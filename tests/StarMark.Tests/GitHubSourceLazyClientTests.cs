@@ -21,7 +21,7 @@ namespace StarMark.Tests;
 /// 它的 Authorization 头停留在启动那一刻 ⇒ 界面按活的 options 说"已配置"，请求却带着空凭据去，
 /// 用户看到的就是"填了 Token 点了同步还是不行"，只能重启（重启在本项目按缺陷算）。
 /// </para>
-/// <para>所以这里钉两层：行为层（不建 / 只建一次 / 借来的不释放 / 注入的照旧释放）＋接线层（源不许自己 new、注册必须取容器那颗）。</para>
+/// <para>所以这里钉两层：行为层（不建 / 只建一次 / 借来的不释放 / 注入的 client 由源释放——它里面注入的 HttpClient 自 P-23 起归建它的一方）＋接线层（源不许自己 new、注册必须取容器那颗）。</para>
 /// </summary>
 public sealed class GitHubSourceLazyClientTests : IDisposable
 {
@@ -134,7 +134,8 @@ public sealed class GitHubSourceLazyClientTests : IDisposable
     {
         var options = Options();
         var handler = new EmptyPageHandler();
-        var client = new GitHubClient(options, new HttpClient(handler));
+        var http = new HttpClient(handler);                                      // 这只 HttpClient 是本测试建的 ⇒ 归本测试收（P-23）
+        var client = new GitHubClient(options, http);
         var builds = 0;
         var source = new GitHubSource(options, Repo(), () => { builds++; return client; });
 
@@ -147,25 +148,27 @@ public sealed class GitHubSourceLazyClientTests : IDisposable
         Assert.True(handler.Requests >= 2);
 
         client.Dispose();
-        Assert.True(handler.Disposed);                                           // 但"谁建谁收"仍成立：这颗的 Dispose 打得通
+        Assert.False(handler.Disposed);                                          // P-23：注入的那只 HttpClient 客户端不代收
+        http.Dispose();                                                          // "谁建谁收"仍成立：建它的一方 Dispose 打得通
+        Assert.True(handler.Disposed);
     }
 
     /// <summary>
-    /// 反向对照：走测试缝（注入客户端）时源<b>拥有</b>它，<c>DisposeAsync</c> 照旧连带释放——
-    /// 这条既有契约（P-19 那批钉下的）没被这次懒建放宽或删掉。
+    /// 反向对照：走测试缝（注入客户端）时源<b>拥有</b>那颗 GitHubClient，<c>DisposeAsync</c> 照旧连带释放——
+    /// 这条既有契约（P-19 那批钉下的）没被懒建放宽或删掉；但 <b>P-23 之后客户端只收自己建的 HttpClient</b>，
+    /// 所以"收走了"的机检信号来自客户端自建的那只：释放后再拉取当场 <see cref="ObjectDisposedException"/>。
     /// </summary>
     [Fact]
     public async Task InjectedClient_IsStillDisposedBySource()
     {
         var options = Options();
-        var handler = new EmptyPageHandler();
-        var client = new GitHubClient(options, new HttpClient(handler));
+        var client = new GitHubClient(options);                     // 不注入 HttpClient ⇒ 客户端自建并拥有它
         await using var source = new GitHubSource(options, Repo(), client);
 
-        await source.FetchAsync(new SyncContext(), CancellationToken.None);
-        await source.DisposeAsync();
+        await source.DisposeAsync();                                 // 源把它一并释放（P-19 契约）
 
-        Assert.True(handler.Disposed);
+        await Assert.ThrowsAsync<ObjectDisposedException>(          // 客户端连同自建的那只 HttpClient 一起收走了
+            () => client.GetAllStarredAsync(CancellationToken.None));
     }
 
     // ==================== 接线层（形状门） ====================

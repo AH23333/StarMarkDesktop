@@ -34,6 +34,9 @@ public sealed class DittoSource : IItemSource
         }
     }
 
+    /// <summary>这里的「可用」靠<b>本机数据文件在场</b>成立（Ditto 的数据库找到了才谈得上读），与"配没配"那族事实无关（片212·P-47）。</summary>
+    public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.FilePresent;
+
     /// <summary>
     /// Ditto 是外部程序：没装就没有数据库，这一项本来就该是空的（与内置剪贴板历史是两回事）。
     /// <para><b>交回键＋实参</b>（批次 WI-57）：那句话住在表里，这里只递"探过哪几条路径"。

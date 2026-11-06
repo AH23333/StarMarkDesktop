@@ -1080,6 +1080,13 @@
                                     <Button i18n:LocText.Key="settings.data.import" Click="ImportBackup_Click" Style="{StaticResource SecondaryButton}"/>
                                     <!-- 备份就在本机目录里，"去看一眼/自己拷走"本该一步到位，不该让用户去地址栏敲路径 -->
                                     <Button i18n:LocText.Key="settings.data.openFolder" Click="OpenBackupFolder_Click" Style="{StaticResource SecondaryButton}"/>
+                                    <!-- 大库的导出/恢复是几秒到几十秒的长跑，跑起来必须有一刻真的能喊停（片212·P-36）。
+                                         可见性跟「这一段可取消」走（Begin/End 圈定的范围），没事可取消时不亮；
+                                         取消的后果由 Core 各取消臂兜底：导出清半截、恢复按「走到哪一步」报中间态。 -->
+                                    <Button Command="{x:Bind ViewModel.CancelBackupCommand, Mode=OneWay}"
+                                            i18n:LocText.Key="dialog.cancel"
+                                            Visibility="{x:Bind ViewModel.IsBackupCancellable, Mode=OneWay, Converter={StaticResource BoolToVis}}"
+                                            Style="{StaticResource SecondaryButton}"/>
                                     <ProgressRing Width="20" Height="20"
                                                   IsActive="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay}"
                                                   Visibility="{x:Bind ViewModel.IsBackupBusy, Mode=OneWay, Converter={StaticResource BoolToVis}}"/>

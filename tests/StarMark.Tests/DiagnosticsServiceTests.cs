@@ -122,7 +122,8 @@ public sealed class DiagnosticsServiceTests : IDisposable
 
         var row = entries.Single(e => e.Label.Key == "diag.label.source");
         Assert.Equal("source.name.chrome", Assert.IsType<LocMessage>(row.Label.Args![0]).Key);
-        Assert.Equal("source.avail.available", row.Value.Key);
+        // 「可用」按 kind 换键（片212·P-47）：桩声明自己是 FilePresent，那一格就该是 filePresent 那颗。
+        Assert.Equal("source.avail.kind.filePresent", row.Value.Key);
 
         stub.Unavailable();
         var failed = (await new DiagnosticsService(_factory, _repo, new IItemSource[] { stub })
@@ -137,6 +138,8 @@ public sealed class DiagnosticsServiceTests : IDisposable
         private bool _available = true;
         public string SourceId => ItemSources.Chrome;
         public bool IsAvailable => _available;
+        // 覆写 kind（片212·P-47）：更贴 Chrome 的生产形状——「可用」靠本机数据文件在场成立。
+        public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.FilePresent;
         public LocMessage? AvailabilityHint => _available ? null : LocMessage.Of("source.hint.ditto", "某条路径");
         public void Unavailable() => _available = false;
         public Task<FetchResult> FetchAsync(SyncContext ctx, CancellationToken ct)

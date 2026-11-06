@@ -299,26 +299,64 @@ public partial class SearchPageViewModel : ObservableObject
             // 结果集合与 PropertyChanged 必须在 UI 线程上更新
             await RunOnUi(() =>
             {
-                if (!append)
-                {
-                    Results.Clear();
-                    ExactResults.Clear();
-                    RelatedResults.Clear();
-                }
                 var keyword = Query.Trim();
-                // 追加页时按预览去重键挡住重复：两页之间底层结果若被同步/编辑改过，切片边界
-                // 可能把同一条再给一次；重复显示比少显示更刺眼，故宁可在接上时过滤。
-                HashSet<string>? seen = append
-                    ? new HashSet<string>(Results.Select(r => r.PreviewDedupeKey), StringComparer.Ordinal)
-                    : null;
-                for (var i = 0; i < result.Items.Count; i++)
+                if (append)
                 {
-                    var vm = new ItemCardViewModel(result.Items[i]);
-                    vm.HighlightQuery = keyword;
-                    if (seen is not null && !seen.Add(vm.PreviewDedupeKey)) continue;
-                    Results.Add(vm);
-                    // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果（ExactCount 按本页给）
-                    if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
+                    // 追加页照旧整段接上：按预览去重键挡住重复——两页之间底层结果若被同步/编辑改过，
+                    // 切片边界可能把同一条再给一次；重复显示比少显示更刺眼，故宁可在接上时过滤。
+                    var seen = new HashSet<string>(Results.Select(r => r.PreviewDedupeKey), StringComparer.Ordinal);
+                    for (var i = 0; i < result.Items.Count; i++)
+                    {
+                        var vm = new ItemCardViewModel(result.Items[i]);
+                        vm.HighlightQuery = keyword;
+                        if (!seen.Add(vm.PreviewDedupeKey)) continue;
+                        Results.Add(vm);
+                        // 分段：Items 前 ExactCount 条为精确匹配，其余为相关结果（ExactCount 按本页给）
+                        if (i < result.ExactCount) ExactResults.Add(vm); else RelatedResults.Add(vm);
+                    }
+                }
+                else
+                {
+                    // 片212·P-48：整跑（逐键合并窗口每 150 ms 一拍）不再整表 Clear+重建——
+                    // 那会让每张卡片重放一遍 EntranceThemeTransition（同一批结果每键闪一次）。
+                    // 按预览去重键对账：键同且屏幕字段没变（ItemCardViewModel.SameDisplayContent）
+                    // ⇒ 复用旧卡片、只把高亮词就地换掉；键缺席或内容变了 ⇒ 那一张换新。
+                    // 三颗集合按引用做最小差异（TodoWidgetViewModel.SyncVisible 同口径）。
+                    var reuse = new Dictionary<string, ItemCardViewModel>(Results.Count, StringComparer.Ordinal);
+                    foreach (var existing in Results)
+                        reuse[existing.PreviewDedupeKey] = existing;
+                    var fresh = new List<ItemCardViewModel>(result.Items.Count);
+                    var exactCount = 0;
+                    for (var i = 0; i < result.Items.Count; i++)
+                    {
+                        var item = result.Items[i];
+                        var key = ItemCardViewModel.PreviewDedupeKeyOf(item);
+                        ItemCardViewModel vm;
+                        if (reuse.TryGetValue(key, out var old) && old.SameDisplayContent(item))
+                        {
+                            vm = old;
+                            vm.HighlightQuery = keyword;   // 复用的容器只换高亮词（[ObservableProperty] 就地刷新，不重建行）
+                            // 同键第二条不再复用同一实例：结果集自带重复时保持旧行为（两颗独立卡片）。
+                            reuse.Remove(key);
+                        }
+                        else
+                        {
+                            vm = new ItemCardViewModel(item);
+                            vm.HighlightQuery = keyword;
+                        }
+                        if (i < result.ExactCount) exactCount++;
+                        fresh.Add(vm);
+                    }
+                    SyncByReference(Results, fresh);
+                    var exactTarget = new List<ItemCardViewModel>(exactCount);
+                    var relatedTarget = new List<ItemCardViewModel>(Math.Max(0, fresh.Count - exactCount));
+                    for (var i = 0; i < fresh.Count; i++)
+                    {
+                        if (i < exactCount) exactTarget.Add(fresh[i]);
+                        else relatedTarget.Add(fresh[i]);
+                    }
+                    SyncByReference(ExactResults, exactTarget);
+                    SyncByReference(RelatedResults, relatedTarget);
                 }
                 HasExact = ExactResults.Count > 0;
                 HasRelated = RelatedResults.Count > 0;
@@ -371,9 +409,11 @@ public partial class SearchPageViewModel : ObservableObject
             {
                 if (!append)
                 {
-                    Results.Clear();
-                    ExactResults.Clear();
-                    RelatedResults.Clear();
+                    // 失败清场与成功对齐走同一颗 SyncByReference（对齐到空表）：
+                    // 行为与旧 Clear 相同，机制上不再有第二处「整表推倒」的写法。
+                    SyncByReference(Results, Array.Empty<ItemCardViewModel>());
+                    SyncByReference(ExactResults, Array.Empty<ItemCardViewModel>());
+                    SyncByReference(RelatedResults, Array.Empty<ItemCardViewModel>());
                     HasExact = HasRelated = false;
                 }
                 HasResults = false;   // 那颗提示按 HasResults 取反显示，不抹掉就没人看得见这句
@@ -388,6 +428,38 @@ public partial class SearchPageViewModel : ObservableObject
                 IsLoadingMore = false;
             });
         }
+    }
+
+    /// <summary>
+    /// 把 <paramref name="collection"/> 增量对齐到 <paramref name="target"/>（按卡片实例＝引用，片212·P-48）。
+    /// <para>整表 Clear+Add 会让每张卡片重放一遍进场动画；按引用对齐后「同一批结果」是零操作，
+    /// 位置错了 Move、缺了 Insert，内容变了的那张已在调用方换过实例。形状与
+    /// <c>TodoWidgetViewModel.SyncVisible</c>／<c>ItemGridWidgetViewModel.ApplyRows</c> 同口径。</para>
+    /// </summary>
+    private static void SyncByReference(ObservableCollection<ItemCardViewModel> collection, IReadOnlyList<ItemCardViewModel> target)
+    {
+        var targetSet = new HashSet<ItemCardViewModel>(target, ReferenceEqualityComparer.Instance);
+
+        // 1) 移除已不在目标里的
+        for (var i = collection.Count - 1; i >= 0; i--)
+            if (!targetSet.Contains(collection[i])) collection.RemoveAt(i);
+
+        // 2) 逐位对齐：引用对得上就零操作，位置错了 Move，缺了 Insert
+        for (var i = 0; i < target.Count; i++)
+        {
+            var want = target[i];
+            if (i < collection.Count && ReferenceEquals(collection[i], want)) continue;
+
+            var at = -1;
+            for (var j = i + 1; j < collection.Count; j++)
+                if (ReferenceEquals(collection[j], want)) { at = j; break; }
+
+            if (at >= 0) collection.Move(at, i);
+            else collection.Insert(i, want);
+        }
+
+        // 3) 尾部多余的（兜底）
+        while (collection.Count > target.Count) collection.RemoveAt(collection.Count - 1);
     }
 
     /// <summary>

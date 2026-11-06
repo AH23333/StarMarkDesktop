@@ -83,6 +83,13 @@ public sealed class RestoreResult
     public bool Success { get; init; }
 
     /// <summary>
+    /// 这次恢复是<b>被用户取消</b>的（片212·P-36）。与「失败」分开报：<b>取消不是事故</b>，
+    /// 那句话按「走到哪一步」说清中间态（没动数据／停在半路＋快照在哪），⛔ 套「导入失败」的口吻——
+    /// 那会让人以为自己丢了什么，而快照正是为这一步留的。
+    /// </summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>
     /// 恢复回执那句话的<b>身份</b>（键＋实参），⛔ 一句成品字（批次 WI-62／P-193）。
     /// <para>为什么这一颗必须交身份而不是字符串：念它的是设置页「数据」那一行（<c>BackupStatus</c>），
     /// 而那一行是<b>长命宿主</b>上的读数。Core 在被调用那一刻按当时语言拼好，换语言就没人回去重算 ⇒

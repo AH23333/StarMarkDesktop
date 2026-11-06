@@ -494,6 +494,10 @@ public static class UiStrings
         new Entry("settings.data.backup.carriesBoards", "还带 {0} 块画板，导入时会写回画板目录（本机已有同名的那块不动）。", "and {0} board scenes; they are written back into the board folder on import (a board already here is left alone).", "画板 {0} 枚も添付されており、導入時に画板フォルダへ書き戻します（この機に既にある同名の板はそのまま）。"),
         new Entry("settings.data.backup.lineJoin", "{0}{2}{1}", "{0}{2}{1}", "{0}{2}{1}"),
         new Entry("settings.data.backup.withSnapshot", "{0}（恢复前快照：{1}）", "{0} (pre-restore snapshot kept: {1})", "{0}（復元前スナップショット：{1}）"),
+        // 取消导出/恢复那三句（片212·P-36）：按「走到哪一步」说清中间态，⛔ 套「失败」口吻。
+        new Entry("settings.data.backup.cancelledExport", "已取消导出，没有生成完整备份；已开始写的半截文件已自动清掉。", "Export cancelled - no complete backup was written; a partially written file was cleaned up automatically.", "エクスポートをキャンセルしました。完全なバックアップは作成されておらず、書きかけのファイルは自動的に削除されました。"),
+        new Entry("settings.data.backup.cancelledBefore", "已取消，未改动任何数据。", "Cancelled - no data was changed.", "キャンセルされました。データは一切変更していません。"),
+        new Entry("settings.data.backup.cancelledMid", "已取消：恢复停在半路，数据可能只导入了一部分。可用恢复前的快照回滚：{0}", "Cancelled: the restore stopped partway, so only part of the data may have been imported. You can roll back with the pre-restore snapshot: {0}", "キャンセルされました：復元は途中で止まり、データの一部だけが入った可能性があります。復元前スナップショットで巻き戻せます：{0}"),
         new Entry("settings.data.autoBackupInterval.6", "每 6 小时", "Every 6 hours", "6 時間ごと"),
         new Entry("settings.data.autoBackupInterval.24", "每 24 小时", "Every 24 hours", "24 時間ごと"),
         new Entry("settings.data.autoBackupInterval.72", "每 3 天", "Every 3 days", "3 日ごと"),
@@ -3240,7 +3244,11 @@ public static class UiStrings
         new Entry("source.name.ditto", "Ditto 剪贴板", "Ditto clipboard", "Ditto クリップボード"),
         new Entry("source.name.filesystem", "本地文件 (Everything)", "Local files (Everything)", "ローカルファイル (Everything)"),
         new Entry("source.name.other", "其它来源（{0}）", "Other source ({0})", "その他のソース（{0}）"),
-        new Entry("source.avail.available", "可用", "Available", "利用可能"),
+        // 「可用」按它靠什么成立换说法（片212·P-47）：三种事实各有各的键——
+        // 配了 Token／本机有数据文件／外部程序在跑。一句笼统的「可用」让排障的人再猜一遍下一步。
+        new Entry("source.avail.kind.configured", "可用（Token 已配置）", "Available (token configured)", "利用可能（Token 設定済み）"),
+        new Entry("source.avail.kind.filePresent", "可用（本机有它的数据文件）", "Available (its data file is on this machine)", "利用可能（この PC にデータファイルがあります）"),
+        new Entry("source.avail.kind.dependencyRunning", "可用（外部程序正在运行）", "Available (the external program is running)", "利用可能（外部プログラムが実行中です）"),
         new Entry("source.avail.missing", "没有这项数据：{0}", "No data for it: {0}", "このデータはありません：{0}"),
         new Entry("source.avail.unknownReason", "本机没有这项数据或依赖没启动",
                   "this machine has no such data, or its dependency is not running",

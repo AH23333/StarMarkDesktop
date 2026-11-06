@@ -49,10 +49,49 @@ public partial class ItemCardViewModel : ObservableObject
     public long? StarsCount => _item.StarsCount;
 
     /// <summary>
-    /// 预览弹窗的去重键。Everything 本地文件结果是不入库的虚拟条目（一律 <see cref="Id"/>＝0），
+    /// 预览弹窗的去重键（单源）。Everything 本地文件结果是不入库的虚拟条目（一律 <see cref="Id"/>＝0），
     /// 只按 Id 组键会让「预览 A 后预览 B」被当成重复请求——B 的窗口不出现，只把 A 置顶，故退到 Uri。
+    /// <para>静态入口（片212·P-48）：搜索页对账「旧卡片 vs 新条目」时还没建卡片，也要按同一把尺取键；
+    /// 两处各写一份尺（实例一份、对账一份）就会分岔——虚拟行的退路改了、一边没跟上，复用就会认错行。</para>
     /// </summary>
-    public string PreviewDedupeKey => Id > 0 ? $"preview:{Id}" : $"preview:uri:{Uri}";
+    public static string PreviewDedupeKeyOf(Item item)
+        => item.Id > 0 ? $"preview:{item.Id}" : $"preview:uri:{item.Uri}";
+
+    public string PreviewDedupeKey => PreviewDedupeKeyOf(_item);
+
+    /// <summary>
+    /// 把这张卡片的条目换成 <paramref name="other"/>，屏幕上会不会变样（片212·P-48）：
+    /// 搜索页整跑按「键同＋这句为真」复用旧卡片（只换高亮词），否则那一张换新。
+    /// <para>只比<b>会上屏</b>的字段：SearchText（FTS 专用）、CreatedAt／SyncedAt（不显示）不参与——
+    /// 屏幕外的字段也算进"内容变了"就会把没变的卡片也整颗换掉，进场动画重放＝本刀要消的那颗病。
+    /// 反过来屏幕上有的（标签、笔记、置顶/隐藏位）一颗都不能少：少一颗就是
+    /// 「编辑了标题、屏上还是旧标题」的陈旧档。</para>
+    /// </summary>
+    public bool SameDisplayContent(Item other)
+        => _item.Type == other.Type
+           && string.Equals(_item.Source, other.Source, StringComparison.Ordinal)
+           && string.Equals(_item.SourceId, other.SourceId, StringComparison.Ordinal)
+           && string.Equals(_item.Title, other.Title, StringComparison.Ordinal)
+           && string.Equals(_item.Subtitle, other.Subtitle, StringComparison.Ordinal)
+           && string.Equals(_item.Uri, other.Uri, StringComparison.Ordinal)
+           && string.Equals(_item.Description, other.Description, StringComparison.Ordinal)
+           && string.Equals(_item.Notes, other.Notes, StringComparison.Ordinal)
+           && string.Equals(_item.ExtraJson, other.ExtraJson, StringComparison.Ordinal)
+           && _item.StarsCount == other.StarsCount
+           && _item.FileSize == other.FileSize
+           && _item.UpdatedAt == other.UpdatedAt
+           && _item.Hidden == other.Hidden
+           && _item.Pinned == other.Pinned
+           && TagsMatch(_item.Tags, other.Tags);
+
+    /// <summary>标签逐颗序敏感比较（<see cref="SameDisplayContent"/> 的那一格）。</summary>
+    private static bool TagsMatch(List<string> left, List<string> right)
+    {
+        if (left.Count != right.Count) return false;
+        for (var i = 0; i < left.Count; i++)
+            if (!string.Equals(left[i], right[i], StringComparison.Ordinal)) return false;
+        return true;
+    }
 
     [ObservableProperty] private bool _isHidden;
     [ObservableProperty] private bool _isPinned;

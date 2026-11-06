@@ -77,6 +77,9 @@ public sealed class GitHubSource : IItemSource, IAsyncDisposable
 
     public bool IsAvailable => _options.IsConfigured;
 
+    /// <summary>这里的「可用」靠<b>配置</b>成立（Token 填了就能用），与"本机有没有文件"那族事实无关（片212·P-47）。</summary>
+    public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.Configured;
+
     /// <summary>
     /// "不可用"在这里的成因是<b>没配 Token</b>，不是坏了；且只影响 Star 同步这一条源。
     /// 那句话自批次 WI-57 起住在表里（这一行上屏幕，⛔ 在这里拼成品字）。

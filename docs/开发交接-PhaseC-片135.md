@@ -757,3 +757,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 存量档语义：旧明文档首读当场升级为密文档（不丢同档字段）；跨机器/跨账号拷档解不开→当没配（重填）；真档升级在应用下次读取时自动发生，无需手动迁移。
 - 读数：全量 6846/6846（基线 6838＋新 8）；docgates211 26/26；census 21（＝基线）；坑表零动（无新坑）；产品码＝5 文件（新增 SecretProtector.cs／SecretAtRestGateTests.cs；改 Abstractions.csproj／GitHubOptions.cs／SettingsStore.Ai.cs）。
 - 下一刀：C 组性能批（P-45/43/48/23/36/47，均已授权）。⛔ push（未推 20）。
+
+## 九十三、片212 C 组性能批落地：备份全链可取消、四源可用性三态一把尺、GitHubClient 所有权反转、主窗搜索增量同步（P-45/23/36/47/48 翻牌）
+
+- 接手第一步照旧现读编号轴：报告到五百九十八、交接到九十三、坑表到 #1154（本批零动）、账本到 P-294；计数器现读＝295/259/36（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK）。
+
+- 事实源：BackupRepository/MigrationRunner（CancellationToken 透传＋「先查再写」放 try 外＋zip 臂 temp+Move 原子形）＋BackupService/BackupEnvelope＋BackupCancelGateTests；SourceAvailabilityText（三态单把尺）＋IItemSource.AvailabilityKind 默认成员＋四源覆写＋SourceAvailabilityTextTests/DiagnosticsServiceTests；GitHubClient（_ownsHttp＋构造缺席才加）＋GitHubClientTests/GitHubSourceLazyClientTests；SearchPageViewModel（SyncByReference 深比增量・键退 Uri）＋SearchResultsMinimalDiffGateTests/SearchTypingMergeTests。
+
+- 行为语义：备份取消不删完好旧档（先查再写＋原子落盘），取消回执分两档（没写出档／半档已删）；注入的 HttpClient 归建它的一方（GitHubClient 只收自建那只）；搜索结果 reuse 判据＝深比防 stale、Everything 虚拟条目 Id=0 所以键退 Uri；四源可用性经 AvailabilityKind 三态一把尺对齐。
+
+- 闸测须知（再动须同步）：BackupCancelGateTests 断言恰 2 处 TryDeletePartial＋恰 2 处先查再写＋repo ≥8 处取消检查；SearchTypingMergeTests 钉死 RunSearchAsync(bool append) 签名＋Query.Trim()（194/194 保持）；DiagWordGate 三 kind 行在 SourceAvailabilityText 内自洽；ClipboardBackupAttachmentGateTests 数 BackupService.cs 里方法名出现次数（注释也不许写方法全名）；census 新基线 20（片212 21→20・出典在 LivingSourcePointerGateTests para＋账本 P-256 追加）。
+
+- 读数：全量 6865/6865（基线 6846＋新 19）；docgates212 26/26（47/47）；census 20（＝新基线）；坑表零动（无新坑）；产品码＝18 src＋8 tests（新增 BackupCancelGateTests／SearchResultsMinimalDiffGateTests・改 6）＋四活档（本批账本含两颗指针修与 P-256 追加）。
+
+- 下一刀：P-28B′＋P-44（队列次位）。⛔ push（未推 20）。

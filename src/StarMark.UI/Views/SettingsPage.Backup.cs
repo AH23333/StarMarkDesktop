@@ -166,6 +166,7 @@ public sealed partial class SettingsPage
     {
         if (ViewModel.IsBackupBusy) return;
         ViewModel.IsBackupBusy = true;      // 必须覆盖"弹对话框"阶段：否则等待期间可重复点，多个 picker 并存在提权下更是必挂
+        var token = ViewModel.BeginBackupCancelScope();   // 选完路径后的写盘段可取消（片212·P-36）
         try
         {
             // 先读开关：它同时决定建议名的扩展名与走哪条导出路。
@@ -182,7 +183,7 @@ public sealed partial class SettingsPage
             if (target is null) return;
 
             var written = carry
-                ? await Task.Run(() => _backup.ExportWithClipImagesAsync(target, CancellationToken.None), CancellationToken.None)
+                ? await Task.Run(() => _backup.ExportWithClipImagesAsync(target, token), token)
                 : null;
             if (written is not null)
             {
@@ -206,10 +207,16 @@ public sealed partial class SettingsPage
             {
                 // 报实际写出去的那个名字：开关关着时若用户手输了 x.zip，那份文件仍是纯清单，
                 // 名字会被改成 x.json（一个叫 .zip 的 JSON 会让下一个读它的人以为它坏了）。
-                var plain = await Task.Run(() => _backup.ExportToFileAsync(target, CancellationToken.None));
+                var plain = await Task.Run(() => _backup.ExportToFileAsync(target, token), token);
                 ViewModel.BackupStatus = LocMessage.Of("settings.data.backup.exportedPlain", plain);
             }
             ViewModel.RefreshBackups();     // 刚导出那份必须立刻出现在下面列表里，否则用户会以为没写成
+        }
+        catch (OperationCanceledException)
+        {
+            // 用户自己按的取消：Core 那一侧已把写了一半的文件清掉（TryDeletePartial），
+            // 这里只按事实报「没生成完整备份」，⛔ 套异常口吻（片212·P-36）。
+            ViewModel.BackupStatus = LocMessage.Of("settings.data.backup.cancelledExport");
         }
         catch (Exception ex)
         {
@@ -217,7 +224,11 @@ public sealed partial class SettingsPage
             // 屏幕上那行与改之前逐字相同（⛔ 顺手给它加一句"导出失败："＝本批没说要改它）。
             ViewModel.BackupStatus = LocMessage.Of("common.rawValue", ex.Message);
         }
-        finally { ViewModel.IsBackupBusy = false; }
+        finally
+        {
+            ViewModel.EndBackupCancelScope();
+            ViewModel.IsBackupBusy = false;
+        }
     }
 
     private async void ImportBackup_Click(object sender, RoutedEventArgs e)
@@ -315,86 +326,104 @@ public sealed partial class SettingsPage
     {
         // 备份文件可达数十 MB：整份读盘 + 反序列化必须在后台线程做（Microsoft.Data.Sqlite 与
         // File/Json 都是同步实现，await 并不让出），否则"点导入备份"就是先冻住整个界面几秒。
-        BackupEnvelope env;
+        // 读盘与恢复两段都可取消（片212·P-36）：范围从进本方法圈到 return。
+        var token = ViewModel.BeginBackupCancelScope();
         try
         {
-            env = await Task.Run(() => BackupService.ReadAsync(source, CancellationToken.None));
-        }
-        catch (BackupFormatException ex)
-        {
-            // 读 <c>Reason</c> 而不是 <c>Message</c>：后者从 WI-62 起只装键名（给日志 grep 用），
-            // 屏幕上那一行必须按<b>现在</b>的语言取词（✅WI-57 那颗"设置页是长命宿主"的界）。
-            ViewModel.BackupStatus = ex.Reason;
-            return;
-        }
-
-        // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
-        var summary = BackupService.Summarize(env);
-        var summaryBlock = Stack(
-            LocMessage.Of("settings.data.backup.fileLine", Path.GetFileName(source)),
-            Stack(LocMessage.Of("settings.data.backup.exportedLine",
-                    DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt).LocalDateTime)),
-                LocMessage.Of("settings.data.backup.countsLine", summary.ItemCount, summary.UserStateCount, summary.TagCount,
-                    summary.HasWidgets ? LocMessage.Of("settings.data.backup.widgetsYes") : null)));
-
-        // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
-        // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
-        // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
-        // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
-        // 画板那一族（片146）另起一句、各报各的数：把"三块板四张图"并成"七个附件"，
-        // 用户就没法在点下去之前核对自己那几块板跟没跟过去；而"没带图片"那句在只带板时照旧是真话。
-        var clipCount = BackupContainer.CountClipEntries(source);
-        var boardCount = BackupContainer.CountBoardEntries(source);
-        var attachmentsNote = Stack(
-            clipCount > 0
-                ? LocMessage.Of("settings.data.backup.carriesImages", clipCount)
-                : LocMessage.Of("settings.data.backup.noImages"),
-            boardCount > 0 ? LocMessage.Of("settings.data.backup.carriesBoards", boardCount) : null);
-        var guideBlock = Stack(
-            LocMessage.Of("settings.data.backup.mergeLine"),
-            Stack(LocMessage.Of("settings.data.backup.replaceLine"), LocMessage.Of("settings.data.backup.snapshotLine")));
-        var body = Stack(summaryBlock, Stack(guideBlock, attachmentsNote, "\n\n"), "\n\n");
-        var detailBlock = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        // 交身份给 LocText 那颗门而不是先 Render 成字符串：这张窗开着的时候换语言，那一格才跟着重贴（坑表 #276 那一族）。
-        LocText.SetMessage(detailBlock, body);
-        var choice = await CenteredDialog.ShowContentAsync(
-            LocMessage.Of("settings.data.importBackupTitle"), detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
-            // 340 → 380：片146 给这一格加了那句"还带 N 块画板"，真机读到那句被裁在窗沿外
-            // （正文最后一行只露出半截，用户看不到"包里有几块板会回来"这件事就白说）。
-            width: 480, height: 380,
-            primaryText: LocMessage.Of("settings.data.importMerge"),
-            secondaryText: LocMessage.Of("settings.data.importOverwrite"),
-            cancelText: LocMessage.Of("dialog.cancel"));
-
-        if (choice != CenteredDialog.HostedDialogResult.Committed
-            && choice != CenteredDialog.HostedDialogResult.Secondary) return;
-
-        var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
-        // 附件从<b>这一份文件</b>里解：把路径一起递进去，服务层据此现算"条目认领哪些文件名"，
-        // 调用方就没有机会把别的包里的名字写进图片目录。
-        var rr = await Task.Run(() => _backup.RestoreAsync(
-            env, mode, null, CancellationToken.None, source));
-        // Core 交回的那半句是身份（嵌套实参，靠 LocMessage.ToString 在贴上去那一刻取词）⇒
-        // 这一行的两半从此同一语言（✅WI-61c 登记"⛔ 一批只改一半"要的就是这一格）。
-        ViewModel.BackupStatus = rr.Success
-            ? LocMessage.Of("settings.data.backup.withSnapshot", rr.Message, rr.SnapshotPath)
-            : LocMessage.Of("settings.data.backup.importFailed", rr.Message);
-        ViewModel.RefreshBackups();     // 这次恢复留下的快照要立刻可见——它就是"撤销"的入口
-
-        // 恢复把画板写回盘上之后，那几块板的<b>索引件</b>当场补一遍（片146：矩阵那一行的前半与后半在这一格咬合）。
-        // ⛔ 等下次开机才补：用户刚导完就去搜那块板，"要重启才搜得到"会被当成缺陷（P-53 那句"坏话要说在用户能做的那件事上"的反面＝
-        // 一件本来能当场办成的事被排到了下次启动）。那颗回填是幂等的，⛔ 需要"哪几块"的名单。
-        if (rr.Success && rr.BoardsRestored > 0)
-        {
-            _ = System.Threading.Tasks.Task.Run(async () =>
+            BackupEnvelope env;
+            try
             {
-                try { await StarMark.UI.Boards.BoardSceneIndex.BackfillAsync(CancellationToken.None); }
-                catch (Exception bex)
+                env = await Task.Run(() => BackupService.ReadAsync(source, token), token);
+            }
+            catch (BackupFormatException ex)
+            {
+                // 读 <c>Reason</c> 而不是 <c>Message</c>：后者从 WI-62 起只装键名（给日志 grep 用），
+                // 屏幕上那一行必须按<b>现在</b>的语言取词（✅WI-57 那颗"设置页是长命宿主"的界）。
+                ViewModel.BackupStatus = ex.Reason;
+                return;
+            }
+
+            // 摘要直接从已解析的 env 算：旧代码再调 Peek(file.Path)，等于把整份备份第二次读盘+反序列化。
+            var summary = BackupService.Summarize(env);
+            var summaryBlock = Stack(
+                LocMessage.Of("settings.data.backup.fileLine", Path.GetFileName(source)),
+                Stack(LocMessage.Of("settings.data.backup.exportedLine",
+                        DateTimeText.Minute(DateTimeOffset.FromUnixTimeSeconds(summary.ExportedAt).LocalDateTime)),
+                    LocMessage.Of("settings.data.backup.countsLine", summary.ItemCount, summary.UserStateCount, summary.TagCount,
+                        summary.HasWidgets ? LocMessage.Of("settings.data.backup.widgetsYes") : null)));
+
+            // 统一走外部居中窗口（非 ContentDialog）：按用户主题着色、可拖动、不可重复。
+            // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
+            // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
+            // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
+            // 画板那一族（片146）另起一句、各报各的数：把"三块板四张图"并成"七个附件"，
+            // 用户就没法在点下去之前核对自己那几块板跟没跟过去；而"没带图片"那句在只带板时照旧是真话。
+            var clipCount = BackupContainer.CountClipEntries(source);
+            var boardCount = BackupContainer.CountBoardEntries(source);
+            var attachmentsNote = Stack(
+                clipCount > 0
+                    ? LocMessage.Of("settings.data.backup.carriesImages", clipCount)
+                    : LocMessage.Of("settings.data.backup.noImages"),
+                boardCount > 0 ? LocMessage.Of("settings.data.backup.carriesBoards", boardCount) : null);
+            var guideBlock = Stack(
+                LocMessage.Of("settings.data.backup.mergeLine"),
+                Stack(LocMessage.Of("settings.data.backup.replaceLine"), LocMessage.Of("settings.data.backup.snapshotLine")));
+            var body = Stack(summaryBlock, Stack(guideBlock, attachmentsNote, "\n\n"), "\n\n");
+            var detailBlock = new TextBlock { TextWrapping = TextWrapping.Wrap };
+            // 交身份给 LocText 那颗门而不是先 Render 成字符串：这张窗开着的时候换语言，那一格才跟着重贴（坑表 #276 那一族）。
+            LocText.SetMessage(detailBlock, body);
+            var choice = await CenteredDialog.ShowContentAsync(
+                LocMessage.Of("settings.data.importBackupTitle"), detailBlock, owner: App.MainWindow, dedupeKey: "importbackup",
+                // 340 → 380：片146 给这一格加了那句"还带 N 块画板"，真机读到那句被裁在窗沿外
+                // （正文最后一行只露出半截，用户看不到"包里有几块板会回来"这件事就白说）。
+                width: 480, height: 380,
+                primaryText: LocMessage.Of("settings.data.importMerge"),
+                secondaryText: LocMessage.Of("settings.data.importOverwrite"),
+                cancelText: LocMessage.Of("dialog.cancel"));
+
+            if (choice != CenteredDialog.HostedDialogResult.Committed
+                && choice != CenteredDialog.HostedDialogResult.Secondary) return;
+
+            var mode = choice == CenteredDialog.HostedDialogResult.Secondary ? RestoreMode.Replace : RestoreMode.Merge;
+            // 附件从<b>这一份文件</b>里解：把路径一起递进去，服务层据此现算"条目认领哪些文件名"，
+            // 调用方就没有机会把别的包里的名字写进图片目录。
+            var rr = await Task.Run(() => _backup.RestoreAsync(
+                env, mode, null, token, source), token);
+            // Core 交回的那半句是身份（嵌套实参，靠 LocMessage.ToString 在贴上去那一刻取词）⇒
+            // 这一行的两半从此同一语言（✅WI-61c 登记"⛔ 一批只改一半"要的就是这一格）。
+            // 被取消的那一档单独走：Core 已按「走到哪一步」备好那两句（未动数据／停在半路＋快照），
+            // ⛔ 再套「导入失败」口吻——取消不是事故（片212·P-36）。
+            ViewModel.BackupStatus = rr.Success
+                ? LocMessage.Of("settings.data.backup.withSnapshot", rr.Message, rr.SnapshotPath)
+                : rr.Cancelled
+                    ? rr.Message
+                    : LocMessage.Of("settings.data.backup.importFailed", rr.Message);
+            ViewModel.RefreshBackups();     // 这次恢复留下的快照要立刻可见——它就是"撤销"的入口
+
+            // 恢复把画板写回盘上之后，那几块板的<b>索引件</b>当场补一遍（片146：矩阵那一行的前半与后半在这一格咬合）。
+            // ⛔ 等下次开机才补：用户刚导完就去搜那块板，"要重启才搜得到"会被当成缺陷（P-53 那句"坏话要说在用户能做的那件事上"的反面＝
+            // 一件本来能当场办成的事被排到了下次启动）。那颗回填是幂等的，⛔ 需要"哪几块"的名单。
+            if (rr.Success && rr.BoardsRestored > 0)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
                 {
-                    StarMark.Abstractions.StarLog.Warn(
-                        "boards.index.backfill.after-import " + bex.GetType().Name + " " + bex.Message);
-                }
-            });
+                    try { await StarMark.UI.Boards.BoardSceneIndex.BackfillAsync(CancellationToken.None); }
+                    catch (Exception bex)
+                    {
+                        StarMark.Abstractions.StarLog.Warn(
+                            "boards.index.backfill.after-import " + bex.GetType().Name + " " + bex.Message);
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消发生在读盘阶段（恢复阶段由 Core 交回 Cancelled 结果，不走这里）＝数据一个字节没动。
+            ViewModel.BackupStatus = LocMessage.Of("settings.data.backup.cancelledBefore");
+        }
+        finally
+        {
+            ViewModel.EndBackupCancelScope();
         }
     }
 }

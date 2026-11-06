@@ -87,12 +87,13 @@ public sealed class DiagnosticsService
         // ── 各源可用性 ──
         // 不能只写"不可用"：那会把"这台机器压根没装"（用 Edge 的人看见 Chrome 不可用）与
         // "装了但读不到"、"没配 Token" 压成同一句话，用户只能猜。成因由来源自己给（它才知道找过什么）。
+        // 「可用」那半句也按它靠什么成立换说法（片212·P-47）：Token／数据文件／外部程序，各有各的键。
         // 名字与成因都交键：这一行是同一颗宿主上<b>同时</b>显示的两格，只翻外层等于半中半英。
         foreach (var source in _sources)
         {
             entries.Add(new DiagnosticEntry(
                 LocMessage.Of("diag.label.source", SourceNames.NameOf(source.SourceId)),
-                SourceAvailabilityText.Of(source.IsAvailable, source.AvailabilityHint)));
+                SourceAvailabilityText.Of(source.AvailabilityKind, source.IsAvailable, source.AvailabilityHint)));
         }
 
         // ── GitHub 同步检查点（P1-4 落库的 sync_state）──

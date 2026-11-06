@@ -1,6 +1,7 @@
 #nullable enable
 using System.IO;
 using System.Reflection;
+using System.Threading;
 
 namespace StarMark.Data;
 
@@ -93,8 +94,15 @@ public sealed class MigrationRunner
     /// 改正文但不重算 search_text，AFTER UPDATE 触发器只会按旧的 search_text 重灌，未打标签的行
     /// 因此永远搜不到还原进来的笔记——这里做<b>全表</b>重算，把带标签与不带标签的行一并覆盖。
     /// </para>
+    /// <para><b>片212·P-36 起这条路也吃取消令牌</b>：还原被取消前刚落库的行仍需进索引（那半截是
+    /// 用户看得见、且快照可回滚的既成事实），所以取消检查放在两段循环里而非入口——
+    /// 入口一票否决会把「已经动了库」的收尾重算整个跳掉。迁移那三个调用方（启动路径，无令牌）
+    /// 走旧签名转 <see cref="CancellationToken.None"/>。</para>
     /// </summary>
     internal static void RebuildSearchTextAndIndex(Microsoft.Data.Sqlite.SqliteConnection conn)
+        => RebuildSearchTextAndIndex(conn, CancellationToken.None);
+
+    internal static void RebuildSearchTextAndIndex(Microsoft.Data.Sqlite.SqliteConnection conn, CancellationToken ct)
     {
         var rows = new List<(long Id, string Text)>();
         using (var sel = conn.CreateCommand())
@@ -111,6 +119,7 @@ public sealed class MigrationRunner
             using var reader = sel.ExecuteReader();
             while (reader.Read())
             {
+                ct.ThrowIfCancellationRequested();
                 string raw = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
                 rows.Add((reader.GetInt64(0), StarMark.Abstractions.Text.CjkTokenizer.ExpandForIndex(raw)));
             }
@@ -124,6 +133,7 @@ public sealed class MigrationRunner
             var pText = upd.Parameters.Add("@t", Microsoft.Data.Sqlite.SqliteType.Text);
             foreach (var (id, text) in rows)
             {
+                ct.ThrowIfCancellationRequested();
                 pId.Value = id;
                 pText.Value = text;
                 upd.ExecuteNonQuery();

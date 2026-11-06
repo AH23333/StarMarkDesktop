@@ -238,7 +238,16 @@ public sealed class LivingSourcePointerGateTests
     /// （304 空页臂那一串・canvas 热键表那一串・P-6／P-34 两行念 <c>PushedAt</c> 代理的那两串），本批按口径换号重指真身；
     /// ② 另三串旧号恰随平移落回正文＝自然愈合而非修，本批没把它算成修复，只在 P-256 报一句 ⇒ 净账少三颗。
     /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
-    private const int FallenPointerBaseline = 21;
+    /// <para><b>片212 再落一颗（21 → 20）・来历＝C 组性能批平移行号（#1020 第九次・⛔ 读成"这一族又修好了"）</b>：
+    /// 本批 P-47 把「可用」一句改三态（<c>SourceAvailabilityText</c> 重写・四源 <c>AvailabilityKind</c> 覆写）＋
+    /// P-23 重写 <c>GitHubClient</c> 构造区 ⇒ 相关行号平移。差集由那把只读复称尺对拍 HEAD 快照与改后点到名：
+    /// ① 切片普查那一行念 <c>SourceAvailabilityText.cs</c> 的旧号被重写压进空行＝真落空（旧「可用」单键臂随键退役），
+    /// 本批按口径<b>删号留锚</b>；② Ditto 那行念 <c>DittoSource.cs</c> 的旧区间被覆写压进空行＝真落空，
+    /// 本批按口径<b>换号重指</b>（<c>CandidateDbPaths</c> 声明现读 89 起・同行那颗裸号一并重指 127）；
+    /// ③ P-23 条目自己那串念 <c>GitHubClient.cs</c> 的旧号恰随重写落回正文＝自然愈合而非修，
+    /// 本批没把它算成修复，只在 P-256 报一句 ⇒ 净账少一颗（22 现读 − 修复 2 ＝ 20）。
+    /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    private const int FallenPointerBaseline = 20;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
     /// 换锚前现读 8 颗（正本 <c>bin/WI99/p843_r1/census843-读数.txt</c>）→ 本批逐颗换成正文锚之后这颗数。

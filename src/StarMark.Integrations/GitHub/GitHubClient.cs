@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -28,6 +29,16 @@ public sealed class GitHubClient : IDisposable
 
     private readonly HttpClient _http;
     private readonly GitHubOptions _options;
+
+    /// <summary>
+    /// 这颗 HttpClient 是否由本客户端自建（P-23）＝是否拥有它的生命周期。
+    /// <para>
+    /// 注入进来的 HttpClient 归调用方所有：这里代为 Dispose 是"双重释放"与"共享它的人连接被拔"
+    /// 两个坑共用的一颗开关。今天生产里 DI 单例走自建那条臂，注入只出现在测试——但这颗开关
+    /// 保护的是"共享注入"那一天，而不是今天。
+    /// </para>
+    /// </summary>
+    private readonly bool _ownsHttp;
 
     /// <summary>
     /// 实际发给 GitHub 的每页条数。GitHub 硬性上限 100：请求 &gt;100 时它静默按 100 返回，
@@ -73,9 +84,15 @@ public sealed class GitHubClient : IDisposable
         // 自己 new 的 HttpClient 必须有界：默认 100 s，代理/门户网络（TCP 连上但不回包）下每页都要
         // 冻满 100 s，而同步入口传的是 CancellationToken.None ⇒ 用户只能等或杀进程。
         // 注入进来的不动 Timeout（可能是共享实例，改它会波及别处）。
+        _ownsHttp = http is null;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        // P-23：头"缺席才加"——注入的 HttpClient 可能带着主人自己的 UA/Accept（或已被另一颗
+        // 客户端摆过同样的头），无条件 ParseAdd/Add 会叠出两份；缺席才加对两边都幂等，
+        // 也不 wipe 主人自己的其他头。
+        if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+        if (!_http.DefaultRequestHeaders.Accept.Any(h => h.MediaType == "application/vnd.github+json"))
+            _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         SyncCredentials();
     }
 
@@ -214,7 +231,16 @@ public sealed class GitHubClient : IDisposable
         return user?.Login;
     }
 
-    public void Dispose() => _http.Dispose();
+    /// <summary>
+    /// 只释放自己 new 出来的那颗 HttpClient（P-23）：注入的那颗归调用方所有，
+    /// 这里代为 Dispose ＝ 调用方那边再来一次双重释放，且共享同一颗实例的人连接被拔。
+    /// 自建那条臂（DI 单例今天走的就是它）照旧整颗收走。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ownsHttp)
+            _http.Dispose();
+    }
 
     /// <summary>
     /// 给仓库加星 / 取消星（本应用<b>第一个 GitHub 写操作</b>）：

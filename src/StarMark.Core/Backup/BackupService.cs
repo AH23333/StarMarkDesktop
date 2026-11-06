@@ -125,15 +125,56 @@ public sealed class BackupService
         if (!carries)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            await File.WriteAllTextAsync(target, json, ct);
+            // 先查再写（⛔ 放进下面那个 try）：此刻取消＝旧档（若有）完好无损，
+            // 落进「清半截」那条臂会把它删掉；try 里能抛 OCE 的只剩写本身——那才是旧档已被截断的路。
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                await File.WriteAllTextAsync(target, json, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                TryDeletePartial(target);   // 写已经开始＝旧档已被 FileMode.Create 截断，半截文件既打不开又占名字
+                throw;
+            }
             return new BackupExport(target, env.Payload.Items.Count, 0, 0, 0, 0, missing, plannedFailed);
         }
-        var (carried, carriedBytes, boards, boardBytes) =
-            await BackupContainer.WriteAsync(target, json, names, sceneNames, ct);
-        // 计划要带、结果没进包的那些（此刻正被别的程序独占、或刚被删掉）并进"没能带上"这一档：
-        // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。
-        return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, boards, boardBytes, missing,
-            plannedFailed + names.Count - carried);
+        try
+        {
+            var (carried, carriedBytes, boards, boardBytes) =
+                await BackupContainer.WriteAsync(target, json, names, sceneNames, ct);
+            // 计划要带、结果没进包的那些（此刻正被别的程序独占、或刚被删掉）并进"没能带上"这一档：
+            // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。
+            return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, boards, boardBytes, missing,
+                plannedFailed + names.Count - carried);
+        }
+        catch (OperationCanceledException)
+        {
+            // WriteAsync 本身已是「先写 *.tmp 再同卷改名」的原子形（片212·P-36 读实）：取消时改名还没发生，
+            // target 完好无损（旧档若有也还在），半截在 .tmp 且已被它自己的 catch 清掉 ⇒ 这里⛔ 再删 target。
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 取消后清掉写了一半的导出件（片212·P-36）。<b>只在「确实开始过写」之后调用</b>：
+    /// 那时目标位置的旧档（若有）已被 FileMode.Create / File.Create 截断，留着的半截
+    /// 既打不开（下一个读它的人会以为备份坏了）又占着那个名字（再导一次还得先腾它）。
+    /// 写之前取消不会走到这里——旧档完好，⛔ 拿它的名字冒风险。
+    /// 清场失败只记日志：取消不该因为清不掉半截反过来变成一次报错。
+    /// </summary>
+    private static void TryDeletePartial(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            File.Delete(path);
+            StarLog.Info($"导出取消：已清掉写了一半的文件（{Path.GetFileName(path)}）");
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"导出取消后清理半截文件失败（可手动删除：{path}）：{ex.Message}");
+        }
     }
 
     /// <summary>
@@ -180,10 +221,21 @@ public sealed class BackupService
     /// </summary>
     public async Task<string> ExportToFileAsync(string path, CancellationToken ct = default)
     {
-        var env = await ExportAsync(ct);
+        var env = await ExportAsync(ct);   // 取消发生在收集阶段：目标还没被碰过，无半截可清
         var target = AgreeExtensionWithContent(path, carries: false);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-        await File.WriteAllTextAsync(target, SerializeEnvelope(env), ct);
+        // 先查再写（⛔ 放进下面那个 try，理由同带附件那条导出路的纯清单臂）：
+        // 此刻取消＝旧档（若有）完好无损；try 里能抛 OCE 的只剩写本身——那才是旧档已被截断的路。
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            await File.WriteAllTextAsync(target, SerializeEnvelope(env), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            TryDeletePartial(target);
+            throw;
+        }
         return target;
     }
 
@@ -290,6 +342,13 @@ public sealed class BackupService
         try
         {
             snapshotPath = await WriteSnapshotAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消发生在快照阶段＝库还没被碰过：这不是失败，是「干净地没做」。
+            // （半截快照已由 ExportToFileAsync 的取消臂清掉，目录里不留垃圾件。）
+            StarLog.Info("恢复被取消（快照阶段，未改动任何数据）");
+            return CancelledResult(null);
         }
         catch (Exception ex)
         {
@@ -420,6 +479,15 @@ public sealed class BackupService
                 BoardsFailed = boards.Failed,
             };
         }
+        catch (OperationCanceledException)
+        {
+            // 取消发生在快照之后＝清库/导入可能已提交了一部分（ImportItemsAsync 每 200 条一批各自提交）。
+            // ⛔ 假装原子：明说「停在半路」，并把回滚入口（快照路径）递给用户；
+            // 已落库的那半截也要广播一次刷新——屏幕停在取消前的旧数据上，用户会以为「其实什么都没发生」。
+            StarLog.Info($"恢复被取消（停在半路，快照可回滚：{snapshotPath}）");
+            DataChangeHub.Notify();
+            return CancelledResult(snapshotPath);
+        }
         catch (Exception ex)
         {
             StarLog.Error("恢复失败", ex);
@@ -432,6 +500,22 @@ public sealed class BackupService
             };
         }
     }
+
+    /// <summary>
+    /// 「这次恢复是被取消的」那一句回执（片212·P-36）：按<b>取消发生在哪一步</b>分两档——
+    /// 快照都没落成（null）＝数据一个字节没动；快照已在（非 null）＝清库/导入停在半路，
+    /// 那半截是既成事实（快照负责兜底回滚），⛔ 套「失败」的口吻把中间态说没。
+    /// </summary>
+    private static RestoreResult CancelledResult(string? snapshotPath)
+        => new()
+        {
+            Success = false,
+            Cancelled = true,
+            SnapshotPath = snapshotPath,
+            Message = snapshotPath is null
+                ? LocMessage.Of("settings.data.backup.cancelledBefore")
+                : LocMessage.Of("settings.data.backup.cancelledMid", snapshotPath),
+        };
 
     /// <summary>把当前数据落一份快照到自动快照目录，返回文件路径。</summary>
     public async Task<string> WriteSnapshotAsync(CancellationToken ct = default)

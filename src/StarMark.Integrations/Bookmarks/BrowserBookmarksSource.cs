@@ -60,6 +60,9 @@ public abstract class BrowserBookmarksSource : IItemSource
 
     public bool IsAvailable => Sources().Any(File.Exists);
 
+    /// <summary>这里的「可用」靠<b>本机数据文件在场</b>成立（书签 JSON 找到了才谈得上读），与"配没配"那族事实无关（片212·P-47）。</summary>
+    public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.FilePresent;
+
     /// <summary>
     /// 说清"找过哪个文件"，并点破一件容易被误判成故障的事：Chrome 与 Edge <b>各读各自的用户数据目录</b>，
     /// 只用 Edge 的机器上「Chrome 书签 没有这项数据」是正常状态，不影响 Edge 那一条。

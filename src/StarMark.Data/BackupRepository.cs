@@ -38,7 +38,11 @@ public sealed class BackupRepository : IBackupRepository
             FROM items i;";
         var list = new List<Item>();
         using var reader = cmd.ExecuteReader();
-        while (reader.Read()) list.Add(MapItem(reader));
+        while (reader.Read())
+        {
+            ct.ThrowIfCancellationRequested();   // 大库的导出读循环也是一段可取消的长跑（片212·P-36）
+            list.Add(MapItem(reader));
+        }
         return Task.FromResult<IReadOnlyList<Item>>(list);
     }
 
@@ -54,6 +58,7 @@ public sealed class BackupRepository : IBackupRepository
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             list.Add(new UserStateRecord(
                 reader.GetString(0),
                 reader.GetString(1),
@@ -73,6 +78,7 @@ public sealed class BackupRepository : IBackupRepository
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             list.Add(new TagRecord(
                 reader.GetString(0),
                 reader.IsDBNull(1) ? null : reader.GetString(1),
@@ -94,6 +100,7 @@ public sealed class BackupRepository : IBackupRepository
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             list.Add(new ItemTagLink(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
         }
         return Task.FromResult<IReadOnlyList<ItemTagLink>>(list);
@@ -109,6 +116,8 @@ public sealed class BackupRepository : IBackupRepository
         const int batch = 200;
         for (int i = 0; i < items.Count; i += batch)
         {
+            // 每批之间查一次取消（片212·P-36）：已提交的批不回滚（快照负责兜底），未开始的批不再动库。
+            ct.ThrowIfCancellationRequested();
             await repo.UpsertAsync(Slice(items, i, batch), ct);
         }
     }
@@ -136,6 +145,8 @@ public sealed class BackupRepository : IBackupRepository
 
         foreach (var s in states)
         {
+            // 事务内逐行查取消（片212·P-36）：抛出去由 using tx 回滚这一段，已过的行不留半截事务。
+            ct.ThrowIfCancellationRequested();
             pHidden.Value = s.Hidden ? 1L : 0L;
             pPinned.Value = s.Pinned ? 1L : 0L;
             pNotes.Value = (object?)s.Notes ?? DBNull.Value;
@@ -168,6 +179,7 @@ public sealed class BackupRepository : IBackupRepository
 
         foreach (var t in tags)
         {
+            ct.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(t.Name)) continue;
             pName.Value = t.Name.Trim();
             pColor.Value = (object?)t.Color ?? DBNull.Value;
@@ -215,6 +227,7 @@ public sealed class BackupRepository : IBackupRepository
 
         foreach (var l in links)
         {
+            ct.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(l.TagName)) continue;
             var sid = UriNormalizer.Normalize(l.SourceId);
             pSrc.Value = l.Source;
@@ -242,7 +255,7 @@ public sealed class BackupRepository : IBackupRepository
         // search_text，AFTER UPDATE 触发器只会按旧 search_text 重灌 → 未打标签行的还原笔记永远搜不到。
         // 全表重算把带/不带标签的行一并覆盖；还原是一次性离线操作，代价可接受，且方法幂等。
         using var conn = _factory.Open();
-        MigrationRunner.RebuildSearchTextAndIndex(conn);
+        MigrationRunner.RebuildSearchTextAndIndex(conn, ct);
         return Task.CompletedTask;
     }
 

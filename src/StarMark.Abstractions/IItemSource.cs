@@ -18,6 +18,15 @@ public interface IItemSource
     bool IsAvailable { get; }
 
     /// <summary>
+    /// <see cref="IsAvailable"/> 为真时，它<b>靠什么成立</b>（片212·P-47）：同一个词「可用」底下
+    /// 压着三种不同的事实——配了 Token、本机有它的数据文件、外部程序正在运行。诊断面板的
+    /// 可用句按它换说法，排障的人才知道「下一步该做什么」（补配置／去启动外部程序／本机本来就没有）。
+    /// <para>走默认实现（与 <see cref="AvailabilityHint"/> 同一条路子）：既有源与测试桩都可以不动；
+    /// 愿意说清自己那种事实的源各自覆写。</para>
+    /// </summary>
+    SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.Configured;
+
+    /// <summary>
     /// 不可用时，"它到底找过什么 / 缺的是什么"——诊断面板把这句显示出来。
     /// <para>
     /// 为什么要有它：只报一个"不可用"，用户无从分辨<b>这台机器压根没装</b>与<b>装了但读不到</b>，
@@ -64,6 +73,24 @@ public interface IItemSource
     /// <param name="query">关键词。</param>
     /// <param name="filter">过滤条件（类型、来源、数值范围）。</param>
     Task<IReadOnlyList<Item>> SearchAsync(string query, SearchFilter filter, CancellationToken ct);
+}
+
+/// <summary>
+/// 「这个源的『可用』靠什么成立」的三种事实（片212·P-47）：
+/// <b>GitHub 配了 Token</b>、<b>书签/Ditto 在本机找到了数据文件</b>、<b>Everything 引擎正在运行</b>——
+/// 旧的一句「可用」把三种不同的"可用"压成同一句话，用户排障时无从分辨
+/// 「补配置就能用」「去启动那个程序」与「这台机器本来就没有它的数据」。
+/// </summary>
+public enum SourceAvailabilityKind
+{
+    /// <summary>可用性靠配置成立（如 GitHub Token 已配置）。</summary>
+    Configured,
+
+    /// <summary>可用性靠本机数据文件在场成立（书签文件、Ditto 数据库）。</summary>
+    FilePresent,
+
+    /// <summary>可用性靠外部程序正在运行成立（Everything 引擎）。</summary>
+    DependencyRunning,
 }
 
 /// <summary>

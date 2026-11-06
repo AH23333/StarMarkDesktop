@@ -140,6 +140,10 @@ public sealed class EverythingSource : IItemSource
     /// </summary>
     public bool IsAvailable => _options.Enabled && EverythingInterop.IsRunning();
 
+    /// <summary>这里的「可用」靠<b>外部程序正在运行</b>成立（Everything 引擎在跑才答得上查询），
+    /// 与"配没配"那族事实无关（片212·P-47）。</summary>
+    public SourceAvailabilityKind AvailabilityKind => SourceAvailabilityKind.DependencyRunning;
+
     /// <summary>
     /// 这一项有两个独立成因，必须分开说：开关没开（去设置里打开）与引擎没在跑（StarMark 会在开启时自带一份）。
     /// 合成一句"不可用"会让人去查错的那一半。两句都在表里（批次 WI-57，P-187）：这一行直接上屏幕，

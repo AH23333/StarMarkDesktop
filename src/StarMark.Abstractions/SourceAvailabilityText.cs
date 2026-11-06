@@ -11,6 +11,9 @@ namespace StarMark.Abstractions;
 /// 而正确反应可能是"我本来就没用 Ditto"。所以这里规定：<b>不可用时要说成因</b>，
 /// 成因由各来源自己给（<see cref="IItemSource.AvailabilityHint"/>：它才知道自己找过哪条路径）。
 /// </para>
+/// <para><b>「可用」那半句同理（片212·P-47）</b>：三种不同的"可用"——配了 Token、本机有数据文件、
+/// 外部程序在跑——各自有自己的键（<see cref="IItemSource.AvailabilityKind"/>）。
+/// 排障的人从那句「可用」就该读出「下一步该做什么」，而不是再猜一遍它靠什么成立。</para>
 /// <para><b>批次 WI-57（P-187）把交出的东西从成品字换成 <see cref="LocMessage"/>，三处一起换</b>：
 /// 这一句直接上屏幕，而那一行的语言由贴上去的那一刻决定。旧写法在这里拼好"没有这项数据：…"，
 /// 语言就定死在算出它的那一瞬间——换语言只剩外层重贴，屏幕上半中半英（坑表 #361 同一族）。
@@ -26,8 +29,17 @@ public static class SourceAvailabilityText
     /// </summary>
     public const int MaxFactLength = 200;
 
-    public static LocMessage Of(bool available, LocMessage? hint)
+    /// <summary>
+    /// <b>「可用」那一句按 <paramref name="kind"/> 换说法</b>（片212·P-47）：三种事实各有各的键；
+    /// <b>不可用分支不变</b>：成因仍由来源自己给，缺成因时落兜底那句。
+    /// </summary>
+    public static LocMessage Of(SourceAvailabilityKind kind, bool available, LocMessage? hint)
         => available
-            ? LocMessage.Of("source.avail.available")
+            ? LocMessage.Of(kind switch
+            {
+                SourceAvailabilityKind.FilePresent => "source.avail.kind.filePresent",
+                SourceAvailabilityKind.DependencyRunning => "source.avail.kind.dependencyRunning",
+                _ => "source.avail.kind.configured",
+            })
             : LocMessage.Of("source.avail.missing", hint ?? LocMessage.Of("source.avail.unknownReason"));
 }

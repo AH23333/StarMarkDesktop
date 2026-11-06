@@ -156,6 +156,39 @@ public partial class SettingsPageViewModel : ObservableObject
     [ObservableProperty] private LocMessage? _backupStatus;
     [ObservableProperty] private bool _isBackupBusy;
 
+    // ===== 备份/恢复的可取消范围（片212·P-36）=====
+    // 大库的导出/恢复是几秒到几十秒的长跑，唯一的安全阀当时是「等它跑完」。
+    // 这里给那段长跑配一颗真正的取消令牌：范围由 Begin/End 配对圈定，
+    // 取消按钮的可见性跟着范围走（IsBackupCancellable），⛔ 让「取消」在没事可取消时也亮着。
+    private CancellationTokenSource? _backupCts;
+
+    /// <summary>当前这段备份/恢复可否取消（取消按钮的可见位）：只在 Begin/End 圈定的范围内为真。</summary>
+    [ObservableProperty] private bool _isBackupCancellable;
+
+    /// <summary>
+    /// 开始一段可取消的备份/恢复工作，返回这段范围的令牌。
+    /// 与 <see cref="EndBackupCancelScope"/> 严格配对（try/finally），⛔ 嵌套——
+    /// 同屏只有一颗忙碌位（<see cref="IsBackupBusy"/>），第二段范围没有立足之处。
+    /// </summary>
+    public CancellationToken BeginBackupCancelScope()
+    {
+        _backupCts = new CancellationTokenSource();
+        IsBackupCancellable = true;
+        return _backupCts.Token;
+    }
+
+    /// <summary>结束可取消范围：摘掉取消按钮、释放令牌源。幂等（范围未开时是空操作）。</summary>
+    public void EndBackupCancelScope()
+    {
+        IsBackupCancellable = false;
+        _backupCts?.Dispose();
+        _backupCts = null;
+    }
+
+    /// <summary>取消当前那段备份/恢复（导出清半截、恢复报中间态，见 Core 各取消臂）。</summary>
+    [RelayCommand]
+    private void CancelBackup() => _backupCts?.Cancel();
+
     /// <summary>
     /// 本次会话是否以管理员权限运行。程序自己不再抬权限（P-108 改判：抬上去只会让拖进／拖出与系统对话框失灵），
     /// 所以这里为 true 只可能是用户手动"以管理员身份运行"的结果。

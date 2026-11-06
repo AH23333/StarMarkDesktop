@@ -829,4 +829,115 @@ public sealed class BackupServiceTests : IDisposable
         var tags = await ctx.Items.GetTagsForItemAsync(item.Id, CancellationToken.None);
         Assert.Equal("重要", Assert.Single(tags));
     }
+
+    // ===== 取消（片212·P-36）：大库的导出/恢复是几秒到几十秒的长跑，跑起来必须真的能喊停 =====
+
+    /// <summary>
+    /// 取消测试专用桩：四颗导出默认交回空集合、导入默认空操作；
+    /// 想钉「取消发生在哪一步」就在对应钩子上换成抛 OCE 或交回数据。
+    /// <b>刻意忽略令牌</b>——取消的时机由测试自己定（桩只负责不抢戏）。
+    /// </summary>
+    private sealed class CancelStubRepo : IBackupRepository
+    {
+        public Func<IReadOnlyList<Item>>? ExportItemsImpl { get; set; }
+        public Func<Task>? ImportItemsImpl { get; set; }
+
+        public Task<IReadOnlyList<Item>> ExportItemsAsync(CancellationToken ct)
+            => Task.FromResult(ExportItemsImpl is null ? Array.Empty<Item>() : ExportItemsImpl());
+
+        public Task<IReadOnlyList<UserStateRecord>> ExportUserStateAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<UserStateRecord>>(Array.Empty<UserStateRecord>());
+
+        public Task<IReadOnlyList<TagRecord>> ExportTagsAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<TagRecord>>(Array.Empty<TagRecord>());
+
+        public Task<IReadOnlyList<ItemTagLink>> ExportItemTagLinksAsync(CancellationToken ct)
+            => Task.FromResult<IReadOnlyList<ItemTagLink>>(Array.Empty<ItemTagLink>());
+
+        public Task ImportItemsAsync(IReadOnlyList<Item> items, CancellationToken ct)
+            => ImportItemsImpl is null ? Task.CompletedTask : ImportItemsImpl();
+
+        public Task<long> ImportUserStateAsync(IReadOnlyList<UserStateRecord> states, CancellationToken ct)
+            => Task.FromResult(0L);
+
+        public Task ImportTagsAsync(IReadOnlyList<TagRecord> tags, CancellationToken ct)
+            => Task.CompletedTask;
+
+        public Task<long> ImportItemTagLinksAsync(IReadOnlyList<ItemTagLink> links, CancellationToken ct)
+            => Task.FromResult(0L);
+
+        public Task ReindexAllSearchTextAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task ClearItemsAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task ClearItemTagLinksAsync(CancellationToken ct) => Task.CompletedTask;
+    }
+
+    private static BackupEnvelope OneItemEnvelope()
+    {
+        var env = new BackupEnvelope();
+        env.Payload.Items.Add(new Item
+        {
+            Type = ItemType.Bookmark, Source = "test", SourceId = "c1",
+            Title = "取消测试条目", Uri = "https://example.com/c1", CreatedAt = 1000,
+        });
+        return env;
+    }
+
+    [Fact]
+    public async Task ExportToFile_CancelledBeforeTheWrite_KeepsTheOldFileIntact()
+    {
+        // 写还没开始就取消：目标位置原有的档一个字节都不能动。
+        // 「清半截」只在写确实开始过之后才合法（FileMode.Create 已把旧档截断的那条路）——
+        // 先查再写那道闸就是为这颗不变量立的，本测钉住它。
+        var old = Path.Combine(_snapshotDir, $"old_{Guid.NewGuid():N}.json");
+        await File.WriteAllTextAsync(old, "原有内容");
+        var svc = new BackupService(new CancelStubRepo());   // 桩忽略令牌：数据收集照常走完，取消只落在写盘那道闸前
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => svc.ExportToFileAsync(old, cts.Token));
+
+        Assert.True(File.Exists(old));
+        Assert.Equal("原有内容", await File.ReadAllTextAsync(old));
+    }
+
+    [Fact]
+    public async Task Restore_CancelledDuringSnapshot_ReportsCleanCancel_NothingChanged()
+    {
+        // 取消发生在快照阶段＝库还没被碰过：回执必须是「未改动任何数据」那颗键，
+        // ⛔ 套「快照失败」或「导入失败」的口吻——用户自己按的停，不是事故。
+        var repo = new CancelStubRepo
+        {
+            ExportItemsImpl = () => throw new OperationCanceledException(),
+        };
+        var svc = new BackupService(repo);
+
+        var rr = await svc.RestoreAsync(OneItemEnvelope(), RestoreMode.Merge, null, CancellationToken.None);
+
+        Assert.False(rr.Success);
+        Assert.True(rr.Cancelled);
+        Assert.Null(rr.SnapshotPath);
+        Assert.Equal("settings.data.backup.cancelledBefore", rr.Message!.Key);
+    }
+
+    [Fact]
+    public async Task Restore_CancelledMidImport_ReportsTheSnapshotAsTheWayBack()
+    {
+        // 取消发生在快照之后＝导入停在半路：回执必须把「停在半路」与「快照路径」一起交出，
+        // ⛔ 假装原子（Replace 已清库、ImportItems 每 200 条一批各自提交）。
+        // 快照必须真实落盘——它就是回滚入口，嘴上有、盘上无等于让用户照着一条死路回滚。
+        var repo = new CancelStubRepo
+        {
+            ImportItemsImpl = () => Task.FromException(new OperationCanceledException()),
+        };
+        var svc = new BackupService(repo);
+
+        var rr = await svc.RestoreAsync(OneItemEnvelope(), RestoreMode.Merge, null, CancellationToken.None);
+
+        Assert.False(rr.Success);
+        Assert.True(rr.Cancelled);
+        Assert.NotNull(rr.SnapshotPath);
+        Assert.True(File.Exists(rr.SnapshotPath!));
+        Assert.Equal("settings.data.backup.cancelledMid", rr.Message!.Key);
+        Assert.Equal(rr.SnapshotPath, rr.Message.Args![0]);   // 句子里递的就是那颗回滚入口
+    }
 }

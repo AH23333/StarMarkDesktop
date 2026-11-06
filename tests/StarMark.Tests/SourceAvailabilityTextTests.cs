@@ -21,6 +21,8 @@ namespace StarMark.Tests;
 /// <para><b>批次 WI-57（P-187）之后这里钉的是键，⛔ 中文措辞</b>（规则 #130）：那几句话全进了语言表，
 /// 逐字钉中文的断言只会随另两列的改措辞红出一句假话。这一族能机检的两件事是
 /// <b>哪颗键</b>与<b>实参里到底带没带那条路径</b>。</para>
+/// <para><b>片212·P-47：「可用」那半句同理按 kind 换键</b>——三种不同的"可用"（Token／数据文件／外部程序）
+/// 各有各的键，一句笼统的「可用」让排障的人再猜一遍它靠什么成立。</para>
 /// </summary>
 public sealed class SourceAvailabilityTextTests
 {
@@ -35,18 +37,24 @@ public sealed class SourceAvailabilityTextTests
             => Task.FromResult<IReadOnlyList<Item>>(Array.Empty<Item>());
     }
 
-    [Fact]
-    public void Available_IsOneKey_AndTheReasonIsNeverAppended()
+    [Theory]
+    [InlineData(SourceAvailabilityKind.Configured, "source.avail.kind.configured")]
+    [InlineData(SourceAvailabilityKind.FilePresent, "source.avail.kind.filePresent")]
+    [InlineData(SourceAvailabilityKind.DependencyRunning, "source.avail.kind.dependencyRunning")]
+    public void Available_IsOneKeyPerKind_AndTheReasonIsNeverAppended(SourceAvailabilityKind kind, string expectedKey)
     {
-        var text = SourceAvailabilityText.Of(true, LocMessage.Of("source.hint.ditto", "任何成因都不该出现"));
-        Assert.Equal("source.avail.available", text.Key);
-        Assert.Null(text.Args);   // "可用"那颗没有槽：给了成因也不许拼进去
+        var text = SourceAvailabilityText.Of(kind, true, LocMessage.Of("source.hint.ditto", "任何成因都不该出现"));
+        Assert.Equal(expectedKey, text.Key);
+        Assert.Null(text.Args);   // "可用"那几颗没有槽：给了成因也不许拼进去
     }
 
-    [Fact]
-    public void Unavailable_WithoutAReason_StillSaysSomethingActionable()
+    [Theory]
+    [InlineData(SourceAvailabilityKind.Configured)]
+    [InlineData(SourceAvailabilityKind.FilePresent)]
+    [InlineData(SourceAvailabilityKind.DependencyRunning)]
+    public void Unavailable_WithoutAReason_StillSaysSomethingActionable(SourceAvailabilityKind kind)
     {
-        var text = SourceAvailabilityText.Of(false, null);
+        var text = SourceAvailabilityText.Of(kind, false, null);
         Assert.Equal("source.avail.missing", text.Key);
         // 兜底那颗是<b>嵌进去的另一颗键</b>，⛔ 在这里拼成成品字：外层换语言时它必须跟着重贴（#361）。
         Assert.Equal("source.avail.unknownReason", Assert.IsType<LocMessage>(text.Args![0]).Key);
@@ -55,17 +63,20 @@ public sealed class SourceAvailabilityTextTests
     /// <summary>
     /// 接口默认实现要保证既有源与测试桩不改动也能编译，并落到兜底话术。
     /// （默认成员只能经接口访问 ⇒ 这一句同时钉住"DiagnosticsService 必须按 IItemSource 取"。）
+    /// <para><b>片212·P-47：<c>AvailabilityKind</c> 也走默认成员</b>——不覆写的源落到 Configured，
+    /// 与 <c>AvailabilityHint</c> 同一条路子。</para>
     /// <para><b>逐字段比而不是整颗比</b>：<c>LocMessage</c> 是记录，但它那个 <c>object?[]</c> 实参数组
     /// 按引用相等——两颗各自 new 出来的同话记录并不相等，整颗比会红在仪器自己身上。</para>
     /// </summary>
     [Fact]
-    public void Interface_DefaultHint_IsNullSoOldImplementersKeepWorking()
+    public void Interface_DefaultHintAndKind_KeepOldImplementersWorking()
     {
         IItemSource src = new BareSource();
         Assert.Null(src.AvailabilityHint);
+        Assert.Equal(SourceAvailabilityKind.Configured, src.AvailabilityKind);
 
-        var fromStub = SourceAvailabilityText.Of(src.IsAvailable, src.AvailabilityHint);
-        var expected = SourceAvailabilityText.Of(false, null);
+        var fromStub = SourceAvailabilityText.Of(src.AvailabilityKind, src.IsAvailable, src.AvailabilityHint);
+        var expected = SourceAvailabilityText.Of(SourceAvailabilityKind.Configured, false, null);
         Assert.Equal(expected.Key, fromStub.Key);
         Assert.Equal(((LocMessage)expected.Args![0]!).Key, ((LocMessage)fromStub.Args![0]!).Key);
     }
@@ -74,7 +85,7 @@ public sealed class SourceAvailabilityTextTests
     public void TheReason_IsNested_NotGluedIntoASentence()
     {
         var why = LocMessage.Of("source.hint.githubNoToken");
-        var text = SourceAvailabilityText.Of(false, why);
+        var text = SourceAvailabilityText.Of(SourceAvailabilityKind.Configured, false, why);
         Assert.Equal("source.avail.missing", text.Key);
         Assert.Same(why, text.Args![0]);   // 原样嵌着：取词发生在贴上去的那一刻
     }

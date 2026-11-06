@@ -289,4 +289,103 @@ public sealed class GitHubClientTests
 
         Assert.Equal(expectedPerPage, sent);
     }
+
+    // ---- 片212·P-23：注入 HttpClient 的所有权与头的幂等 ----
+
+    /// <summary>
+    /// 记得自己有没有被 Dispose 的 handler：注入那条臂上"客户端是否代为释放"由它作证，
+    /// ⛔ 靠"下一发请求碰巧还能用"那种间接读数。
+    /// </summary>
+    private sealed class WatchfulHandler : HttpMessageHandler
+    {
+        public bool Disposed;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(OkJson("[]"));
+
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    [Fact]
+    public void InjectedHttpClient_IsNotDisposed_WithTheClient()
+    {
+        // 注入的 HttpClient 归调用方所有：客户端 Dispose 代为释放＝双重释放＋共享者的连接被拔。
+        var handler = new WatchfulHandler();
+        using var http = new HttpClient(handler);
+        using var client = new GitHubClient(ConfiguredOptions(), http);
+
+        client.Dispose();
+
+        Assert.False(handler.Disposed);   // 客户端的 Dispose ⛔ 碰注入的 HttpClient
+
+        // 所有权没被抢走、只是没被代劳：注入方自己的 Dispose 仍然收得走。
+        http.Dispose();
+        Assert.True(handler.Disposed);
+    }
+
+    [Fact]
+    public async Task SharedHttpClient_StillServesRequests_AfterClientDispose()
+    {
+        // 释放之后共享实例照常干活：这颗读数把"没代为 Dispose"与"没被动过手脚"一起证掉。
+        var handler = new WatchfulHandler();
+        using var http = new HttpClient(handler);
+        using var client = new GitHubClient(ConfiguredOptions(), http);
+
+        client.Dispose();
+
+        using var resp = await http.GetAsync("https://unit.test/");
+        Assert.True(resp.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task OwnedHttpClient_IsDisposed_WithTheClient()
+    {
+        // 自建那条臂（DI 单例今天走的就是它）行为不变：Dispose 仍收走自己 new 的 HttpClient。
+        // 读数用 SendAsync 入口：它开头就有 disposed 守卫（在碰 handler/网络之前同步抛），
+        // ⛔ 用 DefaultRequestHeaders 那条路——释放后它照常可摸，读不出"已收走"。
+        using var client = new GitHubClient(ConfiguredOptions());
+
+        client.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => client.GetStarredPageAsync(1, CancellationToken.None));
+    }
+
+    [Fact]
+    public void Constructor_LeavesTheOwnersUserAgentAlone_AndDoesNotStackOurs()
+    {
+        // 主人带着自己的 UA：既不被顶掉（wipe），也不叠出第二份（无条件 ParseAdd 的旧病）。
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("OwnerApp/2.0");
+        using var client = new GitHubClient(ConfiguredOptions(), http);
+
+        Assert.Equal("OwnerApp/2.0", http.DefaultRequestHeaders.UserAgent.ToString());
+    }
+
+    [Fact]
+    public void Constructor_AddsUserAgentAndAccept_WhenOwnerCarriesNone()
+    {
+        // 缺席才加的另一臂：主人没带，GitHub 要的 UA 与 Accept 由客户端补齐。
+        using var http = new HttpClient();
+        using var client = new GitHubClient(ConfiguredOptions(), http);
+
+        Assert.Equal("StarMarkDesktop/1.0", http.DefaultRequestHeaders.UserAgent.ToString());
+        Assert.Equal("application/vnd.github+json", http.DefaultRequestHeaders.Accept.Single().MediaType);
+    }
+
+    [Fact]
+    public void TwoClientsOnOneHttpClient_DoNotStackHeaders()
+    {
+        // 幂等：同一颗 HttpClient 先后被两颗客户端接管（共享注入的未来形状），头不叠份。
+        using var http = new HttpClient();
+        using var first = new GitHubClient(ConfiguredOptions(), http);
+        using var second = new GitHubClient(ConfiguredOptions(), http);
+
+        Assert.Single(http.DefaultRequestHeaders.UserAgent);
+        Assert.Single(http.DefaultRequestHeaders.Accept, h => h.MediaType == "application/vnd.github+json");
+    }
 }
