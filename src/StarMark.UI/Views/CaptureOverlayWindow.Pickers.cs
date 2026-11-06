@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,6 +17,7 @@ using StarMark.Abstractions.Capture;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Capture;
 using StarMark.Integrations.Capture;
+using StarMark.Integrations.Ocr;
 using StarMark.UI.Helpers;
 using StarMark.UI.Services;
 using Windows.Foundation;
@@ -136,10 +138,41 @@ public sealed partial class CaptureOverlayWindow
     }
 
     /// <summary>
+    /// ✅P-82：识字「识别语言」那一栏（挂在识字那颗的右键上）。候选全部来自
+    /// <c>ScreenOcrReader.AvailableLanguages</c>（这台机器装的 OCR 语言包），第一颗永远是「跟随系统」；
+    /// 读写的是<b>截图那一格</b>（<c>CaptureOcrLanguage</c>）——这条工具条只在截图/贴图两族上出现，
+    /// 直认流（<see cref="CaptureMode.Ocr"/>）根本没有这条条子，它的那一格归托盘子菜单管。
+    /// 机器上一个语言包都没有时右键沉默：没有可选项就没有可弹的东西（那颗「识字」点下去自己会报原因）。
+    /// </summary>
+    private void ToggleOcrLanguagePicker(FrameworkElement anchor)
+    {
+        if (_pickerOpen) { HidePicker(); return; }
+        var settings = App.Services.GetRequiredService<SettingsStore>();
+        var current = settings.LoadCaptureOcrLanguage();
+        var languages = ScreenOcrReader.AvailableLanguages();
+        if (languages.Count == 0) return;
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Padding = new Thickness(4) };
+        row.Children.Add(GroupChip(Locale.T("ocr.pick.followSystem"), Locale.T("ocr.pick.followSystemTip"),
+            () => settings.SaveCaptureOcrLanguage(null), selected: current is null));
+        foreach (var tag in languages)
+        {
+            // 语言标签（zh-CN 那种）是系统给的数据 ⇒ 原样上屏、原样交实参，⛔ 在这里翻译或写死任何一门
+            var wanted = tag;
+            row.Children.Add(GroupChip(wanted,
+                Locale.Fmt("ocr.pick.languageTip", wanted),
+                () => settings.SaveCaptureOcrLanguage(wanted),
+                selected: string.Equals(wanted, current, StringComparison.OrdinalIgnoreCase)));
+        }
+        ShowPicker(anchor, row);
+    }
+
+    /// <summary>
     /// 组栏里的一颗文字芯片。这里<b>刻意不画图标</b>：组号本来就是文字（"组 3"画成图形就没人认得出是第几组），
     /// 而"图标排上不许写死文字"那条禁令管的是主排按钮——这一栏是点开才出现的选项列表，与浮层里的颜色名同类。
+    /// <paramref name="selected"/>（✅P-82）＝当前生效的那一项：亮 <see cref="BarChecked"/>，
+    /// 与主排按钮同一颗"我在哪一态"的信号（语言栏与组栏共用这颗芯片）。
     /// </summary>
-    private Button GroupChip(string text, string tip, Action apply)
+    private Button GroupChip(string text, string tip, Action apply, bool selected = false)
     {
         var chip = new Button
         {
@@ -147,7 +180,7 @@ public sealed partial class CaptureOverlayWindow
             Height = ButtonHeight,
             Padding = new Thickness(6, 0, 6, 0),
             Margin = new Thickness(0),
-            Background = BarNormal,
+            Background = selected ? BarChecked : BarNormal,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(3),
             VerticalAlignment = VerticalAlignment.Center,

@@ -1051,10 +1051,11 @@ public sealed class I18nWiringGateTests
         var trayPartial = Code(ReadRepoFile("src/StarMark.UI/MainWindow.Tray.cs"));
         foreach (var (fragment, name) in new[]
                  {
-                     ("private static TrayHost.TrayCommandItem? GroupMenu()", "GroupMenu"),
-                     ("private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()", "BuildTrayCommands"),
-                     ("private static string PinLabel(int pins, bool hidden)", "PinLabel"),
-                 })
+                      ("private static TrayHost.TrayCommandItem? GroupMenu()", "GroupMenu"),
+                      ("private TrayHost.TrayCommandItem? OcrLanguageMenu()", "OcrLanguageMenu"),
+                      ("private IReadOnlyList<TrayHost.TrayCommandItem> BuildTrayCommands()", "BuildTrayCommands"),
+                      ("private static string PinLabel(int pins, bool hidden)", "PinLabel"),
+                  })
             foreach (Match m in Regex.Matches(MethodBody(trayPartial, fragment), @"""[^""]*[\u4e00-\u9fff][^""]*"""))
                 offenders.Add($"MainWindow.Tray.cs {name}：{m.Value}");
 

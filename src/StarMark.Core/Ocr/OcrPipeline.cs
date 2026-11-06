@@ -27,8 +27,13 @@ public static class OcrPipeline
     /// 送引擎前三件事（判据全在 <see cref="OcrImagePrep"/>）：补边由调用方在裁切时做、
     /// 整数倍最近邻放大、灰度 + 对比拉伸。桌面文字基本都是 12–14px 的小字，小字号是这套引擎最主要的失败源。
     /// </para>
+    /// <para>
+    /// ✅P-82：<paramref name="language"/> 是用户显式选定的识别语言（BCP-47 标签，如 zh-CN）；null＝跟随系统配置，
+    /// 且只有 null 才走"弱结果自动换语言再试"——用户既然明确选了一门，空结果就该如实报空，
+    /// 而不是背着他拿别的语言再认一遍把"空"偷偷换掉。
+    /// </para>
     /// </summary>
-    public static async Task<OcrRead> ReadAsync(byte[] pixels, int width, int height)
+    public static async Task<OcrRead> ReadAsync(byte[] pixels, int width, int height, string? language)
     {
         var factor = OcrImagePrep.UpscaleFactor(width, height);
         byte[] work;
@@ -57,7 +62,7 @@ public static class OcrPipeline
         }
         OcrImagePrep.StretchContrast(work, workWidth, workHeight);
 
-        var first = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight);
+        var first = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight, language);
         // ✅WI-65 片3 第二刀当时写的是「引擎那句话是机器文本 ⇒ 数据门就放在这一行」。<b>那句归因错了</b>：
         // 那六颗下落里只有 WinRT 的异常正文是原文，其余五颗（去哪装语言包・几种在场・尺寸不合法・
         // 缓冲不够长・按那个语言建不出引擎）都是 ScreenOcrReader <b>自己写的句子</b>，套进 common.rawValue
@@ -66,22 +71,25 @@ public static class OcrPipeline
         if (!first.Ok)
             return OcrRead.Fail(first.Error ?? LocMessage.Of("ocr.card.noReason"), first.EngineLanguage);
 
-        var language = first.EngineLanguage;
+        // 这一发实际生效的语言：跟随系统时是引擎挑的那门（first.EngineLanguage），显式选定就是那一门；
+        // 换语言重试成功时被换成换过去的那门（✅P-82：换语言那条路只在跟随系统时存在）。
+        var usedLanguage = first.EngineLanguage;
         var text = OcrText.Assemble(first.Lines);
         var chars = OcrText.CountMeaningful(text);
         var swapped = false;
 
-        // 认了个空、区域却明显够大 ⇒ 大概率是引擎语种与画面语种不符（本机装了多种语言包时尤其常见）
-        if (OcrImagePrep.ShouldRetryWithOtherLanguage(chars, (long)width * height))
+        // 认了个空、区域却明显够大 ⇒ 大概率是引擎语种与画面语种不符（本机装了多种语言包时尤其常见）。
+        // ✅P-82：用户显式选了一门（language 非 null）时这条路整个关掉——选了就是只要这一门。
+        if (language is null && OcrImagePrep.ShouldRetryWithOtherLanguage(chars, (long)width * height))
         {
-            foreach (var tag in ScreenOcrReader.AlternativeLanguages(language))
+            foreach (var tag in ScreenOcrReader.AlternativeLanguages(usedLanguage))
             {
                 var alt = await ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight, tag);
                 if (!alt.Ok) continue;
                 var altText = OcrText.Assemble(alt.Lines);
                 var altChars = OcrText.CountMeaningful(altText);
                 if (altChars <= chars) continue;     // 并列时保持用户配置语言：换了也没多认出东西
-                (language, text, chars, swapped) = (tag, altText, altChars, true);
+                (usedLanguage, text, chars, swapped) = (tag, altText, altChars, true);
             }
         }
 
@@ -90,7 +98,7 @@ public static class OcrPipeline
             Ok = true,
             Text = text,
             Chars = chars,
-            Language = language,
+            Language = usedLanguage,
             Upscale = factor,
             SwappedLanguage = swapped,
         };

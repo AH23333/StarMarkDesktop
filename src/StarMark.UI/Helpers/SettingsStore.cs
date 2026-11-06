@@ -284,6 +284,18 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 而显隐那条是"贴图忽然点不动了"唯一的键盘出口。判据在 <c>Core/Hotkeys/CaptureGate</c>。</para>
         /// </summary>
         public bool? CaptureEnabled { get; set; }
+        /// <summary>
+        /// 截图/贴图流的识字识别语言（BCP-47 标签，如 zh-CN）。✅P-82。<b>null＝跟随系统</b>（默认）。
+        /// 读取侧经 <c>OcrLanguageOrNone</c> 对已装语言包校验——语言包被卸载后旧值回落 null，
+        /// 而不是拿着一个引擎建不出的语言反复失败。
+        /// </summary>
+        public string? CaptureOcrLanguage { get; set; }
+        /// <summary>
+        /// 直认流（框选后直接复制文字）的识字识别语言（BCP-47 标签）。✅P-82。
+        /// 与 <see cref="CaptureOcrLanguage"/> 分格是拍板口径「按截图/识字分别记住」：
+        /// 两族画面的语言习惯不同，谁也不许覆盖谁。<b>null＝跟随系统</b>（默认）。
+        /// </summary>
+        public string? ScreenOcrLanguage { get; set; }
         /// <summary>画板（excalidraw）总开关的存储位（默认关＝null/false；v1 §21 总闸）。</summary>
         public bool? BoardsEnabled { get; set; }
 

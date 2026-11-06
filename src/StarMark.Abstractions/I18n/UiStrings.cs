@@ -1670,7 +1670,10 @@ public static class UiStrings
         new Entry("capture.bar.copy", "把带标注的画面复制进剪贴板（Enter）", "Copy the annotated image to the clipboard (Enter)", "注釈入りの画像をクリップボードへ（Enter）"),
         new Entry("capture.bar.save", "存成 PNG（Ctrl+S）", "Save as PNG (Ctrl+S)", "PNG で保存（Ctrl+S）"),
         new Entry("capture.bar.pin", "钉在桌面上（同 {0}），带上刚画的标注", "Pin it to the desktop (same as {0}), keeping the marks you just drew", "デスクトップに貼り付け（{0} と同じ、描いた注釈付き）"),
-        new Entry("capture.bar.ocr", "认出这块画面的文字并复制", "Read the text in this area and copy it", "この範囲の文字を読み取ってコピー"),
+        // ✅P-82：句尾教那颗右键手势——条上没有文字，选择器藏在这颗按钮的右键里，不写出来就没人找得到。
+        new Entry("capture.bar.ocr", "认出这块画面的文字并复制（右键选识别语言）",
+                  "Read the text in this area and copy it (right-click to pick the recognition language)",
+                  "この範囲の文字を読み取ってコピー（右クリックで認識言語を選択）"),
         new Entry("capture.bar.board", "把带标注的画面放上画板，接着圈注、缩放、写字", "Put the annotated image on a board to keep marking, zooming and writing on it", "注釈入りの画像をキャンバスに載せて、そのまま注釈・拡大・文字入力できます"),
         new Entry("canvas.bar.tip.toBoard", "把笔迹那一块放上画板，板上的墨原样留着", "Send the inked area to a board; the marks stay on the canvas", "線を描いた部分だけをキャンバスに送り、板の落書きはそのまま残ります"),
         new Entry("capture.bar.through", "鼠标穿透：让所有贴图都不再收鼠标（再用这一颗或按 {0} 恢复；只动一组请点托盘「{1}」那一行）",
@@ -1706,6 +1709,14 @@ public static class UiStrings
         new Entry("capture.pick.groupMerge", "把这一张并进{0}（现在 {1} 张）", "Merge this pin into {0} (now {1} pins)", "この画像を{0}にまとめる（現在 {1} 枚）"),
         new Entry("capture.pick.groupLeave", "移出", "Leave group", "組から出る"),
         new Entry("capture.pick.groupLeaveTip", "让这一张不再属于任何一组", "Take this pin out of every group", "この画像をどの組からも外す"),
+        // ===== ✅P-82 识字「识别语言」选择器：语言标签（zh-CN 那种）是系统给的数据 ⇒ 交实参，⛔ 写死任何一门 =====
+        new Entry("ocr.pick.followSystem", "跟随系统", "Follow system", "システムに従う"),
+        new Entry("ocr.pick.followSystemTip", "按系统配置的语言认；认出的字太少时自动换其它已装语言再试一次",
+                  "Reads with the system language; if almost nothing comes back it retries once with another installed language",
+                  "システムの言語で読み取ります。ほとんど認識できないときは他のインストール済み言語でもう一度試します"),
+        new Entry("ocr.pick.languageTip", "只用 {0} 认这一块（不再自动换语言）",
+                  "Read this area with {0} only - no automatic retry with another language",
+                  "この範囲を {0} だけで読み取る（他の言語への自動切り替えなし）"),
         new Entry("pin.bar.through", " · 已穿透，按 {0} 恢复", " · click-through on — press {0} to hand the mouse back", " · 透過中、{0} で復帰"),
         new Entry("pin.opacity.label", "不透明度", "Opacity", "不透明度"),
         new Entry("pin.bar.opacity", "{0} {1}%", "{0} {1}%", "{0} {1}%"),
@@ -1825,6 +1836,11 @@ public static class UiStrings
         new Entry("ocr.text.noText", "这块画面里没有认出文字（图形、手写或太小的字都不在这套引擎的能力里）",
                   "This image has no text the engine can read (graphics, handwriting and very small text are all outside what it does)",
                   "この画像には読める文字がありません（図形・手書き・小さすぎる文字はこのエンジンの能力外です）"),
+        // ✅P-82：认了个空时「按哪种语言认的」是用户自查的唯一线索（框错语言＝最常见的空结果原因）。
+        // 语言标签是系统给的数据 ⇒ 交实参原样进句；engine 没报它用了哪种时才落上面那颗不带语言的兜底。
+        new Entry("ocr.text.noTextBy", "按 {0} 认这块画面时没有认出文字（图形、手写或太小的字都不在这套引擎的能力里）",
+                  "No text the engine can read was found in this image with {0} (graphics, handwriting and very small text are all outside what it does)",
+                  "{0} でこの画像を読んだとき読める文字が見つかりませんでした（図形・手書き・小さすぎる文字はこのエンジンの能力外です）"),
         new Entry("ocr.how.byLanguage", "按 {0}", "using {0}", "{0} で認識"),
         new Entry("ocr.how.upscale", "放大 {0}×", "upscaled {0}×", "{0} 倍に拡大"),
         new Entry("ocr.how.swapped", "已换语言", "language retried", "言語を切り替え"),
@@ -2864,6 +2880,8 @@ public static class UiStrings
         new Entry("tray.screenshot", "截图（框选区域）", "Capture (select an area)", "スクリーンショット（範囲選択）"),
         new Entry("tray.pin", "贴图（框选后钉在桌面）", "Pin (select, then stick to the desktop)", "ピン（範囲選択してデスクトップに固定）"),
         new Entry("tray.ocr", "识字（框选后复制文字）", "OCR (select, then copy the text)", "文字認識（範囲選択してコピー）"),
+        // ✅P-82：直认流的识别语言子菜单父行（语言行本身是系统给的标签 ⇒ 交实参，⛔ 在这里写死任何一门）。
+        new Entry("tray.ocrLanguage", "识字识别语言", "OCR language", "文字認識の言語"),
         new Entry("tray.canvas", "屏幕画布（讲解时在屏幕上画）", "Screen canvas (draw over the screen)", "スクリーンキャンバス（画面に描き込む）"),
         new Entry("tray.boards", "画板", "Board", "ボード"),
         new Entry("tray.boardsNew", "画板（新起一块）", "Board (new)", "ボード（新規）"),

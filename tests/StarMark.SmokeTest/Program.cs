@@ -1041,7 +1041,7 @@ static async Task OcrCheckAsync()
             if (!raw.Ok) throw new Exception("基线识别失败：" + raw.Error);
             var rawText = StarMark.Core.Ocr.OcrText.Assemble(raw.Lines);
 
-            var read = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(bgra, w, h);
+            var read = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(bgra, w, h, null);
             if (!read.Ok) throw new Exception("产品链识别失败：" + read.Error);
             // 产品的预处理绝不能改到调用方给的缓冲：贴图窗交出来的就是它正在显示的那份像素，
             // 就地转灰度＝"点一下识字，贴图变灰图"。这条断言量的就是那个反直觉的边界。
@@ -1083,7 +1083,7 @@ static async Task OcrCheckAsync()
         if (rawFrame.Lines.Count > 0 && rawAssembled.Length == 0)
             throw new Exception("引擎给了行，拼回来却是空的（拼接判据错了）");
         var started = Stopwatch.GetTimestamp();
-        var readFrame = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(crop, fw, fh);
+        var readFrame = await StarMark.Core.Ocr.OcrPipeline.ReadAsync(crop, fw, fh, null);
         var elapsed = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
         lines.Add($"Frame {fw}x{fh} 基线 lines={rawFrame.Lines.Count} chars={StarMark.Core.Ocr.OcrText.CountMeaningful(rawAssembled)} "
             + $"→ 产品 chars={readFrame.Chars} how={readFrame.How} 产品链耗时={elapsed:F0}ms");

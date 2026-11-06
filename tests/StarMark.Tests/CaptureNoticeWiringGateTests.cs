@@ -42,6 +42,9 @@ public sealed class CaptureNoticeWiringGateTests
     private const string SnapshotPartial = "src/StarMark.UI/Services/CanvasService.Snapshot.cs";
     private const string HostPartial = "src/StarMark.UI/Services/CanvasService.Host.cs";
     private const string Gdi = "src/StarMark.Integrations/Capture/GdiScreenCapture.cs";
+    private const string OverlayPickers = "src/StarMark.UI/Views/CaptureOverlayWindow.Pickers.cs";
+    private const string TrayPartial = "src/StarMark.UI/MainWindow.Tray.cs";
+    private const string SettingsCapture = "src/StarMark.UI/Helpers/SettingsStore.Capture.cs";
 
     /// <summary>
     /// 每一张失败脸都有人问：少一条＝那条失败从此静默（用户只会以为"这个键坏了"）。
@@ -323,17 +326,30 @@ public sealed class CaptureNoticeWiringGateTests
         var reader = SourceGate.Code(SourceGate.ReadRepoFile(OcrReaderFile));
 
         // ① 三张失败脸各有话说（引擎坏了／认出个空／写不进剪贴板），成功那一张也要报数
-        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.failedTitle\")"));
+        //    （✅P-82 后 1：从前 2 里的另一处住在死码 CopyTextFromSelectionAsync 里，那一刀把它拆了）
+        Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.failedTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.emptyTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copiedTitle\")"));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copyFailedBody\""));
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.copiedBody\""));
         // ② 抬头那颗必传（⛔ 默认值），两态各报自己的名字；同一颗"复制失败"与截图那一路共用一个出处
-        Assert.Equal(2, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.category\")"));
+        //    （✅P-82 后 0：svc 里那两处原本全在死码里——这颗键的正主在 Pin.cs 的贴图右键菜单，不受影响）
+        Assert.Equal(0, SourceGate.Count(svc, "LocMessage.Of(\"ocr.card.category\")"));
         Assert.DoesNotContain("string category =", svc);
         Assert.Equal(1, SourceGate.Count(svc, "LocMessage.Of(\"capture.card.copyFailedTitle\")"));
         Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"capture.card.categoryOcr\")"));
         Assert.Equal(1, SourceGate.Count(overlay, "LocMessage.Of(\"pin.card.categoryOcr\")"));
+        // ②-补（✅P-82）：识字语言整条链必传无默认——带默认值＝"忘了传也算说过话"；
+        //     死码 CopyTextFromSelectionAsync 拆掉后不许回来（它裁选区的那半件事由遮罩窗 FinalPixels 那条正路做）。
+        Assert.Equal(1, SourceGate.Count(svc, "OcrPipeline.ReadAsync(pixels, width, height, language)"));
+        Assert.Equal(1, SourceGate.Count(svc, "OcrText.ResultProblem(read.Text, read.Language)"));
+        Assert.DoesNotContain("string? language = null", svc);
+        Assert.DoesNotContain("string? language = null", pipe);
+        Assert.DoesNotContain("CopyTextFromSelectionAsync", svc);
+        // ②-补二（✅P-82）：用户显式选了一门（language 非 null）时自动换语言那条路整个关掉；
+        //     跟随系统（null）时保持旧行为。两个方向各钉一枚。
+        Assert.Equal(1, SourceGate.Count(pipe, "ScreenOcrReader.RecognizeAsync(work, workWidth, workHeight, language)"));
+        Assert.Equal(1, SourceGate.Count(pipe, "language is null && OcrImagePrep.ShouldRetryWithOtherLanguage"));
         // ③ "怎么认的"那三片＋分隔符＋括号：Core 一份，UI⛔ 再写第二份括号。
         //    ✅WI-65 片3 第二刀起那一串交的是 <c>LocJoin</c>＝连连接符本身也进表（`ocr.how.join`），
         //    括号那颗交的是「键＋那一句」⇒ 这一档从此⛔ 出现当场取词（念法冻在建对象那一刻＝坑表 #362 那一族）。
@@ -372,6 +388,9 @@ public sealed class CaptureNoticeWiringGateTests
                                         "像素缓冲比声明的尺寸短", "创建识别引擎（该语言可能没装", "识别没有完成：" })
             Assert.DoesNotContain(deadOcr, reader);
         Assert.Equal(1, SourceGate.Count(text, "LocMessage.Of(\"ocr.text.noText\")"));
+        // ✅P-82：认了个空时"按哪种语言认的"是用户自查的唯一线索——引擎实际用的语言交进句子；
+        // 引擎没报语言时才落上面那颗不带语言的兜底（两颗键同住 OcrText，各守一个出口）。
+        Assert.Equal(1, SourceGate.Count(text, "LocMessage.Of(\"ocr.text.noTextBy\", language)"));
         // ⑥ 旧句子一概不许回来（带引号的短词同 WI-46a 那条口径：裸词会撞上日志措辞）
         foreach (var dead in new[]
         {
@@ -384,6 +403,46 @@ public sealed class CaptureNoticeWiringGateTests
             Assert.DoesNotContain(dead, pipe);
         }
         Assert.DoesNotContain("\"识字\"", read);
+    }
+
+    /// <summary>
+    /// ✅P-82 识字「识别语言」的两颗槽：截图/贴图流（<c>CaptureOcrLanguage</c>）与直认流
+    ///（<c>ScreenOcrLanguage</c>）分格记住、各走各的门——拍板口径「按截图/识字分别记住」。
+    /// 这一条把三个选点钉在各自的槽上：谁写串了槽，两族的选择就开始互相覆盖，
+    /// 用户"明明选过、又变回去"的错觉就是从这里来的（AI 域四 key 同名那颗教训的同一族）。
+    /// </summary>
+    [Fact]
+    public void TheOcrLanguageChoosersRouteThroughTheTwoPersistedSlots()
+    {
+        var actions = SourceGate.Code(SourceGate.ReadRepoFile(OverlayActions));
+        var pickers = SourceGate.Code(SourceGate.ReadRepoFile(OverlayPickers));
+        var tray = SourceGate.Code(SourceGate.ReadRepoFile(TrayPartial));
+        var store = SourceGate.Code(SourceGate.ReadRepoFile(SettingsCapture));
+
+        // ① 选槽的判据只有一处（Commit 的 OcrLanguage）：直认态读「识字」那格，其余（截图/贴图工具条）读「截图」那格
+        Assert.Equal(1, SourceGate.Count(actions, "_mode == CaptureMode.Ocr"));
+        Assert.Equal(1, SourceGate.Count(actions, "LoadScreenOcrLanguage()"));
+        Assert.Equal(1, SourceGate.Count(actions, "LoadCaptureOcrLanguage()"));
+        // ② 遮罩窗工具条右键那一栏只写「截图」那格——这条条子只出现在截图/贴图两族上
+        Assert.Equal(2, SourceGate.Count(pickers, "SaveCaptureOcrLanguage"));
+        Assert.Equal(0, SourceGate.Count(pickers, "SaveScreenOcrLanguage"));
+        // ③ 托盘子菜单只读写「识字」那格——它挂在直认入口（托盘「识字」那一行）下面
+        Assert.Equal(1, SourceGate.Count(tray, "LoadScreenOcrLanguage()"));
+        Assert.Equal(2, SourceGate.Count(tray, "SaveScreenOcrLanguage"));
+        Assert.Equal(0, SourceGate.Count(tray, "LoadCaptureOcrLanguage()"));
+        Assert.Equal(0, SourceGate.Count(tray, "SaveCaptureOcrLanguage"));
+        // ④ 两格的存取都只住在 SettingsStore.Capture 那一位主人里，读取侧一律过在场校验
+        //   （语言包装卸后旧值回落 null＝跟系统，而不是拿建不出的语言反复失败）
+        Assert.Equal(1, SourceGate.Count(store, "OcrLanguageOrNone(Load()?.CaptureOcrLanguage)"));
+        Assert.Equal(1, SourceGate.Count(store, "OcrLanguageOrNone(Load()?.ScreenOcrLanguage)"));
+        Assert.Equal(1, SourceGate.Count(store, "ScreenOcrReader.AvailableLanguages()"));
+        // ⑤ 语言标签是系统给的数据 ⇒ 候选一律现查 AvailableRecognizerLanguages，⛔ 任何写死一门的地方
+        foreach (var file in new[] { pickers, tray, store })
+        {
+            Assert.DoesNotContain("\"zh-CN\"", file);
+            Assert.DoesNotContain("\"en-US\"", file);
+            Assert.DoesNotContain("\"ja\"", file);
+        }
     }
 
     /// <summary>

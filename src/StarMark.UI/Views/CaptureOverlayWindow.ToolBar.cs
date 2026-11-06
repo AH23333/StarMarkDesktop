@@ -133,6 +133,9 @@ public sealed partial class CaptureOverlayWindow
         }
         var ocr = IconButton(OcrIcon(), LocMessage.Of("capture.bar.ocr"));
         ocr.Click += Ocr_Click;
+        // ✅P-82：识字识别语言选择器挂在这颗的右键上——条上没有文字，没有第二个可发现的入口
+        //（说明那句句尾教的就是这一下，见 capture.bar.ocr）。与换笔那颗的右键同一手感（BrushTool_RightTapped）。
+        ocr.RightTapped += (_, e) => { ToggleOcrLanguagePicker(ocr); e.Handled = true; };
         // 放上画板那一路（深析 §四 第1行）：交的是同一份带标注的画面，只是落点换成那扇窗。
         // 贴图态也摆这一颗——那张图本来就还能拿去接着标，与「复制／存图／识字」在两种态下同一条规矩。
         var toBoard = IconButton(BoardIcon(), LocMessage.Of("capture.bar.board"));

@@ -95,6 +95,21 @@ public sealed partial class MainWindow
     /// </summary>
     private const int TrayGroupParent = -1;
 
+    /// <summary>
+    /// 「识字识别语言」那棵子菜单（✅P-82）的父行号。与 <see cref="TrayGroupParent"/> 同一颗规矩：
+    /// 父行只是容器，永远发不出命令，但照样占号位。
+    /// </summary>
+    private const int TrayOcrLanguageParent = -2;
+
+    /// <summary>
+    /// ✅P-82：识字语言行的号段。900＝「跟随系统」，901 起按 <c>ScreenOcrReader.AvailableLanguages</c>
+    /// 的顺序发号；<b>999 封顶</b>——1000 起是 <see cref="StarMark.Core.Capture.PinGrouping"/> 的组号段
+    /// （TagBase），撞上去会被 <c>RunTrayCommand</c> 当成组命令发走。真实机器上的语言包量级是个位数，
+    /// 99 门封顶只是把"撞号"这件事在形状上变得不可能。
+    /// </summary>
+    private const int TrayOcrLanguageFollowSystem = 900;
+    private const int TrayOcrLanguageMaxTag = 999;
+
     private static TrayHost.TrayCommandItem? GroupMenu()
     {
         var groups = StarMark.UI.Services.PinManager.Groups;
@@ -108,6 +123,32 @@ public sealed partial class MainWindow
                     new(PinGrouping.ThroughLabel(group.AllThrough).Render(), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Through)),
                     new(PinGrouping.CloseLabel(group.Members.Count).Render(), PinGrouping.TagOf(group.Serial, PinGrouping.Action.Close)),
                 ])).ToList());
+    }
+
+    /// <summary>
+    /// 「识字识别语言」那棵子菜单（✅P-82）：读写<b>识字那一格</b>（<c>ScreenOcrLanguage</c>）。
+    /// 这一棵挂在托盘「识字」那一行下面——那是直认流的入口，所以它管的那一格与遮罩窗工具条
+    /// 右键那一栏（截图那一格）分格记住（拍板口径「按截图/识字分别记住」）。
+    /// <para>语言行本身是系统给的标签（zh-CN 那种）＝数据 ⇒ 原样上屏；「跟随系统」与父行是表里的词。
+    /// 一个语言包都没有时整棵不出现：那时点「识字」自己会报"去哪装"，留一棵只剩「跟随系统」的空目录
+    /// 只会让人以为选了也没用（与 <see cref="GroupMenu"/> 同一条判据）。</para>
+    /// </summary>
+    private TrayHost.TrayCommandItem? OcrLanguageMenu()
+    {
+        var languages = StarMark.Integrations.Ocr.ScreenOcrReader.AvailableLanguages();
+        if (languages.Count == 0) return null;
+        var current = _settings.LoadScreenOcrLanguage();
+        var children = new List<TrayHost.TrayCommandItem>
+        {
+            new(Locale.T("ocr.pick.followSystem"), TrayOcrLanguageFollowSystem, current is null),
+        };
+        for (var index = 0; index < languages.Count && TrayOcrLanguageFollowSystem + 1 + index <= TrayOcrLanguageMaxTag; index++)
+        {
+            var wanted = languages[index];
+            children.Add(new TrayHost.TrayCommandItem(wanted, TrayOcrLanguageFollowSystem + 1 + index,
+                string.Equals(wanted, current, StringComparison.OrdinalIgnoreCase)));
+        }
+        return new TrayHost.TrayCommandItem(Locale.T("tray.ocrLanguage"), TrayOcrLanguageParent, Children: children);
     }
 
     /// <summary>
@@ -173,6 +214,11 @@ public sealed partial class MainWindow
         // 有了组才多出这一棵，而且插在"所有贴图"那三条之后（先全局、后按组，与人的操作顺序一致）。
         // 一组贴图收起后它的工具条跟着消失，托盘这一行就是那几张图唯一的出口——不能只在贴图条上给入口。
         if (GroupMenu() is { } groupMenu) list.Insert(list.FindIndex(item => item.Tag == TrayPinsCloseAll) + 1, groupMenu);
+        // ✅P-82：识字语言的子菜单挂在「识字」那一行下面，并随那一条一起消失——capture 总开关关掉时
+        // 直认入口整条不出现，留一棵指不进任何流程的语言树就是看得见点不动的残骸（同上面那条判据）。
+        if (StarMark.Core.Hotkeys.CaptureGate.ShowsTrayItem(HotkeyActions.ScreenOcr, captureOn)
+            && OcrLanguageMenu() is { } ocrLanguage)
+            list.Insert(list.FindIndex(item => item.Tag == TrayScreenOcr) + 1, ocrLanguage);
         // 三条总开关各自关掉时，对应入口整条消失（发起人裁决："关掉就别留入口"）。
         // 画布那条另有按 Ctrl+Alt+D 给的一句"要先在设置里打开"——那是 CanvasService 的闸门，不是菜单项的职责；
         // 截屏那三条则连键一起放掉（F1/F3 是裸功能键），所以这里必须整条消失，不能留一项灰在那儿。
@@ -241,6 +287,12 @@ public sealed partial class MainWindow
             case int groupTag when PinGrouping.IsGroupTag(groupTag):
                 StarMark.UI.Services.PinManager.RunGroupCommand(groupTag);
                 break;
+            // ✅P-82 识字识别语言：900＝跟随系统，901 起＝按右键那一刻语言表的顺序。表是快照，
+            // 走到这里时它可能已经变了（装/卸语言包）——按号找回那一门，越界就忽略这一次点击
+            //（⛔ 拿旧号瞎指一门：那会把语言改成用户没选过的那种）。
+            case int langTag when langTag >= TrayOcrLanguageFollowSystem && langTag <= TrayOcrLanguageMaxTag:
+                RunOcrLanguageCommand(langTag - TrayOcrLanguageFollowSystem);
+                break;
             case TrayTopmostToggle:
                 _ = _widgetManager.ToggleAllTopmostAsync();
                 break;
@@ -275,6 +327,23 @@ public sealed partial class MainWindow
                 _ = CheckUpdateFromTrayAsync();
                 break;
         }
+    }
+
+    /// <summary>
+    /// ✅P-82：托盘点了识字语言那一行。index 0＝「跟随系统」（存 null），其余＝语言表里第 index−1 门。
+    /// 语言表<b>现查</b>：菜单行是右键那一刻的快照，装/卸语言包之后旧号可能越界——越界忽略这一次，
+    /// 下一次右键看到的就已经是新表（⛔ 把旧号硬解成"现在表里的那一行"，那是把用户没点的当成点了）。
+    /// </summary>
+    private void RunOcrLanguageCommand(int index)
+    {
+        if (index == 0)
+        {
+            _settings.SaveScreenOcrLanguage(null);
+            return;
+        }
+        var languages = StarMark.Integrations.Ocr.ScreenOcrReader.AvailableLanguages();
+        if (index - 1 >= languages.Count) return;
+        _settings.SaveScreenOcrLanguage(languages[index - 1]);
     }
 
     /// <summary>

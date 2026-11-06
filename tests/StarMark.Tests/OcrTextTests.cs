@@ -112,10 +112,21 @@ public sealed class OcrTextTests
     [Fact]
     public void ResultProblem_EmptyCaseNamesTheLimits()
     {
-        var problem = OcrText.ResultProblem(string.Empty)!.Render();   // ✅片3b：那颗交「键＋实参」⇒ 比句子
+        // ✅片3b：那颗交「键＋实参」⇒ 比句子；✅P-82：引擎没报语言时仍落这颗不带语言的兜底
+        var problem = OcrText.ResultProblem(string.Empty, null)!.Render();
         Assert.Contains("没有认出文字", problem);
         Assert.Contains("图形", problem);      // 要说清哪种情况注定读不出来，别让人反复试
-        Assert.Null(OcrText.ResultProblem("有字"));
+        Assert.Null(OcrText.ResultProblem("有字", null));
+    }
+
+    [Fact]
+    public void ResultProblem_EmptyCaseWithLanguageSaysWhichOneWasUsed()
+    {
+        // ✅P-82：认了个空时"按哪种语言认的"是用户自查的唯一线索（框错语言＝最常见的空结果原因）
+        var problem = OcrText.ResultProblem(string.Empty, "en-US")!.Render();
+        Assert.Contains("en-US", problem);
+        Assert.Contains("没有认出文字", problem);
+        Assert.Null(OcrText.ResultProblem("有字", "en-US"));    // 有字永远是 null：那句是"空结果"专属
     }
 
     [Theory]

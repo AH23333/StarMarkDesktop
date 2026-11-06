@@ -825,3 +825,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates216 47/47；census 19；flipcheck PASS（加行 14 行 0 禁词・whole 128 同态）；计数器 296/278/18 VERDICT OK。
 
 - 下一刀：队列清理第二刀＝P-82 识字「识别语言」选择器（实现口径＝重开条件行：候选取自 `AvailableRecognizerLanguages`、默认仍是用户配置语言、按截图/识字分别记住、「这块画面里没有认出文字」文案改带当前语言）；P-293 GLM 远程 API 随后（P-89 注记在册：key 落盘沿 P-30 DPAPI 口径）。⛔ push（未推 24）。
+
+## 九十八、片217 队列清理第二刀：P-82 识字「识别语言」选择器落地（两流两槽・显式语言关自动换语言・死码拆除）
+
+- 接手第一步照旧现读编号轴：报告到六百零三、交接到九十八、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-82）；计数器现读＝296/279/17（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 18→17）。
+
+- P-82 实现锚（供复核，全部在仓）：`OcrPipeline.ReadAsync` 的 `language is null && OcrImagePrep.ShouldRetryWithOtherLanguage` 闸（显式语言关自动换语言）；`SettingsStore.Capture` 的 `LoadCaptureOcrLanguage`／`SaveCaptureOcrLanguage`／`LoadScreenOcrLanguage`／`SaveScreenOcrLanguage`＋`OcrLanguageOrNone` 在场校验（写入侧只修剪）；`CaptureOverlayWindow.Actions` 的 `OcrLanguage` 选槽判据（`_mode == CaptureMode.Ocr` 走识字槽，其余走截图槽）；`CaptureOverlayWindow.Pickers` 的 `ToggleOcrLanguagePicker`（工具条右键・`GroupChip` 新增 selected 参）；`MainWindow.Tray` 的 `OcrLanguageMenu`／`RunOcrLanguageCommand`（900..999 号段・999 封顶避开 `PinGrouping` TagBase・越界忽略这一次点击）；`OcrText.ResultProblem(text, language)` 双句（新键 `ocr.text.noTextBy`）；死码 `CopyTextFromSelectionAsync` 已拆（`ocr.card.category` 的正主在 `Pin.cs` 贴图右键菜单）。
+
+- 真机统一测清单（P-82 项，随片214/215/216 那批一起测）：① F1 截图→工具条「识字」右键弹语言栏（跟随系统＋语言包逐颗・当前项亮蓝）；② 选一门后识字→提示卡「按 <语言> 识别」报所选语言；③ 显式语言认空区域→文案带该语言且不再自动换语言重试；④ 贴图工具条右键同栏（与截图流共用截图槽）；⑤ 托盘「识字」→「识字识别语言」子菜单勾选态与生效（只改识字槽）；⑥ 两条入口互不覆盖（截图槽/识字槽分开记住）；⑦ capture 总开关关→托盘直认行与语言子菜单一起消失。
+
+- 读数：build 0 错 0 警；定向 245/245；全量 6913/6913（13 m 09 s）；docgates217 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词・whole 128 同态）；计数器 296/279/17 VERDICT OK。
+
+- 下一刀：队列清理第三刀＝P-80 贴图跨会话持久化（拍板在册：每张 PNG 落盘＋元数据＋启动重建・上限 12 张）；随后 P-170 取证日志（选项 A・零行为改动）→P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）。⛔ push（未推 25）。

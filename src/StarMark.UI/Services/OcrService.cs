@@ -4,9 +4,7 @@ using System.Threading.Tasks;
 using StarMark.Abstractions;
 using StarMark.Abstractions.Capture;
 using StarMark.Abstractions.I18n;
-using StarMark.Core.Capture;
 using StarMark.Core.Ocr;
-using StarMark.Integrations.Capture;
 using Windows.ApplicationModel.DataTransfer;
 
 namespace StarMark.UI.Services;
@@ -20,42 +18,21 @@ namespace StarMark.UI.Services;
 /// <para>
 /// 预处理与拼回文本的判据都不在这里（<c>Core.Ocr.OcrPipeline</c> / <c>OcrText</c>，可单测，
 /// 而且冒烟探针必须能原样跑到那条链，量出来的才是产品行为而不是探针行为）。
-/// 这里只做"取像素 → 交出去 → 写剪贴板 → 把结果说清楚"。
+/// 这里只做"接像素 → 交出去 → 写剪贴板 → 把结果说清楚"。
 /// </para>
 /// </summary>
 public static class OcrService
 {
     /// <summary>
-    /// 认这块选区（从已经抓好的一帧里裁出来）。裁不动时 <see cref="ScreenshotService"/> 那条路径已经回报过，这里不再重复。
-    /// <para>
-    /// 识字裁的是<b>补过边</b>的那块：用户贴着字边沿框选时，第一笔/最后一笔会被切掉，
-    /// 而"少半笔"正是这套引擎读错的高频来源。补边只会把相邻的空白多带一点进来，不伤识别。
-    /// </para>
-    /// </summary>
-    public static Task CopyTextFromSelectionAsync(ScreenFrame frame, IntRect selection)
-    {
-        var boxed = OcrImagePrep.Pad(selection, frame.Bounds);
-        if (CaptureGeometry.CropProblem(boxed, frame.Bounds) is { } cropProblem)
-        {
-            // ✅WI-65 片3：那颗判据自己就交「键＋实参」⇒ 直接递出去，common.rawValue 那道门在这里撤了
-            //（那道门只装"念完的成品字"，留着它反而把换语言重贴挡在门外）。
-            TrayReporter.Report(LocMessage.Of("ocr.card.category"), LocMessage.Of("ocr.card.failedTitle"),
-                cropProblem);
-            return Task.CompletedTask;
-        }
-        var (ox, oy) = CaptureGeometry.CropOffset(boxed, frame.Bounds);
-        var pixels = GdiScreenCapture.Crop(new FrameCopyRequest(frame, ox, oy, boxed.Width, boxed.Height));
-        return CopyTextFromPixelsAsync(pixels, boxed.Width, boxed.Height, LocMessage.Of("ocr.card.category"));
-    }
-
-    /// <summary>
     /// 认一块已经裁好的 BGRA 画面，并把文字复制进剪贴板。
     /// <para><paramref name="category"/> 必传的理由与 <c>ScreenshotService.CopyPixelsAsync</c> 同一颗：
-    /// 那颗词会被拼进卡片抬头＝上屏，带默认值＝"忘了传也算说过话"（托盘那条入口与遮罩窗那两态说的不是同一族话）。</para>
+    /// 那颗词会被拼进卡片抬头＝上屏，带默认值＝"忘了传也算说过话"（托盘那条入口与遮罩窗那两态说的不是同一族话）。
+    /// <paramref name="language"/>（✅P-82）同口径必传：null＝跟随系统，非 null＝用户显式选定的识别语言（BCP-47）。
+    /// 显式语言由 <c>OcrPipeline</c> 负责"只认这一门、不自动换语言"，这里只做透传。</para>
     /// </summary>
-    public static async Task CopyTextFromPixelsAsync(byte[] pixels, int width, int height, LocMessage category)
+    public static async Task CopyTextFromPixelsAsync(byte[] pixels, int width, int height, LocMessage category, string? language)
     {
-        var read = await OcrPipeline.ReadAsync(pixels, width, height);
+        var read = await OcrPipeline.ReadAsync(pixels, width, height, language);
         if (!read.Ok)
         {
             // 「原因」＋「怎么认的」这两段从前在 C# 里用 + 拼 ⇒ 语序被定死在中文那一侧；
@@ -65,7 +42,7 @@ public static class OcrService
             return;
         }
 
-        if (OcrText.ResultProblem(read.Text) is { } problem)
+        if (OcrText.ResultProblem(read.Text, read.Language) is { } problem)
         {
             // 这是"识别成功但没有文字"，与"引擎坏了"是两件事，必须分开说：
             // 前者让用户换一块有字/更大的区域再试，后者是程序该修的问题

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -57,6 +58,22 @@ public sealed partial class CaptureOverlayWindow
     private enum CommitAction { Copy, Save, Pin, Ocr, Board }
 
     /// <summary>
+    /// ✅P-82：这一发识字按哪种语言认（null＝跟随系统＝这一版之前唯一的行为）。
+    /// 直认态（<see cref="CaptureMode.Ocr"/>）读「识字」那格，截图/贴图两族的工具条读「截图」那格——
+    /// 拍板口径「按截图/识字分别记住」：两族画面的语言习惯不同，两格互不覆盖。
+    /// </summary>
+    private string? OcrLanguage
+    {
+        get
+        {
+            var settings = App.Services.GetRequiredService<SettingsStore>();
+            return _mode == CaptureMode.Ocr
+                ? settings.LoadScreenOcrLanguage()
+                : settings.LoadCaptureOcrLanguage();
+        }
+    }
+
+    /// <summary>
     /// 提交这一屏的选区：复制、存图、钉住、认字并复制文字，或把那一份画面放上画板。五个落点交的都是<b>带上标注的那一份画面</b>。
     /// 先算好像素再 Settle：服务收到结果就会关掉所有遮罩窗（包括本窗），
     /// 反过来先干活会让用户在裁图期间还被困在暗幕里。
@@ -100,7 +117,8 @@ public sealed partial class CaptureOverlayWindow
                 break;
             case CommitAction.Ocr:
                 _ = OcrService.CopyTextFromPixelsAsync(final.Pixels, final.Width, final.Height,
-                    _pinned ? LocMessage.Of("pin.card.categoryOcr") : LocMessage.Of("capture.card.categoryOcr"));
+                    _pinned ? LocMessage.Of("pin.card.categoryOcr") : LocMessage.Of("capture.card.categoryOcr"),
+                    OcrLanguage);
                 break;
             case CommitAction.Board:
                 // 第五颗落点：交的还是同一份画面，只是落点换成那扇窗。Settle 已经跑在前面（上面那句
