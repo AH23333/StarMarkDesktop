@@ -259,6 +259,7 @@ public sealed partial class CaptureOverlayWindow
         {
             _draggingPin = false;
             Root.ReleasePointerCapture(e.Pointer);
+            if (_pinned) PinManager.NotePinStateChanged(this);   // ✅P-80：拖动落定的位置落盘
             return;
         }
         if (_erasing)

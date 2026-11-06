@@ -197,7 +197,8 @@ public sealed class CaptureNoticeWiringGateTests
         var grouping = SourceGate.Code(SourceGate.ReadRepoFile(Grouping));
 
         // ① 抬头两颗（贴图／贴图组）＋那一排的范围名：按主人点名，⛔ 用"汉字总数下降"那种整体口径
-        Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.category\")"));
+        //    （✅P-80：8→9＝ReportPersistFailure 那张"没存下来"的卡，抬头同主）
+        Assert.Equal(9, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.category\")"));
         Assert.Equal(8, SourceGate.Count(pin, "LocMessage.Of(\"pin.group.title\")"));   // 7 处 Report 抬头 + 那句正文里的引用（✅P-260：抬头与托盘那一行同名同主人）
         Assert.Equal(2, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.scopeAll\")"));   // ✅片5b：交键，⛔ 当场念完
         // ② 每张卡的标题各有几张脸（少一条＝那条从此静默；"没有可操作的贴图"三处共用一颗）
@@ -219,6 +220,9 @@ public sealed class CaptureNoticeWiringGateTests
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.joinedTitle\")"));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.leftTitle\")"));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.groupClosedTitle\")"));
+        // ✅P-80：落盘失败那颗——恒报成功是一句谎话，没存下来必须开口（标题与正文各一颗）。
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.persistFailedTitle\")"));
+        Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.persistFailedBody\""));
         // ③ 带插值的正文：一颗都不许漏（漏掉的那条只会以中文出现在英文界面上）
         Assert.Equal(1, SourceGate.Count(pin, "Locale.Fmt(\"pin.card.pinnedBody\""));
         Assert.Equal(1, SourceGate.Count(pin, "LocMessage.Of(\"pin.card.throughMissBody\")"));

@@ -2005,6 +2005,12 @@ public static class UiStrings
         new Entry("pin.card.leftBody", "{0} 还剩 {1} 张", "{0} now has {1} pins left", "{0} は残り {1} 枚です"),
         new Entry("pin.card.groupClosedTitle", "已关闭这一组", "Group closed", "このグループを閉じました"),
         new Entry("pin.card.scopeAll", "全部贴图", "all pins", "すべての貼り付け"),
+        // ✅P-80：贴图落盘失败要开口（恒报成功是一句谎话——重启后那张不在了，用户无从知道为什么）。
+        // {0} 交 common.rawValue 包着的异常原文；正文同时说清后果（下次启动不会回来），让"现在看着还在"与"它没存下来"不互相矛盾。
+        new Entry("pin.card.persistFailedTitle", "这张贴图没存下来", "This pin wasn't saved", "この貼り付けは保存されませんでした"),
+        new Entry("pin.card.persistFailedBody", "贴图没能存下来：{0}（下次启动这张不会回来）",
+                  "The pin could not be saved: {0} (it won't come back on next launch)",
+                  "貼り付けを保存できませんでした：{0}（次回起動時にこの画像は戻りません）"),
         new Entry("pin.group.name", "组 {0}", "Group {0}", "グループ {0}"),
         // 「贴图组」「关闭这组」两处引用都交键：这句话指的是屏幕上真实存在的那两行，改了那两个名字⛔ 让这里继续念旧的。
         new Entry("pin.group.limitBody", "最多分 {0} 组，先关掉一组（托盘「{1}」里那条「{2}」）",

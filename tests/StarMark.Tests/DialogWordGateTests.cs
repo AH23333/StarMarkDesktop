@@ -307,7 +307,8 @@ public sealed class DialogWordGateTests
         // 下一位再把句子塞回去＝这一格当场红（先例＝✅片3b 那三行"原样递出去"的针）。
         Assert.Equal(0, Times(CodeOf(ShotCs), "LocMessage.Of(\"common.rawValue\""));    // 画布那三张卡的正文现在交「键＋实参」
         Assert.Equal(0, Times(CodeOf(ShotCs), "Locale.T("));                            // 那一档⛔ 再当场念表里的键
-        Assert.Equal(2, Times(CodeOf(PinCs), "LocMessage.Of(\"common.rawValue\""));     // 剩下的两颗＝尺寸读数与 ex.Message＝数据
+        // 2→3＝✅P-80：落盘失败的 ex.Message 同走这道门——那三颗＝尺寸读数、钉住失败的异常、落盘失败的异常，全是数据。
+        Assert.Equal(3, Times(CodeOf(PinCs), "LocMessage.Of(\"common.rawValue\""));
         Assert.Equal(4, Times(CodeOf(ScreenCs), "LocMessage.Of(\"common.rawValue\""));  // 复制失败交键，剩下三颗异常正文与一颗像素读数
         // 1→2＝片148：放上画板那一发的异常正文同走 ReasonOf 那道门（截图那一发之外的第二个调用点）。
         Assert.Equal(2, Times(CodeOf(ScreenCs), "CaptureFailureException.ReasonOf(ex)"));

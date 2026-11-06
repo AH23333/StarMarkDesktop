@@ -131,6 +131,10 @@ public sealed partial class MainWindow : Window
             MarkFirstComposedFrame();
         });
 
+        // ✅P-80：恢复上次落盘的桌面贴图。单独一条 enqueue（不塞进上面那条启动度量链里——
+        // 那条量的是组件那一段，贴图多十二张时的耗时会把它搅浑）；仍在 UI 线程上，建窗与条子挂接才有效。
+        DispatcherQueue.TryEnqueue(() => PinManager.RestorePersisted());
+
         // 开发辅助：启动即搜索（STARMARK_START_QUERY），用于冒烟渲染卡片
         var startQuery = Environment.GetEnvironmentVariable("STARMARK_START_QUERY");
         if (!string.IsNullOrWhiteSpace(startQuery))
@@ -213,6 +217,8 @@ public sealed partial class MainWindow : Window
 
     private async void ExitApp()
     {
+        // ✅P-80：退出收尾的第一步——此后关贴图窗不删记录（下次启动要回来）。更新交棒走同一条路。
+        PinManager.EnterShutdown();
         _allowExit = true;
         StarLog.Info("退出：开始收尾（画板 → 停同步 → 关组件 → 停采集 → 摘托盘 → 结束进程）");
         // 硬退出保险：收尾里任何一步卡住（22 个组件窗口的关闭，只要有一个不返回就够）都会让进程留在

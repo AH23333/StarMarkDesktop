@@ -550,6 +550,8 @@ public sealed partial class CaptureOverlayWindow
         _undoButton.IsEnabled = _history.CanUndo;
         _redoButton.IsEnabled = _history.CanRedo;
         _clearButton.IsEnabled = _history.Count > 0;
+        // ✅P-80：重烤＝这份像素真的变了——贴图那张要把新像素落盘（截图那张没有登记，钩子自己早退）。
+        if (_pinned) PinManager.NotePinContentChanged(this);
     }
 
     /// <summary>

@@ -135,6 +135,7 @@ public sealed partial class CaptureOverlayWindow
         ApplyPinWindowRect();         // 只算物理像素：尺寸、收边、落位、_lastApplied 一起
         RefreshScaleIfChanged();      // 收边可能把这张图整个推到另一块屏上
         RelayoutContent();            // DIP 那一层（内容摆位 + 条子）按新缩放重摆，里面会再校一次窗口
+        PinManager.NotePinStateChanged(this);   // ✅P-80：缩放与随之重摆的位置落盘
     }
 
     /// <summary>窗口矩形变了（缩放）之后重摆内容与工具条：底图与预览的像素没动，动的只是显示尺寸。</summary>
@@ -198,6 +199,7 @@ public sealed partial class CaptureOverlayWindow
             PinBorder.Visibility = Visibility.Collapsed;    // 穿透中的窗收不到鼠标，悬停高亮也永远等不来退出
         }
         SyncBadge();
+        PinManager.NotePinStateChanged(this);   // ✅P-80：穿透态落盘
         return ok;
     }
 
@@ -216,6 +218,7 @@ public sealed partial class CaptureOverlayWindow
             SetBarVisible(true);
             Activate();
             IsHidden = false;
+            PinManager.NotePinStateChanged(this);   // ✅P-80：收起态解除要落盘
         }
         catch (Exception ex) { StarLog.Warn($"[Pin] 唤回贴图失败：{ex.Message}"); }
     }
@@ -232,6 +235,7 @@ public sealed partial class CaptureOverlayWindow
             SetBarVisible(false);
             WindowInterop.ShowWindow(WindowInterop.GetHwnd(this), WindowInterop.SW_HIDE);
             IsHidden = true;
+            PinManager.NotePinStateChanged(this);   // ✅P-80：收起态落盘（下次启动照旧收着回来）
         }
         catch (Exception ex) { StarLog.Warn($"[Pin] 隐藏贴图失败：{ex.Message}"); }
     }
@@ -486,6 +490,7 @@ public sealed partial class CaptureOverlayWindow
         WindowInterop.SetWindowOpacity(this, opacity);
         SizeChip.Visibility = Visibility.Visible;
         SizeText.Text = Locale.Fmt("pin.bar.opacity", Locale.T("pin.opacity.label"), $"{opacity * 100:0}");
+        PinManager.NotePinStateChanged(this);   // ✅P-80：透明度落盘
     }
 
     private void ShowPinMenu(Point localDip)
@@ -531,6 +536,39 @@ public sealed partial class CaptureOverlayWindow
         _zoom = 1d;
         _sourceScale = 1d;
         ResizePinAnchoringTopLeft();
+        SyncBadge();
+    }
+
+    // ────────── ✅P-80：持久化出口（给名册读的真值） ──────────
+
+    /// <summary>当前倍率（名册落盘用）。</summary>
+    public double Zoom => _zoom;
+
+    /// <summary>当前不透明度（名册落盘用）。</summary>
+    public double Opacity => _opacity;
+
+    /// <summary>这份贴图此刻的像素（底图＋已提交标注，每次重烤后更新；名册编码 PNG 用它）。</summary>
+    public byte[]? PinContent => _composed;
+
+    /// <summary>源图宽度（物理像素，与倍率无关）。</summary>
+    public int ContentWidth => _contentWidth;
+
+    /// <summary>源图高度（物理像素，与倍率无关）。</summary>
+    public int ContentHeight => _contentHeight;
+
+    /// <summary>
+    /// 恢复时把存档行套回这张窗。透明度/穿透/收起各走它们自己的正门（SetOpacity/ApplyClickThrough/HidePin），
+    /// <b>不直写字段</b>——那些正门连着条子、角标与系统样式，直写等于恢复一张少一套。
+    /// 末尾 SyncBadge 复原角标：SetOpacity 会把角标切到透明度那一行，而恢复完该念的是倍率。
+    /// </summary>
+    internal void ApplyPersistedState(PinRecord rec)
+    {
+        var opacity = double.IsNaN(rec.Opacity) || double.IsInfinity(rec.Opacity)
+            ? 1
+            : Math.Clamp(rec.Opacity, 0.1, 1);
+        if (Math.Abs(opacity - _opacity) > 0.001) SetOpacity(opacity);
+        if (rec.ClickThrough) ApplyClickThrough(true);
+        if (rec.Hidden) HidePin();
         SyncBadge();
     }
 }

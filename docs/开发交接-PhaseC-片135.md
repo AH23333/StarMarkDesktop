@@ -837,3 +837,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错 0 警；定向 245/245；全量 6913/6913（13 m 09 s）；docgates217 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词・whole 128 同态）；计数器 296/279/17 VERDICT OK。
 
 - 下一刀：队列清理第三刀＝P-80 贴图跨会话持久化（拍板在册：每张 PNG 落盘＋元数据＋启动重建・上限 12 张）；随后 P-170 取证日志（选项 A・零行为改动）→P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）。⛔ push（未推 25）。
+
+## 九十九、片218 队列清理第三刀：P-80 贴图跨会话持久化落地（每张＝PNG＋一行元数据・启动重建・退出不再是没了）
+
+- 接手第一步照旧现读编号轴：报告到六百零四、交接到九十九、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-80）；计数器现读＝296/280/16（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 17→16）。
+
+- P-80 实现锚（供复核，全部在仓）：`PinStore`（七格 PinRecord・Load 三态・Save tmp→Move・降级拒写・Normalize 不截量）；`PinManager` 持久化区（Store/Records/PngWriting/PngPending/_restoring/_shutdown/_persistFailNoticed 七字段＋PersistNew/Upsert/QueuePinPng/WritePinPngFileAsync/ReportPersistFailure/DropPersisted/RestorePersisted/RestoreOne/UnionMonitorBounds/PruneOrphanPngs 十方法）；Pin 档五正门尾钩＋五 getter（Zoom/Opacity/PinContent/ContentWidth/ContentHeight）＋`ApplyPersistedState`；Selection 档的 Rebake 尾钩；Pointer 档的 Root_PointerReleased 钩；MainWindow 的 ExitApp 首行 `EnterShutdown`＋组件恢复后单独 enqueue `RestorePersisted`；UiStrings 两新键 `pin.card.persistFailedTitle`/`pin.card.persistFailedBody`（三列）。已知残留竞态在册：in-flight PNG 写完成于关窗删除那一拍之后→孤儿 PNG→下次启动 `PruneOrphanPngs` 收走。
+
+- 真机统一测清单（P-80 项，随片214–217 那批一起测）：① F3 贴一张→退出应用→重启→按原位/缩放/透明度回来；② 收起（F4/双击）的贴图重启后照旧收着回来（托盘可唤回）；③ 穿透贴图重启后照旧穿透；④ 拖动/缩放/调透明度后退出重启→最后状态回来；⑤ 关掉一张→重启→那张不回来（记录与 PNG 都摘了）；⑥ pins 目录里 pins.json 与 pin-*.png 一一对应；⑦ 落盘失败 toast（把存档目录设只读）本会话只弹一次其后节流；⑧ 上限 12 张贴满重启→12 张回来、第 13 张的记录不删（关掉一张再重启→它回来）。
+
+- 读数：build 0 错 0 警（7 警全在未触碰旧档，非本刀引入）；定向 313/313；全量 6935/6935（12 m 22 s）；docgates218 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/280/16 VERDICT OK。
+
+- 下一刀：队列清理第四刀＝P-170 取证日志（选项 A・零行为改动）→P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问。⛔ push（未推 26）。

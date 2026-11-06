@@ -123,7 +123,10 @@ public sealed class CanvasWiringGateTests
         // 以前这里是两个 bool，而"双击收起某一张"确实能让它说谎——名册说没隐藏，屏幕上却少了一张。
         // 有了组之后更不能存：组说"已隐藏"而里面那张其实还在，就是名册与窗体两份账（WO/WD-7 那一族）。
         Assert.DoesNotContain("AreHidden = ", pins);
-        Assert.DoesNotContain("ClickThrough = ", pins);
+        // ✅P-80：持久化 Upsert 有一行 `rec.ClickThrough = pin.IsClickThrough;`——那是把窗上的真值
+        // 抄进存档行（DTO），不是名册自己养存储位。挖掉那一个方法再判，名册其余地方照旧全禁。
+        Assert.DoesNotContain("ClickThrough = ",
+            SourceGate.WithoutMethod(pins, "private static void Upsert(CaptureOverlayWindow pin, string id)"));
         // 空名册不能算"已隐藏"：All() 对空序列为真，那会让一张图都没有时托盘写「显示所有贴图」。
         // 两边都必须走 PinGrouping.AllIn（它把空集这一臂钉在单测里）。
         Assert.Contains("public static bool AreHidden => AllIn(Pins, static pin => pin.IsHidden);", pins);
