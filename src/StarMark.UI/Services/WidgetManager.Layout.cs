@@ -161,13 +161,12 @@ public sealed partial class WidgetManager
             // 快照非 null（保存时用户已改过）→ 还原成它自己那套自定义外观，不受当前全局主题影响。
             inst.Appearance = entry.Appearance;
             used.Add(inst.Id);
-            if (created)
-            {
-                data.Instances.Add(inst);
-                _storage.Save(data);   // 新建实例先落盘，ShowInternal 才能从磁盘读到它并带上新外观
-            }
-
-            ShowInternal(inst.Id);
+            if (created) data.Instances.Add(inst);
+            // ✅P-43 widgets 半边：新建实例不再"先落盘再从盘上读回来"——待落盘的存档直接递给显示路径
+            // （ShowNow 用那份内存建窗，不再整档读盘），落盘由调用方收尾那一次 Save 完成（套布局/还原快照
+            // /启动恢复本来就有那一次）。从前这里每建一颗就是一趟整档写＋（Save 作废缓存后）一趟整档读，
+            // N 颗新实例＝N 趟往返，还把半套布局提前写上了盘——中途出错留下的是半新半旧的落盘态。
+            ShowInternal(inst.Id, data);
             // 窗口缓存的 config 是上一次 Load 的对象（新建者甚至是保存前的旧磁盘数据），
             // 必须显式下发新位置 + 新外观并回写，否则 ApplyLayoutCore 里改的 inst 不会落到窗口。
             if (_windows.TryGetValue(inst.Id, out var w))

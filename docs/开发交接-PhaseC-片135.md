@@ -861,3 +861,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错（7 警全旧档既有，非本刀引入）；定向 318/318（十四族闸，`gates219.txt`）；全量 6936/6936（13 m 11 s，`full219.txt`）；docgates219 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/281/15 VERDICT OK。
 
 - 下一刀：队列清理第五刀＝P-43 widgets 半边→P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问→P-93。⛔ push（未推 27）。
+
+## 一百零一、片220 队列清理第五刀：P-43 widgets 半边收口（套布局/还原快照建新实例不再循环整档写读）
+
+- 接手第一步照旧现读编号轴：报告到六百零六、交接到一百零一、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-43）；计数器现读＝296/282/14（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 15→14）。
+
+- P-43 实现锚（供复核，全部在仓）：WidgetManager.Layout 的 ApplyGeometryCore——循环里不再 _storage.Save/_storage.Load，新建实例只进待落盘存档（data.Instances.Add）＋ShowInternal(inst.Id, data)；WidgetManager.Lifecycle 的 ShowInternal/ShowNow 增可选 pendingData（默认 null 走原读盘路径，其余调用点零改动）；落盘由三个调用方收尾（套布局/还原快照 dataRestore/启动恢复）。闸门证人＝WidgetGeometryPersistGateTests.LayoutApplyNeverTouchesTheDiskInsideTheLoop。
+
+- 真机统一测清单（P-43 widgets 项，随片214–219 那批一起测）：① 套一套「条目多于在册实例」的布局（或快照）→缺失的实例当场新建上屏、外观按布局/快照带出；② 套完立刻重启→摆位/外观/内容与套用时一致（收尾一次落盘没丢）；③ 套用后再 Ctrl+拖动→协同移动照旧一次落盘；④ 还原快照后各组件数据（待办/随记/入口）照旧回位（ApplySnapshotAsync 映射半边未动）。
+
+- 读数：build 0 错（7 警全旧档既有，非本刀引入）；定向 282/282（Widget 族，`gates220.txt`）；全量 6937/6937（15 m 38 s，`full220.txt`）；docgates220 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词・whole-档 128 同态）；计数器 296/282/14 VERDICT OK。
+
+- 下一刀：队列清理第六刀＝P-293 GLM 远程 API（key 落盘沿 P-30 DPAPI 口径）→P-63 默认键先问→P-93。⛔ push（未推 28）。

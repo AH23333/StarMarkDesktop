@@ -146,10 +146,10 @@ public sealed partial class WidgetManager
     /// 显示某实例。<b>这一层只做计时</b>：启动要建十几颗组件窗口，"每颗多贵"必须由日志说话，
     /// 而不是靠"约 -50~150 ms"这类猜（超过 30 ms 才写行，正常环境一条都不出）。
     /// </summary>
-    private void ShowInternal(string id)
-        => StarMark.Abstractions.StartupProfile.Measure($"显示组件窗口 {id}", () => ShowNow(id), logWhenMs: 30);
+    private void ShowInternal(string id, WidgetStoreData? pendingData = null)
+        => StarMark.Abstractions.StartupProfile.Measure($"显示组件窗口 {id}", () => ShowNow(id, pendingData), logWhenMs: 30);
 
-    private void ShowNow(string id)
+    private void ShowNow(string id, WidgetStoreData? pendingData = null)
     {
         // 窗口创建/显示必须整体兜错：这里的异常会顺着 UI 线程冒到点击处理，
         // 演变成未处理异常让整个应用卡死崩溃（历史事故：外观设置读取失败导致「全部显示」崩溃）。
@@ -157,7 +157,10 @@ public sealed partial class WidgetManager
         {
             if (!_windows.TryGetValue(id, out var window))
             {
-                var data = _storage.Load();
+                // ✅P-43 widgets 半边：调用方手里已有一份待落盘的存档（布局/快照正套用到一半）时直接用它——
+                // 新建实例此刻只在那份内存里，从盘上读会扑空。从前的解法是显示前先落盘（N 颗新实例 N 趟整档写读），
+                // 现在那一趟由调用方收尾统一完成。
+                var data = pendingData ?? _storage.Load();
                 var cfg = data.Instances.FirstOrDefault(i => i.Id == id);
                 if (cfg is null) return;
                 window = new WidgetWindow(id, cfg, _storage, _repo, this);

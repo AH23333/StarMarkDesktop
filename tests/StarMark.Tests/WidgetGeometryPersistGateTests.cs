@@ -154,4 +154,28 @@ public sealed class WidgetGeometryPersistGateTests
         Assert.Contains("public Task SaveCountdownsAsync(", all);                            // PerWidget
         Assert.Contains("private async Task LogActivitiesAsync(ActivityKind kind", all);      // Activity
     }
+
+    /// <summary>
+    /// ✅P-43 widgets 半边：套布局/还原快照建新实例时<b>循环里一次盘都不许碰</b>。
+    /// 从前每建一颗就"先落盘再从盘上读回来"——<c>ApplyGeometryCore</c> 循环内 <c>_storage.Save</c>
+    /// （写整档＋作废读缓存）＋<c>ShowNow</c> 再整档读：N 个新实例＝N 趟整档往返，而调用方收尾
+    /// 本来就有一次落盘。现在待落盘的存档直接递进显示路径，新窗从<b>那份内存</b>建。
+    /// <para>另一头的保证：收尾那次落盘失败时窗口已上屏但盘上没有它——这与逐颗先落盘的旧形状
+    /// （落盘失败＝那颗静默不上屏）在 P-16 的口径下同属"没写进磁盘要由调用方说实话"，不新增静默。</para>
+    /// </summary>
+    [Fact]
+    public void LayoutApplyNeverTouchesTheDiskInsideTheLoop()
+    {
+        var manager = ReadRepoPartials(ManagerPath);
+        var core = MethodBody(manager, "private List<(T entry, WidgetInstanceConfig inst)> ApplyGeometryCore<T>(");
+
+        Assert.Equal(0, Count(core, "_storage.Save("));         // 循环里不许落盘（含隐藏的"建一颗存一颗"）
+        Assert.Equal(0, Count(core, "_storage.Load()"));        // 也不许整档读——几何全在手里那份 data 上
+        Assert.Contains("data.Instances.Add(inst);", core);     // 反空转：新建实例确实进那份待落盘存档
+        Assert.Contains("ShowInternal(inst.Id, data);", core);  // 显示拿的是待落盘那一份，不是从盘上重读
+
+        var show = MethodBody(manager, "private void ShowNow(string id, WidgetStoreData? pendingData");
+        Assert.Contains("pendingData ?? _storage.Load()", show);   // 有待落盘存档就不读盘
+        Assert.Contains("if (cfg is null) return;", show);         // 找不到配置仍必须静默退出（原语义不动）
+    }
 }
