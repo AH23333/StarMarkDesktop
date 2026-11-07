@@ -933,3 +933,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build225 0 错；定向（~AiUsage|~AiDashboard）30/30；gates225 首跑 1819/3（~GateTests 1822 例）・修毕；全量两跑：首跑 6963/2（I18nContractTests 两红・修毕）・复跑 6965/6965（基线 6951＋14）；docgates225 23/23（四类・翻牌后复测；六类宽口径 35/35）；census 19；flipcheck PASS（加行 2 行 0 禁词・回改与 HEAD 同态）；计数器 296/287/9 VERDICT OK。
 
 - 下一刀：队列清理第十一刀＝i18n 按批（账本 P-168／P-169／P-172／P-192 四颗，动工前先读各条拍板行定批形状与先后）。真机验收随统一测（P-63 浮层清单照旧＋P-294 仪表盘三段）。⛔ push（桌面未推 33・扩展未推 2）。
+
+## 一百零七、片226 队列清理第十一刀：i18n 四账收官（P-168 ⑦ A/B 实测＋P-172 翻牌＋P-169 收官注记）
+
+- 接手第一步照旧现读编号轴：报告到六百一十二、交接到一百零七、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-172）；计数器现读＝296/288/8（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 9→8）。
+
+- i18n 四账现状（供复核）：P-168＝⑦ 三条件齐（①RY/RZ✅②A/B 数字落账＝收益≈0：包体 +107 字节、启动中位 1.12 vs 0.925 秒淹没在 0.80–1.69 秒跑间极差里、内存 ≈1 MB；③产品口径归他——「英文／日文系统首启要不要继续自动跟系统语」，现状跟；开关一开则 `CurrentUICulture.Name` 恒空串→自动探测失效→落中文默认，已表态用户不受影响）——本条不翻牌只等 ③；P-169＝内容清单全✅＋17 句清零＋收官注记（不翻牌・尾巴留统一测）；P-172＝题行翻牌 ✅（末刀＝批次 WI-31 补录）；P-192＝代码侧无量可挖，三臂（pngStillBad/canceled・badSize/shortBuffer・noLanguagePack）归他点验。本轮改动落点只有两档：docs/待决策事项.md（三处：⑦ 补录／P-169 收官注记／P-172 题行翻牌）＋tests/StarMark.Tests/I18nWiringGateTests.cs（段头注释改锚・零例数变化）；A/B 产物与探针 CSV 在 D:\StarMarkTmp\p226\（临时・不进仓）。
+
+- docgates 宽口径基线勘正＝**34/34**（片225 报 35 系笔误；六类静态例数 4+3+13+3+8+3＝34・静态运行双证）；四类 23/23 照旧为准。
+
+- 统一测清单（本轮入账的尾巴）：⑦ 若产品拍板「不再跟系统语」→ 改 `StarMark.UI.csproj` 的 `InvariantGlobalization`（现注释在 PropertyGroup 尾）＋重跑 A/B 冒烟；P-169 尾巴：AI 组行（要真 AI 跑）、托盘菜单、安装器向导（纯 Win32・UIA 够不着）、同步中关窗卡；P-192 三臂读数（无 OCR 语言包的机器／损坏 png 两防御臂）。
+
+- 读数：publish A/B 双绿；定向 I18nWiringGateTests 95/95；全量 6965/6965（19 m 24 s）；docgates 四类 23/23・宽 34/34；census 19；计数器 296/288/8 VERDICT OK。
+
+- 下一刀：队列已清——等用户三件裁决（⑦ 条件③ 产品口径／P-192 三臂点验／统一测排期），期间可接新指示。⛔ push（桌面未推 34・扩展未推 2）。
