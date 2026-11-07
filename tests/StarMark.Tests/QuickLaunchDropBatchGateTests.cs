@@ -257,6 +257,102 @@ public sealed class QuickLaunchDropBatchGateTests
         Assert.Equal(1, Count(code, "SayAddProblem(null);"));               // 重新开表先擦掉上一次那句
     }
 
+    /// <summary>
+    /// ✅P-93：一次拖入的结局必须当着用户的面说出来——「加了几条」「全都已在」「一条都没加进去的原因」，
+    /// 长在<b>用户刚操作的那扇组件窗内</b>的同一颗槽里，后一次覆盖前一次。口径钉死「不用秒表判断『够不够短』」：
+    /// 也就是不许为收回这句回执引入任何定时器基础设施。落库判据零改动：<c>AddPathsToLauncherAsync</c> 仍是唯一配对出口，
+    /// 只是回程从「一颗 int」换成「结局三件套」——「全被去重」与「实例不在了」都读作 0，回执必须分开说。
+    /// </summary>
+    [Fact]
+    public void TheDropSaysItsOutcomeInTheSameSlot()
+    {
+        var win = ReadRepoPartials(WindowRelativePath);
+
+        // 回执槽与遮罩同一棵根树、同一生命周期：建一次、复用同一颗
+        var setup = MethodBody(win, "private void SetupQuickLaunchDrop(");
+        Assert.Contains("_dropReceipt = new Border", setup);
+        Assert.Contains("Grid.SetRowSpan(_dropReceipt, 2);", setup);
+        Assert.Contains("rootGrid.Children.Add(_dropReceipt);", setup);
+
+        // 同一颗槽只有一个说法出口：话进表（LocText 那颗门），贴出来那刻的语言才算数
+        var say = MethodBody(win, "private void SayDropReceipt(");
+        Assert.Contains("LocText.SetMessage(_dropReceiptText, message);", say);
+        Assert.Contains("_dropReceipt.Visibility = Visibility.Visible;", say);
+        Assert.Equal(1, Count(win, "private void SayDropReceipt("));
+
+        // 三岔翻译只有一处，整批与单条两个出口都走它
+        var receiptFor = MethodBody(win, "private static LocMessage ReceiptFor(");
+        Assert.Contains("widget.drop.receipt.missing", receiptFor);
+        Assert.Contains("widget.drop.receipt.allDup", receiptFor);
+        Assert.Contains("widget.drop.receipt.added", receiptFor);
+        Assert.Equal(3, Count(receiptFor, "LocMessage.Of(\"widget.drop.receipt."));
+
+        var drop = MethodBody(win, "private async void QuickLaunch_Drop(");
+        Assert.Contains("SayDropReceipt(ReceiptFor(outcome));", drop);            // 整批：文件那一支
+        Assert.Equal(3, Count(drop, "AddLinkWithOutcomeAsync("));                 // 单条：网页/应用/文本三支
+        Assert.Contains("SayDropReceipt(LocMessage.Of(\"widget.drop.receipt.noPaths\"", drop);   // 拿不到路径也说
+        Assert.Contains("SayDropReceipt(LocMessage.Of(\"widget.drop.receipt.failed\"", drop);    // 写盘失败说原因
+        Assert.Contains("common.rawValue", drop);                                 // 原因走数据门，不编话
+
+        // 口径「不用秒表」：回执不为收回自己引入定时器（⇒ 后一次覆盖前一次就是全部的「收」）
+        var dropFile = ReadRepoFile("src/StarMark.UI/Views/WidgetWindow.QuickLaunchDrop.cs");
+        Assert.Equal(0, Count(dropFile, "DispatcherQueueTimer"));
+        Assert.Equal(0, Count(dropFile, "Timeline"));
+    }
+
+    /// <summary>
+    /// ✅P-93 的数据面：「全被去重」与「实例不在了」都读作净增 0，Manager 必须把两者分开交出来。
+    /// 判据零改动——<c>AddLinksAsync</c> 仍是那颗 int 整批出口（签名与整批形状由别处两道闸钉着），
+    /// 分岔只发生在净增 0 之后的那一次「实例还在不在」探问；加成了的那趟不付这个钱。
+    /// </summary>
+    [Fact]
+    public void TheManagerSeparatesAllDuplicatesFromAMissingInstance()
+    {
+        var manager = ReadRepoPartials(ManagerRelativePath);
+        Assert.Contains("public sealed record LauncherAddOutcome(int Offered, int Added, bool InstanceFound)", manager);
+
+        var body = MethodBody(manager, "public async Task<LauncherAddOutcome> AddPathsToLauncherAsync(");
+        Assert.Contains("RecordPathsToLibraryAsync(usable);", body);              // 登记与添加的配对仍是那一处
+        Assert.Contains("AddLinksAsync(instanceId,", body);                       // 整批出口没换
+        Assert.Contains("added > 0", body);                                       // 加成了不付那次探问
+        Assert.Contains("LauncherInstanceExistsAsync(instanceId)", body);
+
+        var probe = MethodBody(manager, "private async Task<bool> LauncherInstanceExistsAsync(");
+        Assert.Contains("_storage.Load()", probe);
+        Assert.Contains("i.Id == instanceId", probe);
+
+        // 单条那一发仍走批量那份判据，只多回答「实例还在不在」
+        var single = MethodBody(manager, "public async Task<LauncherAddOutcome> AddLinkWithOutcomeAsync(");
+        Assert.Contains("await AddLinkAsync(instanceId, title, uri)", single);
+        Assert.Equal(0, Count(single, "_storage."));                              // 判据不在这两颗新出口里另起一份
+
+        // 挑选器那条出口也换接「结局三件套」，但取证那句与收表单行为一字不变
+        var picked = MethodBody(ReadRepoFile(WidgetCodeRelativePath), "private async Task AddPickedAsync(");
+        Assert.Contains("var outcome = await _manager.AddPathsToLauncherAsync(_instanceId,", picked);
+        Assert.Contains("var added = outcome.Added;", picked);
+        Assert.Contains("净新增入口 {added} 条", picked);
+        Assert.Contains("AddForm.Visibility = Visibility.Collapsed;", picked);
+    }
+
+    /// <summary>✅P-93 的五句回执话进表且三语齐：屏幕上那句由 <c>LocText</c> 现贴，这里只问「表里有没有、三种语言全不全」。</summary>
+    [Fact]
+    public void TheDropReceiptWordsAreInTheTableForAllThreeLanguages()
+    {
+        foreach (var key in new[] { "widget.drop.receipt.added", "widget.drop.receipt.allDup",
+                                    "widget.drop.receipt.missing", "widget.drop.receipt.noPaths",
+                                    "widget.drop.receipt.failed" })
+        {
+            Assert.True(UiStrings.TryGet(key, out var entry), "表里没有 " + key);
+            foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })
+                Assert.False(string.IsNullOrWhiteSpace(UiStrings.TextOf(entry, language)), key + " 缺 " + language);
+        }
+        // 带数的那两句数在 {0} 上；失败那句的原因走 common.rawValue（数据门），表里只留半句
+        Assert.True(UiStrings.TryGet("widget.drop.receipt.added", out var added));
+        Assert.Contains("{0}", UiStrings.TextOf(added, AppLanguage.Chinese));
+        Assert.True(UiStrings.TryGet("widget.drop.receipt.failed", out var failed));
+        Assert.Contains("{0}", UiStrings.TextOf(failed, AppLanguage.Chinese));
+    }
+
     private static int Count(string text, string needle) => SourceGate.Count(text, needle);
 
     private static string Between(string text, string from, string to) => SourceGate.Between(text, from, to);

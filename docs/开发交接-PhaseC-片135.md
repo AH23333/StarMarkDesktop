@@ -885,3 +885,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错；定向 967/967（Ai 超集闸，`gates221.txt`）＋新 Theory 4/4；全量 6941/6941（12 m 58 s，`full221.txt`）；docgates221 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/283/13 VERDICT OK。
 
 - 下一刀：队列清理第七刀＝P-63 默认键先问（动工前先问用户默认键方案）→P-93。⛔ push（未推 29）。
+
+## 一百零三、片222 队列清理第七刀：P-93 拖放回执落地（三岔当面说・同槽覆盖・不用秒表）
+
+- 接手第一步照旧现读编号轴：报告到六百零八、交接到一百零三、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-93）；计数器现读＝296/284/12（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 13→12）。
+
+- P-93 实现锚（供复核，全部在仓）：回执槽＝WidgetWindow.QuickLaunchDrop 的 SetupQuickLaunchDrop（回执 Border＋TextBlock 与遮罩同树建一次）＋SayDropReceipt（LocText.SetMessage・同槽覆盖）＋ReceiptFor（三岔翻译一处）；数据面＝WidgetManager.QuickLaunch 的 LauncherAddOutcome record＋AddPathsToLauncherAsync 回程换结局三件套＋LauncherInstanceExistsAsync（只在净增 0 那趟探一次）＋AddLinkWithOutcomeAsync（单链接三支同一份判据）；选择器出口（QuickLaunchWidget.AddPickedAsync）机械适配；五句回执话＝UiStrings 的 widget.drop.receipt.*（三语）。
+
+- 统一测清单（P-93 项）：往快捷启动拖一批新文件→窗内见「已添加 N 个」；原样再拖一次→「N 个都已经在快捷启动里」；拖一批已在的＋一批新的→回执说净增数；拖不动（实例没了／拿不到路径）看原因句；顺手看回执槽不遮入口、后一次覆盖前一次。
+
+- 读数：build 0 错；定向 179/179（五族，`gates222.txt`）；RssPlural 24/24；全量 6944/6944（11 m 30 s，`full222.txt`）；docgates222 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/284/12 VERDICT OK。
+
+- 下一刀：队列清理第八刀＝P-120（动工前先读账本拍板行定形状）。两颗用户裁决项在队：P-63 默认键、P-294 仪表盘细案——随统一测问用户。⛔ push（未推 30）。

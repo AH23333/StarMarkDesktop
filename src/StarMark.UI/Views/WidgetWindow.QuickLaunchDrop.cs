@@ -62,7 +62,53 @@ public sealed partial class WidgetWindow
             Child = hintText,
         };
         Grid.SetRowSpan(_dropHint, 2);
-        if (RootBorder.Child is Grid rootGrid) rootGrid.Children.Add(_dropHint);
+
+        // P-93 的回执槽：与遮罩同一棵根树、同一生命周期（建一次、复用同一颗）——后一次结局覆盖前一次
+        // （口径钉死：不用秒表判断「够不够短」，也就不为它引入任何定时器）。
+        var receiptText = new TextBlock
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 12,
+        };
+        _dropReceiptText = receiptText;
+        _dropReceipt = new Border
+        {
+            Background = WidgetBrush("WidgetDropHintBrush"),
+            BorderBrush = ThemeBrush.For(RootBorder.ActualTheme, "AppAccentBrush"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 4, 10, 4),
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(8, 0, 8, 6),
+            Child = receiptText,
+        };
+        Grid.SetRowSpan(_dropReceipt, 2);
+        if (RootBorder.Child is Grid rootGrid)
+        {
+            rootGrid.Children.Add(_dropHint);
+            rootGrid.Children.Add(_dropReceipt);
+        }
+    }
+
+    /// <summary>P-93 的回执：一次拖入的结局由<b>这同一颗槽</b>说，后一次覆盖前一次（口径：长在用户刚操作的那扇组件窗内，不弹主窗、不弹通知）。</summary>
+    private void SayDropReceipt(LocMessage message)
+    {
+        if (_dropReceipt is null || _dropReceiptText is null) return;
+        LocText.SetMessage(_dropReceiptText, message);
+        _dropReceipt.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>结局 → 回执那一句的三岔翻译：实例没了／全都已在／加了几条。一处翻译，整批与单条两个出口共用。</summary>
+    private static LocMessage ReceiptFor(LauncherAddOutcome outcome)
+    {
+        if (!outcome.InstanceFound) return LocMessage.Of("widget.drop.receipt.missing");
+        return outcome.Added == 0
+            ? LocMessage.Of("widget.drop.receipt.allDup", outcome.Offered)
+            : LocMessage.Of("widget.drop.receipt.added", outcome.Added);
     }
 
     private void SetDropHintVisible(bool visible)
@@ -133,34 +179,39 @@ public sealed partial class WidgetWindow
                     // 收到了 Drop 却一个路径都拿不到＝载荷形状与预期不同（远端 shell 扩展、占位符之类），
                     // 这种情况必须留下痕迹：否则它与"其实落库成功了但列表没变"在日志里一模一样。
                     StarLog.Warn($"[拖放] 快捷启动 Drop：{DropFormats(v)}，但 {items.Count} 项都没有可用路径，未落库。");
+                    // P-93：日志留痕之外，用户眼前也得有这一句——否则"拖了没反应"在屏幕上重演。
+                    SayDropReceipt(LocMessage.Of("widget.drop.receipt.noPaths", items.Count));
                     return;
                 }
                 // 「收到几项」与「净增几条」分开记：拖进来的东西早已在列表里时返回 0，
                 // 界面上确实"什么都没发生"。没有这一行的话，那种正常去重和"落库失败"长得一模一样。
-                var added = await _manager.AddPathsToLauncherAsync(_instanceId, paths);
+                var outcome = await _manager.AddPathsToLauncherAsync(_instanceId, paths);
+                var added = outcome.Added;
                 StarLog.Info($"[拖放] 快捷启动 Drop：{DropFormats(v)}，收到 {paths.Count} 项，净新增入口 {added} 条"
                              + (added == 0 ? "（这些都是已存在的入口，所以列表没变）" : ""));
+                // P-93：结局当面说出来——「全在」「加了几条」「实例没了」三岔（ReceiptFor 一处翻译）。
+                SayDropReceipt(ReceiptFor(outcome));
             }
             else if (v.Contains(StandardDataFormats.WebLink))
             {
                 var uri = await v.GetWebLinkAsync();
-                await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri);
+                SayDropReceipt(ReceiptFor(await _manager.AddLinkWithOutcomeAsync(_instanceId, uri.Host, uri.AbsoluteUri)));
             }
             else if (v.Contains(StandardDataFormats.ApplicationLink))
             {
                 var uri = await v.GetApplicationLinkAsync();
-                await _manager.AddLinkAsync(_instanceId, uri.Host, uri.AbsoluteUri);
+                SayDropReceipt(ReceiptFor(await _manager.AddLinkWithOutcomeAsync(_instanceId, uri.Host, uri.AbsoluteUri)));
             }
             else if (v.Contains(StandardDataFormats.Text))
             {
                 var text = (await v.GetTextAsync()).Trim();
                 if (QuickLaunchWidgetViewModel.TryParseUri(text, out var uri) && uri is not null)
-                    await _manager.AddLinkAsync(_instanceId,
+                    SayDropReceipt(ReceiptFor(await _manager.AddLinkWithOutcomeAsync(_instanceId,
                         // 文本拖进来的地址同样会被 new Uri() 规范化成 percent 编码 ⇒ 默认标题走判据（先问磁盘）。
                         uri.IsFile ? System.IO.Path.GetFileName(
                             StarMark.Abstractions.LocalFileIdentity.PreferredPathFromUri(
                                 uri.AbsoluteUri, StarMark.UI.Helpers.LauncherEx.ExistsOnDisk)) : uri.Host,
-                        uri.AbsoluteUri);
+                        uri.AbsoluteUri)));
             }
 
             // 新增后 WidgetManager 触发 LinksChanged，QuickLaunchWidget 订阅后增量刷新 Links（R3）。
@@ -168,6 +219,8 @@ public sealed partial class WidgetWindow
         catch (Exception ex)
         {
             StarLog.Error("拖放添加快捷入口失败", ex);
+            // P-93：写盘失败也是「一条都没加进去」的一种，回执必须说原因（原因走数据门，不编话）。
+            SayDropReceipt(LocMessage.Of("widget.drop.receipt.failed", LocMessage.Of("common.rawValue", ex.Message)));
         }
     }
 

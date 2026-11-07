@@ -206,8 +206,10 @@ public sealed partial class QuickLaunchWidget : UserControl
     /// </summary>
     private async Task AddPickedAsync(IReadOnlyList<(string Title, string Path)> picked)
     {
-        var added = await _manager.AddPathsToLauncherAsync(_instanceId,
+        // P-93 之后这颗出口回「结局三件套」：取证那句沿旧口径照说（净增数照记），回执不在这条出口上长（口径只给拖放）。
+        var outcome = await _manager.AddPathsToLauncherAsync(_instanceId,
             picked.Select(p => ((string?)p.Title, p.Path)).ToList());
+        var added = outcome.Added;
         StarLog.Info($"[选择器] 快捷启动挑了 {picked.Count} 项，净新增入口 {added} 条"
                      + (added == 0 ? "（这些都是已存在的入口，所以列表没变）" : ""));
         AddForm.Visibility = Visibility.Collapsed;

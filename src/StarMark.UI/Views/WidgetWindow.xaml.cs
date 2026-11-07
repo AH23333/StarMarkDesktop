@@ -47,6 +47,8 @@ public sealed partial class WidgetWindow : Window
     private WidgetInstanceConfig _config;
     private Border? _dropHint;
     private bool _dropEnterLogged;      // 拖放进来的那句证词只记一次（见 QuickLaunch_DragEnter）
+    private Border? _dropReceipt;       // P-93 回执槽：一次拖入的结局由这同一颗槽说，后一次覆盖前一次（见 QuickLaunch_Drop）
+    private TextBlock? _dropReceiptText;
 
     // ── 拖动/缩放状态（全部使用 Win32 物理像素，避免 DIP 与 AppWindow 物理坐标混用）──
     private bool _dragging;

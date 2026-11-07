@@ -2780,6 +2780,11 @@ public static class UiStrings
         // 跟随光标那句由 DragOver 现取词（系统画的，不是树里的元素）。术语与 widget.kind.quickLaunch 同一份。
         new Entry("widget.drop.hint", "松开以添加到快捷启动", "Release to add to Quick launch", "ドロップしてクイック起動に追加"),
         new Entry("widget.drop.caption", "添加到快捷启动", "Add to Quick launch", "クイック起動に追加"),
+        new Entry("widget.drop.receipt.added", "已添加 {0} 个", "Added {0}", "{0} 件を追加しました"),
+        new Entry("widget.drop.receipt.allDup", "{0} 个都已经在快捷启动里", "Already in Quick launch: {0}", "{0} 件はすべてクイック起動にあります"),
+        new Entry("widget.drop.receipt.missing", "这个快捷启动实例已经不在了，一条都没加进去", "This Quick launch instance no longer exists; nothing was added", "このクイック起動インスタンスはもう存在しないため、何も追加されませんでした"),
+        new Entry("widget.drop.receipt.noPaths", "拖入的 {0} 项都没有可用路径", "None of the {0} dropped items had a usable path", "ドロップされた {0} 項目には有効なパスがありません"),
+        new Entry("widget.drop.receipt.failed", "添加失败：{0}", "Failed to add: {0}", "追加に失敗しました：{0}"),
 
         // ===== 护眼 · 休息提醒整节（批次 WI-37-B）=====
         // 这一族过去住在 Core：`EyeRestPolicy.IntervalLabels`／`NoticeLabels`／`NoticeHint` 直接拼中文成品串，

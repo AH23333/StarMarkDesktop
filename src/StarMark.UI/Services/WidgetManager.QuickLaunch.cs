@@ -8,6 +8,11 @@ using StarMark.UI.Views;
 
 namespace StarMark.UI.Services;
 
+/// <summary>一次「往快捷启动里加东西」的结局（P-93 回执的数据面）：递了几条、真加了几条、那个实例还在不在。
+/// <para>「全被去重」与「实例不在了」在净增数上长得一模一样（都是 0），但前者是正常结果、后者是那条入口根本没落下去——
+/// 回执必须分开说，合说一句就是把两种下一步混成一种。</para></summary>
+public sealed record LauncherAddOutcome(int Offered, int Added, bool InstanceFound);
+
 /// <summary>
 /// WidgetManager 的这一段——快捷启动的数据面：一条链接的增删、整批落库的唯一出口、活动记录。
 /// <para>按访问面拆出来的 partial：<b>不持有任何状态</b>——字段与构造都住在主文件里，这里只放"同一件事的那几条出口"，好让主文件回到能一眼看完的尺寸。</para>
@@ -118,13 +123,31 @@ public sealed partial class WidgetManager
     /// <para>选择器这条路不是锦上添花：程序以管理员身份运行时 Windows（UIPI）会整条拦下从资源管理器拖进来的消息流，
     /// 不报错也不提示，症状就是"拖了没反应"；对话框跑在本进程里，与权限等级无关。</para>
     /// </summary>
-    /// <returns>真正加进本组件的入口条数（去重后为 0 也是正常结果，由调用侧说出来，别让它静默）。</returns>
-    public async Task<int> AddPathsToLauncherAsync(string instanceId, IReadOnlyList<(string? Title, string Path)> picked)
+    /// <returns>那次尝试的结局（<see cref="LauncherAddOutcome"/>）：加了几条、递了几条、实例还在不在——
+    /// 「全被去重」与「实例不在了」都读作净增 0，回要把它们分开说（P-93），别让前者冒充后者。</returns>
+    public async Task<LauncherAddOutcome> AddPathsToLauncherAsync(string instanceId, IReadOnlyList<(string? Title, string Path)> picked)
     {
         var usable = picked.Where(p => !string.IsNullOrWhiteSpace(p.Path)).ToList();
-        if (usable.Count == 0) return 0;
+        if (usable.Count == 0) return new LauncherAddOutcome(0, 0, InstanceFound: true);   // 空手＝什么都没试，不冒充「实例没了」
         await RecordPathsToLibraryAsync(usable);
-        return await AddLinksAsync(instanceId, usable.Select(p => (TitleOf(p.Title, p.Path), new Uri(p.Path).AbsoluteUri)).ToList());
+        var added = await AddLinksAsync(instanceId, usable.Select(p => (TitleOf(p.Title, p.Path), new Uri(p.Path).AbsoluteUri)).ToList());
+        // 只在净增 0 那一趟多读一次档分岔：加成了用不着问，加不成才要回答「是全在，还是实例没了」。
+        return added > 0
+            ? new LauncherAddOutcome(usable.Count, added, InstanceFound: true)
+            : new LauncherAddOutcome(usable.Count, 0, await LauncherInstanceExistsAsync(instanceId));
+    }
+
+    /// <summary>净增 0 时回答「那个实例还在不在」：只为回执的分岔读一次档，加成的那趟不付这个钱。</summary>
+    private async Task<bool> LauncherInstanceExistsAsync(string instanceId)
+        => await OnUiAsync(() => _storage.Load().Instances.FirstOrDefault(i => i.Id == instanceId) is not null);
+
+    /// <summary>单个链接那一发的回执数据面（P-93）：判据仍走 <see cref="AddLinkAsync"/> 那一份，只多回答「实例还在不在」。</summary>
+    public async Task<LauncherAddOutcome> AddLinkWithOutcomeAsync(string instanceId, string title, string uri)
+    {
+        var added = await AddLinkAsync(instanceId, title, uri);
+        return added
+            ? new LauncherAddOutcome(1, 1, InstanceFound: true)
+            : new LauncherAddOutcome(1, 0, await LauncherInstanceExistsAsync(instanceId));
     }
 
     /// <summary>没带名字就取路径末段；目录带尾斜杠时 <c>GetFileName</c> 会返回空串，退化成去掉斜杠的末段。</summary>
