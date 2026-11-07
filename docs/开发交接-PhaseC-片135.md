@@ -957,3 +957,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 队列状态：可动项全清。开放头行剩七颗：P-2／P-73／P-90／P-147／P-153（用户裁决／长期记录）＋P-169（不翻牌・尾巴＝AI 组行・托盘菜单・安装器向导・同步中关窗卡，留统一测）＋P-192（⑴ pngStillBad／canceled・⑵ badSize／shortBuffer 防御臂・⑶ noLanguagePack 要一台没装 OCR 包的机器——三臂本机造不出，归他点验・⛔ 进发布说明直到点验）。
 
 - 下一刀：等统一测排期或新指示。⛔ push（桌面未推 35・扩展未推 2）。
+
+## 一百零九、片228 P-192 ⑶ 收官：noLanguagePack 三语真机读数（用户授权「卸本机 OCR→测→装回」）
+
+- 接手第一步照旧现读编号轴：报告到六百一十四、交接到一百零九、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・P-192 追加片228 块＝14 行）；计数器现读＝296/289/7（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・本批加减 0/0）。
+
+- P-192 ⑶ 口径（供复核）：用户授权「卸本机 OCR→测→装回」⇒ 探针（仓外・D:\StarMarkTmp\p228\OcrProbe・走 Locale.TrySet→AvailableLanguages→OcrPipeline.ReadAsync 真链）拿到无包窗口的三语 noLanguagePack 逐字读数，⇄ UiStrings 三列逐字相等（readout228.py 7/7）；四包 dism 装回全 code=0・装后复测与卸前基线逐字一致。正本全在 D:\StarMarkTmp\p228\（读数档＋能力侧档案＋复算尺）。capability 正名＝`Language.OCR~~~<tag>~0.0.1.0`（⛔ LanguageFeatures.OCR*／TextRecognition*，本机查全空）；FOD 装回每颗 22-25 分钟且 WU 下载阶段零进度条＝「像卡死」的常态，客户端死了 TiWorker 照样接着装完。
+
+- P-192 剩余：⑴ pngStillBad／canceled（本机造不出）・⑵ badSize／shortBuffer（防御臂）两臂四颗照旧登记未验证・⛔ 进发布说明（名册 465 族口径）；翻牌与否归用户裁。⑶ 已收＝三语文案＋设置路径指引均验过。
+
+- 队列状态：开放头行剩七颗照旧——P-2／P-73／P-90／P-147／P-153（用户裁决／长期记录）＋P-169（不翻牌・尾巴＝AI 组行・托盘菜单・安装器向导・同步中关窗卡，留统一测）＋P-192（剩 ⑴⑵ 两臂未验证尾巴）。等统一测排期或新指示。⛔ push（桌面未推 36・扩展未推 2）。
