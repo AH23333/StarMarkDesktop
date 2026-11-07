@@ -921,3 +921,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build224 0 错；gates224 374/374；全量 6951/6951（基线 6944＋7）；docgates224 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/286/10 VERDICT OK。
 
 - 下一刀：队列清理第十刀＝P-294 AI 请求仪表盘（用户裁决已到手：设置页 AI 栏新卡＝最近请求明细＋汇总读数＋按天趋势小图，三项全选；动工前先读账本拍板行与 AI 请求链路定数据源）。其后 i18n 按批（P-168／169／172／192）→P-172→P-192。⛔ push（桌面未推 32・扩展未推 2）。
+
+## 一百零六、片225 队列清理第十刀：P-294 设置页 AI 仪表盘（全期汇总＋按日趋势条＋最近请求明细）
+
+- 接手第一步照旧现读编号轴：报告到六百一十一、交接到一百零六、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-294）；计数器现读＝296/287/9（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 10→9）。
+
+- P-294 落点（供复核，全部在仓）：`src/StarMark.Abstractions/IAiUsageRepository.cs`（RecentAsync＋ByDaySinceAsync＋AiUsageDay record＋AiDashboardSnapshot record＋AiUsageTrend.LastDays 纯函数）、`src/StarMark.Data/AiUsageRepository.cs`（两读实现）、`src/StarMark.UI/Services/AiClassifyService.cs`（DashboardSnapshotAsync 一次读齐）、`src/StarMark.UI/Views/SettingsPage.AiDashboard.cs`（新档：卡装配＋行类「键＋实参」Repaste）、`src/StarMark.UI/Views/SettingsPage.xaml`（AI 栏卡列新卡三段）、`SettingsPage.Ai.cs`／`SettingsPage.xaml.cs`（接线：进栏初始化＋整理跑完跟一拍）、`src/StarMark.Abstractions/I18n/UiStrings.cs`（10 颗 settings.ai.dashboard.* 三语）；测＝`tests/StarMark.Tests/AiDashboardGateTests.cs`（新 9）＋`AiUsageTests`（+5）＋`I18nContractTests`（rowTokens 名册登记）。账本 7028 行那颗指向 SettingsPage.Ai.cs 的旧指针已随翻牌按新行位修回（census 19 保形）。
+
+- 统一测清单（P-294 项・真机）：进设置页 AI 栏看仪表盘卡三段——全期汇总行（次数／token／估算条数／最近一条时刻）、近两星期按日趋势条（条高随量、hover 看日／token／次数）、最近请求明细（时刻／功能与模型／进出台 token／估算标记）；跑一次真实整理后不重启、回设置页看明细与趋势跟新；空账本看空态句；三语各扫一眼。
+
+- 读数：build225 0 错；定向（~AiUsage|~AiDashboard）30/30；gates225 首跑 1819/3（~GateTests 1822 例）・修毕；全量两跑：首跑 6963/2（I18nContractTests 两红・修毕）・复跑 6965/6965（基线 6951＋14）；docgates225 23/23（四类・翻牌后复测；六类宽口径 35/35）；census 19；flipcheck PASS（加行 2 行 0 禁词・回改与 HEAD 同态）；计数器 296/287/9 VERDICT OK。
+
+- 下一刀：队列清理第十一刀＝i18n 按批（账本 P-168／P-169／P-172／P-192 四颗，动工前先读各条拍板行定批形状与先后）。真机验收随统一测（P-63 浮层清单照旧＋P-294 仪表盘三段）。⛔ push（桌面未推 33・扩展未推 2）。

@@ -211,6 +211,49 @@ public sealed class AiUsageRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Recent_NewestFirst_LimitedAndRoundTrips()
+    {
+        for (var i = 0; i < 5; i++)
+            await _repo.LogAsync(Entry(i, i == 3 ? "instant" : "classify", i % 2 == 0 ? "m" : null,
+                10 + i, 2, estimated: i == 3));
+
+        var top3 = await _repo.RecentAsync(3);
+        Assert.Equal(3, top3.Count);                        // 上限生效
+        for (var i = 1; i < top3.Count; i++)
+            Assert.True(top3[i - 1].At >= top3[i].At);      // 新→旧
+
+        var all = await _repo.RecentAsync(10);
+        Assert.Equal(5, all.Count);
+        var newest = all[0];                                // 0 天前那条整圈往返
+        Assert.Equal("classify", newest.Feature);
+        Assert.Equal("ollama", newest.Provider);
+        Assert.Equal("m", newest.Model);
+        Assert.False(newest.Usage.Estimated);
+        Assert.Equal(10, newest.Usage.InputTokens);
+        Assert.Null(all.First(e => e.Model is null).Model);          // model 没记的行照读成 null，不悄悄丢行
+        Assert.Equal("instant", all.Single(e => e.Usage.Estimated).Feature);   // 估算位往返
+    }
+
+    [Fact]
+    public async Task ByDay_GroupsIntoLocalDayStringsAscending()
+    {
+        // 同一时刻的两行＝同一个本地日，保证不跨午夜；第三行隔整 3 天＝另一个本地日
+        var now = DateTimeOffset.Now;
+        await _repo.LogAsync(new AiUsageEntry(now, "classify", "ollama", "m", new AiUsage(10, 2, false)));
+        await _repo.LogAsync(new AiUsageEntry(now, "instant", "ollama", "m", new AiUsage(5, 5, false)));
+        await _repo.LogAsync(new AiUsageEntry(now.AddDays(-3), "classify", "ollama", "m", new AiUsage(7, 3, false)));
+
+        var days = await _repo.ByDaySinceAsync(0);
+        Assert.Equal(2, days.Count);                                        // 分组不丢行：3 行并成 2 天
+        Assert.Equal(1, days[0].Calls);
+        Assert.Equal(10, days[0].TotalTokens);                              // 3 天前那天
+        Assert.Equal(2, days[1].Calls);                                     // 同日的两行合一天
+        Assert.Equal(22, days[1].TotalTokens);
+        Assert.True(string.CompareOrdinal(days[0].Day, days[1].Day) < 0);   // 升序
+        Assert.All(days, d => Assert.Matches(@"^\d{4}-\d{2}-\d{2}$", d.Day));   // 本地日字符串
+    }
+
+    [Fact]
     public async Task Log_OnMissingTable_SwallowsAndKeepsGoing()
     {
         // 账写不上也绝不拦功能（§20.1 写侧纪律）：拿一个没建表的库来验证"不抛"
@@ -224,5 +267,67 @@ public sealed class AiUsageRepositoryTests : IDisposable
         {
             try { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); File.Delete(orphan); } catch { }
         }
+    }
+}
+
+/// <summary>按天趋势的铺日纯函数：末日锚定、缺日补零、窗外丢弃——仪表盘那张小图的三条诚实底线。</summary>
+public sealed class AiUsageTrendTests
+{
+    /// <summary>锚点用本地时区构造：LastDays 铺的是 anchor 的<b>本地日</b>，测试机在哪个时区都该锚在 2026-11-07。</summary>
+    private static readonly DateTimeOffset Anchor = CreateAnchor();
+
+    private static DateTimeOffset CreateAnchor()
+    {
+        var local = new DateTime(2026, 11, 7, 18, 30, 0, DateTimeKind.Unspecified);
+        return new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local));
+    }
+
+    [Fact]
+    public void LastDays_AnchorsAtAnchorLocalDay_PadsMissingWithZero()
+    {
+        var raw = new[]
+        {
+            new AiUsageDay("2026-11-05", 3, 300),
+            new AiUsageDay("2026-11-07", 1, 100),
+        };
+
+        var days = AiUsageTrend.LastDays(raw, Anchor, 4);
+
+        Assert.Equal(4, days.Count);
+        Assert.Equal("2026-11-04", days[0].Day);
+        Assert.Equal(0, days[0].TotalTokens);            // 没账的日子补零占位："空格"与"零消耗"都得在图上
+        Assert.Equal("2026-11-05", days[1].Day);
+        Assert.Equal(300, days[1].TotalTokens);
+        Assert.Equal("2026-11-06", days[2].Day);
+        Assert.Equal(0, days[2].TotalTokens);
+        Assert.Equal("2026-11-07", days[3].Day);         // anchor 的本地日永远是最后一格
+        Assert.Equal(100, days[3].TotalTokens);
+    }
+
+    [Fact]
+    public void LastDays_DropsOutsideWindow_AndLastWinsOnDuplicate()
+    {
+        var raw = new[]
+        {
+            new AiUsageDay("2026-10-20", 9, 900),        // 窗外旧账：并进来会把窗内的日子挤掉
+            new AiUsageDay("2026-11-06", 2, 200),
+            new AiUsageDay("2026-11-06", 5, 500),        // 同名后写胜
+        };
+
+        var days = AiUsageTrend.LastDays(raw, Anchor, 2);
+
+        Assert.Equal(2, days.Count);
+        Assert.Equal("2026-11-06", days[0].Day);
+        Assert.Equal(500, days[0].TotalTokens);          // 11-06 取后写那条
+        Assert.Equal("2026-11-07", days[1].Day);
+        Assert.Equal(0, days[1].TotalTokens);            // 10-20 被丢弃；11-07 无账补零
+        Assert.DoesNotContain(days, d => d.Day == "2026-10-20");
+    }
+
+    [Fact]
+    public void LastDays_ZeroCount_ReturnsEmpty()
+    {
+        Assert.Empty(AiUsageTrend.LastDays(Array.Empty<AiUsageDay>(), Anchor, 0));
+        Assert.Empty(AiUsageTrend.LastDays(Array.Empty<AiUsageDay>(), Anchor, -1));
     }
 }

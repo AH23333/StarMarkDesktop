@@ -335,6 +335,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 排在下面那颗早退之前——那一颗是热键服务解析失败时的出口，⛔ 让 AI 这一栏的重贴跟着它一起被跳过。
         Locale.Changed -= RepasteAiGroupRows;
         Locale.Changed += RepasteAiGroupRows;
+        // 「AI 仪表盘」卡里趋势条的悬浮提示与明细行同样住在数据项＋模板里：同一颗成对块（⛔ 为它再开新主人），P-294。
+        Locale.Changed -= RepasteAiDashboardRows;
+        Locale.Changed += RepasteAiDashboardRows;
         // 「本机备份」那一列每行有两句（类别名与按钮名）也住在数据项＋模板里：同一颗订阅那一段，第四组成对手臂（机制 (C)·第四位宿主）。
         Locale.Changed -= RepasteBackupRows;
         Locale.Changed += RepasteBackupRows;
@@ -369,6 +372,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         Locale.Changed -= ViewModel.PaintDiagnostics;   // 与 Loaded 那颗成对
         Locale.Changed -= RepasteHotkeyRows;            // 同上：那一栏的重贴手臂也一起摘
         Locale.Changed -= RepasteAiGroupRows;           // 同上：AI 预览那两行同样⛔ 留下挂着的订阅
+        Locale.Changed -= RepasteAiDashboardRows;       // 同上：仪表盘那卡的趋势条与明细行一起摘（P-294）
         Locale.Changed -= RepasteBackupRows;            // 同上：备份那一列的三颗显示属性也一起摘
         Locale.Changed -= ViewModel.PaintHealthReadouts; // 同上：健康那一栏那几行的重贴手臂一起摘
         Locale.Changed -= RepasteSyncStatus;            // 同上：GitHub 卡那行「上一次同步」的重贴手臂一起摘

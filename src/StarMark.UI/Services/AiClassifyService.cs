@@ -328,4 +328,26 @@ public sealed class AiClassifyService
         return await _repo.TagItemsAsync(
             plan.Proposals.Select(proposal => new ItemTagAssignment(proposal.Id, proposal.Tags)).ToList(), ct);
     }
+
+    /// <summary>
+    /// AI 仪表盘（P-294）的一次完整读：全部合计＋最近明细＋按天趋势。null＝账本没接线
+    /// （与 <see cref="UsageSnapshotAsync"/> 同一口径：面板只把这一格亮出来，⛔ 拦设置页）。
+    /// <para>趋势窗从<b>账本最后一条</b>往回铺（§20.5 同一哲学：不以墙钟为基准），
+    /// 多拉一天再由 <see cref="AiUsageTrend.LastDays"/> 修剪——起切那一日常常不满一天，
+    /// 把半天的量与整天摆一样高，读图的人会误判"今天特别少"。</para>
+    /// </summary>
+    public async Task<AiDashboardSnapshot?> DashboardSnapshotAsync(int recentTake, int trendDays, CancellationToken ct = default)
+    {
+        if (_usage is null) return null;
+        var max = await _usage.MaxRecordedAtAsync(ct);
+        if (max is null)
+            return new AiDashboardSnapshot(null, new AiUsageTotals(0, 0, 0, 0),
+                Array.Empty<AiUsageEntry>(), Array.Empty<AiUsageDay>());
+        var latest = DateTimeOffset.FromUnixTimeSeconds(max.Value);
+        var allTime = await _usage.TotalsSinceAsync(0, ct);
+        var recent = await _usage.RecentAsync(recentTake, ct);
+        var rawDays = await _usage.ByDaySinceAsync(max.Value - (trendDays + 1L) * 86_400, ct);
+        return new AiDashboardSnapshot(latest, allTime, recent,
+            AiUsageTrend.LastDays(rawDays, latest, trendDays));
+    }
 }

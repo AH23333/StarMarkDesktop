@@ -209,7 +209,8 @@ public sealed class ThemeAccentWordGateTests : IDisposable
             Assert.Equal(0, Count(xaml, "{ThemeResource " + key + "}"));
         }
         Assert.DoesNotContain("\"AccentFillColorDefaultBrush\"", brush, StringComparison.Ordinal);
-        Assert.Equal(3, new[] { "src/StarMark.UI/Controls/ItemCard.xaml", ThemeXaml, Page }
+        // 本格自己现读（2026-11-07・片225・P-294）：设置页 AI 仪表盘那排按天趋势条要跟系统强调色（与 ItemCard 同族）＝第 4 颗。
+        Assert.Equal(4, new[] { "src/StarMark.UI/Controls/ItemCard.xaml", ThemeXaml, Page }
             .Sum(f => Count(ReadRepoFile(f), "{ThemeResource AccentFillColorDefaultBrush}")));
     }
 

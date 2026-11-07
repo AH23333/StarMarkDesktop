@@ -503,6 +503,54 @@
                                 </ScrollViewer>
                             </StackPanel>
                         </Border>
+
+                                <!--
+                                    AI 仪表盘（P-294 用户拍板：长在 AI 栏的新卡——最近请求明细＋汇总读数＋按天趋势小图）。
+                                    数据源＝§20.1 那本 ai_usage 账本：预算栏判额、这里画趋势，同一份账的第二只读面。
+                                    卡里的字与数字全部由 code-behind 交键交读数（SettingsPage.AiDashboard.cs），
+                                    这里只有骨架与绑定。
+                                -->
+                                <Border Style="{StaticResource Card}">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock i18n:LocText.Key="settings.ai.dashboard.title" Style="{StaticResource SettingTitle}"/>
+                                        <TextBlock x:Name="AiDashboardSummaryText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"
+                                                   Opacity="0.72"/>
+                                        <TextBlock i18n:LocText.Key="settings.ai.dashboard.trendTitle" Style="{StaticResource SettingRowText}"
+                                                   Opacity="0.72"/>
+                                        <ItemsControl x:Name="AiDashboardTrend">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" Spacing="3"/>
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Spacing="2" ToolTipService.ToolTip="{Binding TipText}">
+                                                        <Border Width="14" Height="{Binding BarHeight}" VerticalAlignment="Bottom"
+                                                                Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2,2,0,0"/>
+                                                        <TextBlock Text="{Binding DayLabel}" FontSize="9" Opacity="0.55" HorizontalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <TextBlock i18n:LocText.Key="settings.ai.dashboard.recentTitle" Style="{StaticResource SettingRowText}"
+                                                   Opacity="0.72"/>
+                                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl x:Name="AiDashboardRecentList">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,2,0,2">
+                                                            <TextBlock Grid.Column="0" Text="{Binding MainLine}" FontSize="11.5" TextWrapping="Wrap"
+                                                                       VerticalAlignment="Center"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding TokensLine}" FontSize="11.5" Opacity="0.72"
+                                                                       VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
                     </controls:ColumnFlowPanel>
                 </ScrollViewer>
             </TabViewItem>

@@ -317,6 +317,9 @@ public sealed class I18nContractTests : IDisposable
                 + "与 calc.cat.speed 那类「日文照汉字写」同族（✅WI-64c 片114／P-199）",
             ["clip.sub.image"] = "纯骨架「{0} · {1}×{2} · {3}」三列同形：来源、几何、体积全是中性事实，「·」与「×」都是记号不是词"
                 + "（✅WI-64c 片114／P-199，与 clip.sub.text1 同形）；{3} 交的是字节数那颗读数",
+            ["settings.ai.dashboard.rowTokens"] = "纯骨架「{0} + {1} token」中日同形：进／出两颗 token 读数用「+」相连，"
+                + "token 是哪一列都照写的记号词（en 列走 label 形 \"tokens in {0} · out {1}\"——数量词 label 形家法），这一行没有词可翻"
+                + "（✅片225／P-294 设置页 AI 仪表盘；同副骨架的 rowTokensEstimated「（估算）／（推定）」有词所以三列各异）",
         };
 
         var actual = UiStrings.All

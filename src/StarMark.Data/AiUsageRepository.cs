@@ -106,4 +106,53 @@ public sealed class AiUsageRepository : IAiUsageRepository
         var value = await cmd.ExecuteScalarAsync(ct);
         return value is null or DBNull ? null : Convert.ToInt64(value);
     }
+
+    public async Task<IReadOnlyList<AiUsageEntry>> RecentAsync(int take, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        // rowid 作次序的 tie-break：at 只精确到秒，同一秒内的两行也该有稳定的先后
+        cmd.CommandText = @"
+            SELECT at, feature, provider, model, input_tokens, output_tokens, estimated
+            FROM ai_usage ORDER BY at DESC, rowid DESC LIMIT @take;";
+        cmd.Parameters.AddWithValue("@take", take);
+        var rows = new List<AiUsageEntry>();
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new AiUsageEntry(
+                DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(reader.GetValue(0))),
+                reader.GetValue(1)?.ToString() ?? string.Empty,
+                reader.GetValue(2)?.ToString() ?? string.Empty,
+                reader.IsDBNull(3) ? null : reader.GetValue(3)?.ToString(),
+                new AiUsage(
+                    Convert.ToInt32(reader.GetValue(4)),
+                    Convert.ToInt32(reader.GetValue(5)),
+                    Convert.ToInt32(reader.GetValue(6)) != 0)));
+        }
+        return rows;
+    }
+
+    public async Task<IReadOnlyList<AiUsageDay>> ByDaySinceAsync(long fromUnixSec, CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        using var cmd = conn.CreateCommand();
+        // 'localtime'：趋势按用户过的那一天切，不按 UTC——半夜跑的整理该记在用户看见的那一天上
+        cmd.CommandText = @"
+            SELECT date(at, 'unixepoch', 'localtime') AS day, COUNT(*),
+                   COALESCE(SUM(input_tokens + output_tokens), 0)
+            FROM ai_usage WHERE at >= @from
+            GROUP BY day ORDER BY day;";
+        cmd.Parameters.AddWithValue("@from", fromUnixSec);
+        var rows = new List<AiUsageDay>();
+        using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new AiUsageDay(
+                reader.GetValue(0)?.ToString() ?? string.Empty,
+                Convert.ToInt32(reader.GetValue(1)),
+                Convert.ToInt64(reader.GetValue(2))));
+        }
+        return rows;
+    }
 }

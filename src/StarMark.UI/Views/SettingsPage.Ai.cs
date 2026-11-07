@@ -69,6 +69,7 @@ public sealed partial class SettingsPage
         ShowAiProblem();
         InitAiOrganiseSection();
         InitAiUsagePanel();     // §20.1 用量面板：读一次账本，失败只留一行解释不拦设置页
+        InitAiDashboard();      // P-294 仪表盘卡：同一份账本的另一只读面（明细＋汇总＋按天趋势）
     }
 
     /// <summary>把界面上这一组控件读成一份配置。<b>只有这一个地方读控件</b>：
@@ -323,6 +324,7 @@ public sealed partial class SettingsPage
             AiApplyAllButton.IsEnabled = !_aiPlan.IsEmpty;
             cts.Dispose();
             _ = RefreshAiUsageAsync();          // 这一轮烧了多少，面板当场跟上
+            _ = RefreshAiDashboardAsync();      // 仪表盘那只读面同一拍跟上（P-294）：明细与趋势多出的正是刚跑完的这几发
         }
     }
 
