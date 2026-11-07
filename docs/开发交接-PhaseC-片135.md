@@ -1007,3 +1007,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 队列状态：开放头行剩四颗——P-73／P-90／P-153（用户裁决／等真机一句话）＋P-147（私钥备份风险・长期记录）。账本可动项全清。同会话接续开工：用户指示两条新线——①AI 分类省 token（保质量前提下降本）②AI 链路韧性（客户端断联／服务商断联／额度不够的优雅处理）——下一刀登记新账后动工。
 
 - 下一刀：登记＋调研两条新线（AI 分类 token 降本・AI 链路韧性），先读现链路再立方案；用户已放行连续开发。⛔ push（桌面未推 40・扩展未推 2）。
+## 一百一十四、片233 立账两颗：P-296（AI 分类省 token）＋P-297（AI 链路韧性）
+
+- 接手第一步照旧现读编号轴：报告到六百一十九、交接到一百一十四、坑表到 #1158（本轮无新增）、账本到 P-297（本轮新立 2：P-296／P-297）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73／P-90／P-147／P-153／P-296／P-297）。
+
+- P-296 口径：AI 分类省 token 只走「行级去重」——发给模型的行完全相同的条目并成一行问一遍、标签扇出全体同款；质量判据＝同款拿到的标签与不去重时逐字一致（恒等式非近似）。批加大／系统段再瘦／结果缓存三条分叉已否并记档内。
+
+- P-297 口径：批内重试（可重试型每批最多三试・退避 Retry-After 优先、上限 60s、默认 5s/15s）＋连续两批全败熔断＋致命型即停（未配置/Key 拒/模型名不对/额度耗尽/协议不认）＋额度耗尽独立分型（402 或 429 带余额字样 ⇒ QuotaExhausted）。叫停语义零改动。文案债（ai.failure.rateLimited 承诺了不存在的重试）随落地刀补真。
+
+- 下一刀：P-297 落地（AiFailures／AiResults／AiHttp／AiProviders／ClassifyRunner／UiStrings／AiChannelWordGateTests／AiClassifyTests／AiLayerTests），随后 P-296 落地。⛔ push（桌面未推 40・扩展未推 2）。
