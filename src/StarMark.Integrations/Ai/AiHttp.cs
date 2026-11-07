@@ -19,7 +19,8 @@ internal sealed record AiTransport(
     string? Body,
     AiFailureKind Failure = AiFailureKind.Unknown,
     LocMessage? Problem = null,
-    bool Truncated = false)
+    bool Truncated = false,
+    int? RetryAfterSeconds = null)
 {
     public bool Succeeded => Connected && Status is >= 200 and <= 299;
 }
@@ -95,7 +96,8 @@ internal static class AiHttp
             // ResponseHeadersRead + 限长读：服务方一直喂也不会把内存吃掉
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, bounded);
             var (body, truncated) = await ReadBoundedAsync(response, bounded);
-            return new AiTransport(true, (int)response.StatusCode, body, Truncated: truncated);
+            return new AiTransport(true, (int)response.StatusCode, body, Truncated: truncated,
+                RetryAfterSeconds: RetryAfterOf(response));
         }
         catch (OperationCanceledException) when (userToken.IsCancellationRequested)
         {
@@ -133,5 +135,16 @@ internal static class AiHttp
             buffer.Write(chunk, 0, read);
         }
         return (Encoding.UTF8.GetString(buffer.ToArray()), false);
+    }
+
+    /// <summary><c>Retry-After</c> 头的「隔几秒再来」（429/503 常带）。只认秒数形态（<c>Delta</c>）——
+    /// HTTP-日期形态少且要换算墙钟，null 落回编排层的固定退避即可（片233·P-297）。
+    /// <b>原样交秒数，⛔ 在这里夹上限</b>：上限是重试策略的一部分，住 <see cref="Core.Ai.ClassifyRunner"/>。</summary>
+    private static int? RetryAfterOf(HttpResponseMessage response)
+    {
+        var delta = response.Headers.RetryAfter?.Delta;
+        return delta is { } wait && wait > TimeSpan.Zero
+            ? (int)Math.Min(wait.TotalSeconds, int.MaxValue)
+            : null;
     }
 }

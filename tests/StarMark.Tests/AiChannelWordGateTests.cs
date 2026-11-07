@@ -43,7 +43,8 @@ public sealed class AiChannelWordGateTests : IDisposable
     private const string Policy = "src/StarMark.Core/Widgets/WidgetStartupPolicy.cs";
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    /// <summary>本扇交进表里的 50 颗键，逐颗点名（计数型判据抓不到"换名"＝#164；名单由 <c>rows_67j.py</c> 现生成）。</summary>
+    /// <summary>本扇交进表里的 52 颗键，逐颗点名（计数型判据抓不到"换名"＝#164；名单由 <c>rows_67j.py</c> 现生成，
+    /// 片234·P-297 补入 <c>quotaExhausted</c>／<c>aborted</c> 两颗）。</summary>
     private static readonly string[] Keys =
     {
         "ai.problem.notEnabled",
@@ -65,6 +66,7 @@ public sealed class AiChannelWordGateTests : IDisposable
         "ai.failure.modelNotFound",
         "ai.failure.unauthorized",
         "ai.failure.rateLimited",
+        "ai.failure.quotaExhausted",
         "ai.failure.timedOut",
         "ai.failure.serviceError",
         "ai.failure.badResponse",
@@ -91,6 +93,7 @@ public sealed class AiChannelWordGateTests : IDisposable
         "ai.transport.emptyInventory",
         "ai.probe.urlMalformed",
         "ai.run.batchFailed",
+        "ai.run.aborted",
         "ai.parse.nothingReadable",
         "ai.parse.itemsNotArray",
         "ai.parse.categoriesNotObject",
@@ -129,18 +132,18 @@ public sealed class AiChannelWordGateTests : IDisposable
 
     /// <summary>①名单颗数：这颗数的是<b>我自己抄进本档的那一串</b>，加一颗不登记就红。</summary>
     [Fact]
-    public void TheRosterIsExactlyTheFiftySentencesThisSliceHandedIn()
+    public void TheRosterIsExactlyTheFiftyTwoSentencesThisSliceHandedIn()
     {
-        Assert.Equal(50, Keys.Length);
-        Assert.Equal(50, Keys.Distinct(StringComparer.Ordinal).Count());
-        // 前缀⛔ 混：settings.ai.* 那 71 颗的主人是界面层（✅WI-41），ai.* 这 50 颗的主人是句厂三层——
+        Assert.Equal(52, Keys.Length);
+        Assert.Equal(52, Keys.Distinct(StringComparer.Ordinal).Count());
+        // 前缀⛔ 混：settings.ai.* 那 71 颗的主人是界面层（✅WI-41），ai.* 这 52 颗的主人是句厂三层——
         // 两族各一把尺，混成一把就分不清"是谁在产地取的词"。
         Assert.All(Keys, key => Assert.StartsWith("ai.", key, StringComparison.Ordinal));
         Assert.DoesNotContain(Keys, key => key.StartsWith("settings.ai.", StringComparison.Ordinal));
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在十一档里恰好被点名一次、在标记里一次都没有。
-    /// <para>0 次＝白进表（那句还是有人手写），2 次＝两个主人（改一处漏一处）。现场数：50/50 都是 1（<c>probe_67k.txt</c> ②）。</para></summary>
+    /// <para>0 次＝白进表（那句还是有人手写），2 次＝两个主人（改一处漏一处）。现场数：52/52 都是 1。</para></summary>
     [Fact]
     public void EverySentenceHasOneRowAndExactlyOneVoice()
     {
@@ -155,7 +158,7 @@ public sealed class AiChannelWordGateTests : IDisposable
         }
     }
 
-    /// <summary>③语言读数：50 颗三语各答话、槽数三列一致、实参⛔ 被吞；除两颗纯胶水外三语⛔ 同形。
+    /// <summary>③语言读数：52 颗三语各答话、槽数三列一致、实参⛔ 被吞；除两颗纯胶水外三语⛔ 同形。
     /// <para>形状尺（④）只说得了"代码交出的是键"，说不了"那句在屏幕上念得出来"——Ja 列漏一格、槽没填满都由这一格先红。</para></summary>
     [Fact]
     public void TheSentencesAnswerInEveryLanguage()
@@ -206,7 +209,7 @@ public sealed class AiChannelWordGateTests : IDisposable
 
         Assert.Contains("public static LocMessage Reason(AiFailureKind kind, LocMessage? detail, LocMessage where) => kind switch", CodeOf(Failures));
 
-        Assert.Contains("LocMessage? Detail = null, AiUsage? Usage = null)", CodeOf(Results));
+        Assert.Contains("LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null)", CodeOf(Results));
         Assert.Contains("public LocMessage Explain(LocMessage where) =>", CodeOf(Results));
         Assert.Contains("public LocMessage Explain(LocMessage where, string? configuredModel)", CodeOf(Results));
 
@@ -214,7 +217,8 @@ public sealed class AiChannelWordGateTests : IDisposable
 
         Assert.Contains("internal sealed record AiTransport(", CodeOf(Http));
         Assert.Contains("LocMessage? Problem = null,", CodeOf(Http));
-        Assert.Contains("bool Truncated = false)", CodeOf(Http));
+        Assert.Contains("bool Truncated = false,", CodeOf(Http));   // 片234·P-297 起后面还有 RetryAfterSeconds 那一位
+        Assert.Contains("int? RetryAfterSeconds = null)", CodeOf(Http));
         Assert.Contains("internal static LocMessage? DetailOf(AiTransport transport)", CodeOf(Http));
 
         Assert.Contains("public sealed record AiProbe(bool Ok, LocMessage Report, IReadOnlyList<string> Models)", CodeOf(Gateway));
@@ -326,6 +330,7 @@ public sealed class AiChannelWordGateTests : IDisposable
             AiFailureKind.NotConfigured,   // 有明细走 notConfiguredWith，没有走 notConfigured 那句落点
             AiFailureKind.ServiceError,
             AiFailureKind.BadResponse,
+            AiFailureKind.QuotaExhausted,  // 片234·P-297：额度那支把服务商原话带进槽——用户对账时靠它认出是哪笔账
             AiFailureKind.Unknown,
         };
         foreach (var kind in Enum.GetValues<AiFailureKind>())

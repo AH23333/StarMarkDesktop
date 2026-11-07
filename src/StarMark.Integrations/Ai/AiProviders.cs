@@ -68,7 +68,8 @@ public sealed class OllamaProvider : IAiProvider, IDisposable
         if (!transport.Connected)
             return AiReply.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
+            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
+                AiHttp.DetailOf(transport), transport.RetryAfterSeconds);
         return AiWire.ReadOllamaText(transport.Body) is { Length: > 0 } text
             ? AiReply.Success(text, AiWire.ReadOllamaUsage(transport.Body)
                 ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))   // 没回 usage 就折算（§20.5），正文照常返回
@@ -98,7 +99,8 @@ public sealed class OpenAiCompatibleProvider : IAiProvider, IDisposable
 
         if (!transport.Connected) return AiReply.Fail(transport.Failure, transport.Problem);
         if (!transport.Succeeded)
-            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body), AiHttp.DetailOf(transport));
+            return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
+                AiHttp.DetailOf(transport), transport.RetryAfterSeconds);
         return AiWire.ReadOpenAiText(transport.Body) is { Length: > 0 } text
             ? AiReply.Success(text, AiWire.ReadOpenAiUsage(transport.Body)
                 ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))

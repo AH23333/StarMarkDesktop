@@ -322,29 +322,186 @@ public sealed class AiClassifyTests
 
     private static Task<AiReply> Reply(string text) => Task.FromResult(AiReply.Success(text));
 
+    /// <summary>记下每次退避等了几秒、不真等——重试节奏是 P-297 的断言对象，测试里等真秒就本末倒置。</summary>
+    private static Func<TimeSpan, CancellationToken, Task> RecordingWait(List<int> waited) =>
+        (delay, _) => { waited.Add((int)delay.TotalSeconds); return Task.CompletedTask; };
+
+    private static Task<AiReply> TimedOutReply() =>
+        Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, LocMessage.Of("ai.transport.waitedOut")));
+
     [Fact]
     public async Task OneBrokenBatchNeitherStopsTheRunNorBlankTheGoodOnes()
     {
         var items = Enumerable.Range(1, 95).Select(n => Item(n, "T" + n)).ToList();   // 两批（O7 后 80/15）：80 + 15
         var calls = 0;
+        var waited = new List<int>();
 
         var report = await ClassifyRunner.RunAsync(items, new[] { "前端" },
             _ =>
             {
                 calls++;
-                return calls == 1
-                    ? Task.FromResult(AiReply.Fail(AiFailureKind.TimedOut, LocMessage.Of("ai.transport.waitedOut")))
+                return calls <= 3                                   // 第一批三试全超时：线是真的抖，不是抖一下
+                    ? TimedOutReply()
                     : Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
             },
-            null, CancellationToken.None);
+            null, CancellationToken.None, wait: RecordingWait(waited));
 
-        Assert.Equal(2, calls);
+        Assert.Equal(4, calls);                                     // 三试 + 第二批一次
+        Assert.Equal(new[] { 5, 15 }, waited);                      // 固定退避档：先短后长
         Assert.Equal(2, report.Batches.Count);
         Assert.Equal(1, report.FailedBatches);
         Assert.False(report.Batches[0].Ok);
+        Assert.Equal(3, report.Batches[0].Attempts);                // 「试了几次」要看得见，否则"超时"和"超时三次"读起来一样
         Assert.Contains("超时", report.Batches[0].Error!.Render());
-        Assert.Single(report.Proposals);                          // 第二批整理出来的东西留着
+        Assert.Single(report.Proposals);                            // 第二批整理出来的东西留着
         Assert.Equal(0, report.StoppedBatches);
+        Assert.Equal(0, report.SkippedBatches);                     // 一批死透还不够成"线断了"
+        Assert.Null(report.AbortReason);
+    }
+
+    [Fact]
+    public async Task ATransientFailureIsHealedByOneRetry()
+    {
+        var items = Enumerable.Range(1, 95).Select(n => Item(n, "T" + n)).ToList();   // 两批
+        var calls = 0;
+        var waited = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                return calls == 1
+                    ? TimedOutReply()
+                    : Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(3, calls);                                     // 抖了一下就救回来：第一批 2 次 + 第二批 1 次
+        Assert.Equal(new[] { 5 }, waited);
+        Assert.Equal(0, report.FailedBatches);                      // 没有批最终失败——这一下对用户不存在
+        Assert.True(report.Batches[0].Ok);
+        Assert.Equal(2, report.Batches[0].Attempts);
+        Assert.Equal(1, report.Batches[1].Attempts);
+        Assert.Equal(2, report.Proposals.Count);
+    }
+
+    [Fact]
+    public async Task RetryAfterFromTheServerBeatsTheDefaultBackoff()
+    {
+        var waited = new List<int>();
+        var calls = 0;
+
+        var report = await ClassifyRunner.RunAsync(new[] { Item(1, "T") }, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                return calls == 1
+                    ? Task.FromResult(AiReply.Fail(AiFailureKind.RateLimited, retryAfterSeconds: 7))
+                    : Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(new[] { 7 }, waited);                          // 服务说隔 7 秒，就别自作主张等 5 秒
+        Assert.True(report.Batches[0].Ok);
+        Assert.Equal(2, report.Batches[0].Attempts);
+    }
+
+    [Fact]
+    public async Task ARetryAfterBeyondTheCeilingIsClamped()
+    {
+        var waited = new List<int>();
+        var calls = 0;
+
+        var report = await ClassifyRunner.RunAsync(new[] { Item(1, "T") }, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                return calls == 1
+                    ? Task.FromResult(AiReply.Fail(AiFailureKind.RateLimited, retryAfterSeconds: 3600))
+                    : Reply("""{"items":[{"id":1,"tags":["工具"]}]}""");
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(new[] { 60 }, waited);                         // 「十分钟后再来」照单全收＝界面看着像死了
+        Assert.True(report.Batches[0].Ok);
+    }
+
+    [Fact]
+    public async Task TwoConsecutivelyDeadBatchesTripTheBreaker()
+    {
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();  // 三批（80/80/10）
+        var calls = 0;
+        var waited = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ => { calls++; return TimedOutReply(); },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(6, calls);                                     // 两批各三试；第三批一次都没问
+        Assert.Equal(new[] { 5, 15, 5, 15 }, waited);
+        Assert.Equal(2, report.Batches.Count);
+        Assert.Equal(2, report.FailedBatches);
+        Assert.Equal(1, report.SkippedBatches);                     // 断联时剩下的批不再各烧一遍超时（P-297 的核心判据）
+        Assert.Equal(0, report.StoppedBatches);
+        Assert.Equal(3, report.BatchesTotal);
+        Assert.NotNull(report.AbortReason);
+        Assert.Contains("第 3 批", report.AbortReason!.Render());   // 熔断那半句要能对回"哪一批起没问"
+        Assert.Contains("超时", report.AbortReason!.Render());
+        Assert.False(report.AnythingToApply);
+    }
+
+    [Fact]
+    public async Task AFatalFailureSkipsTheRetriesAndTheRestOfTheRun()
+    {
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();  // 三批
+        var calls = 0;
+        var waited = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                return Task.FromResult(AiReply.Fail(AiFailureKind.QuotaExhausted,
+                    LocMessage.Of("common.rawValue", "余额不足")));
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(1, calls);                                     // 额度耗尽重试一百次也一样：墙就在那里
+        Assert.Empty(waited);                                       // 也没有退避——退避是为"再试可能成"准备的
+        Assert.Single(report.Batches);
+        Assert.Equal(AiFailureKind.QuotaExhausted, report.Batches[0].Failure);
+        Assert.Equal(1, report.Batches[0].Attempts);
+        Assert.Equal(2, report.SkippedBatches);
+        Assert.Equal(3, report.BatchesTotal);
+        Assert.NotNull(report.AbortReason);
+        Assert.Contains("第 2 批", report.AbortReason!.Render());
+        Assert.Contains("充值", report.AbortReason!.Render());      // 那句话给的是下一步：掏钱，不是再点一次
+        Assert.Contains("余额不足", report.AbortReason!.Render());
+    }
+
+    /// <summary>退避是等待，不是占着不让停：按停止的那一刻要能立刻带着已整理的东西回来。</summary>
+    [Fact]
+    public async Task CancellingDuringBackoffKeepsWhatWasOrganised()
+    {
+        using var cts = new CancellationTokenSource();
+        var items = Enumerable.Range(1, 95).Select(n => Item(n, "T" + n)).ToList();   // 两批
+        var calls = 0;
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ => { calls++; return TimedOutReply(); },
+            null, cts.Token,
+            wait: (_, _) =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException();
+            });
+
+        Assert.Equal(1, calls);
+        Assert.Equal(2, report.StoppedBatches);                     // 等待中的那一批 + 还没问的第二批
+        Assert.Equal(0, report.FailedBatches);                      // 叫停不等于坏批
+        Assert.Empty(report.Proposals);
+        Assert.Equal(2, report.BatchesTotal);
+        Assert.False(report.AnythingToApply);
     }
 
     /// <summary>真机反馈的另一半：<b>停止落在"正在问的那一批"里面</b>——那时在飞的 HTTP 已被掐断，
@@ -435,9 +592,11 @@ public sealed class AiClassifyTests
     public async Task AnExceptionFromTheChannelIsolatedToItsBatch()
     {
         var report = await ClassifyRunner.RunAsync(new[] { Item(1, "T") }, Array.Empty<string>(),
-            _ => throw new InvalidOperationException("通道里抛了"), null, CancellationToken.None);
+            _ => throw new InvalidOperationException("通道里抛了"), null, CancellationToken.None,
+            wait: (_, _) => Task.CompletedTask);     // 异常型＝Unknown（可重试）：三次都收在这里，不真等退避
 
         Assert.Equal(1, report.FailedBatches);
+        Assert.Equal(3, report.Batches[0].Attempts); // 看不懂的东西也值得再试一次，但只试到上限
         Assert.Contains("通道里抛了", report.Batches[0].Error!.Render());
     }
 

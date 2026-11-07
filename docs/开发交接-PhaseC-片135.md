@@ -1016,3 +1016,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - P-297 口径：批内重试（可重试型每批最多三试・退避 Retry-After 优先、上限 60s、默认 5s/15s）＋连续两批全败熔断＋致命型即停（未配置/Key 拒/模型名不对/额度耗尽/协议不认）＋额度耗尽独立分型（402 或 429 带余额字样 ⇒ QuotaExhausted）。叫停语义零改动。文案债（ai.failure.rateLimited 承诺了不存在的重试）随落地刀补真。
 
 - 下一刀：P-297 落地（AiFailures／AiResults／AiHttp／AiProviders／ClassifyRunner／UiStrings／AiChannelWordGateTests／AiClassifyTests／AiLayerTests），随后 P-296 落地。⛔ push（桌面未推 40・扩展未推 2）。
+
+## 一百一十五、片234：P-297 落地（AI 链路韧性——批内重试/退避/熔断＋额度耗尽独立分型）
+
+- 接手第一步照旧现读编号轴：报告到六百二十、交接到一百一十五、坑表到 #1159、账本到 P-297（P-297 落地未翻牌）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73／P-90／P-147／P-153／P-296／P-297）。
+
+- 本刀七源码＋三测试：AiFailures（QuotaExhausted 分型＋IsRetryable 分界）・AiResults（AiReply.RetryAfterSeconds 尾参）・AiHttp（RetryAfterOf 只认秒数形态・原样交不夹上限）・AiProviders（两 Read 传参）・ClassifyRunner（批内三试・退避・熔断・SkippedBatches/AbortReason・wait 尾参可注入）・UiStrings（三键三语：quotaExhausted/aborted 新・rateLimited 改口还债）・AiClassifyService（FirstError 优先 AbortReason）；测试 AiLayerTests（+8 例）／AiClassifyTests（重写 1＋新增 6）／AiChannelWordGateTests（roster 52・签名钉随 record 进化・carriesDetail 加 QuotaExhausted）。
+
+- 判据六条全钉：瞬时失败一试救回・三试全败不扩轮・连败熔断零调用・Retry-After 被读被尊重有上限・退避中叫停照收・限流文案与实现一致（坑 #1159 还债）。真机观感归用户统一测，翻牌随用户裁决。
+
+- 下一刀：片235 P-296 落地（ClassifyPrompt 行级去重纯函数＋AiClassifyService 接线＋状态行「去重后 M 条」新 settings.ai 键＋AiWordGateTests roster 71→72/73）。⛔ push（桌面未推 41・扩展未推 2）。

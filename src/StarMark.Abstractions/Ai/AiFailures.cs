@@ -16,6 +16,10 @@ public enum AiFailureKind
     ModelNotFound,
     Unauthorized,
     RateLimited,
+    /// <summary>额度耗尽（402，或 429 带「余额不足／Insufficient balance」字样）。与 <see cref="RateLimited"/>
+    /// 分开是片233（P-297）的裁定：两者的下一步完全不同——充值/换通道 vs 等一等再试——
+    /// 被同一句话打发，用户就只能反复点同一个按钮。</summary>
+    QuotaExhausted,
     TimedOut,
     ServiceError,
     BadResponse,
@@ -34,6 +38,10 @@ public static class AiFailures
         if (status == 404 && MentionsMissingModel(text)) return AiFailureKind.ModelNotFound;
         if (status is null) return AiFailureKind.Unreachable;
         if (status == 401 || status == 403) return AiFailureKind.Unauthorized;
+        // 额度耗尽在 429 之前判：OpenAI 的 insufficient_quota 与 GLM 的「余额不足」都走 429，
+        // 只看状态码会把"该充值了"报成"稍后再试"——那正是 P-297 要拆开的混型。
+        if (status == 402) return AiFailureKind.QuotaExhausted;
+        if (status == 429 && MentionsSpentQuota(text)) return AiFailureKind.QuotaExhausted;
         if (status == 429) return AiFailureKind.RateLimited;
         if (status == 408 || status == 504) return AiFailureKind.TimedOut;
         // 400/404/422：是"我们发出去的东西它不认"（地址少一段、参数它不支持），与"服务自己坏了"要分开
@@ -42,6 +50,23 @@ public static class AiFailures
         if (status >= 400) return AiFailureKind.ServiceError;
         return AiFailureKind.Unknown;
     }
+
+    /// <summary>响应体里说的是「钱花完了」还是「请求太快了」。只认各家文档写明的措辞，⛔ 见 429 就当额度
+    /// （RPM 限流也回 429，把它报成"去充值"会让用户白跑一趟控制台）。</summary>
+    private static bool MentionsSpentQuota(string text)
+        => text.Contains("insufficient_quota", StringComparison.OrdinalIgnoreCase)
+           || text.Contains("insufficient balance", StringComparison.OrdinalIgnoreCase)
+           || text.Contains("exceeded your current quota", StringComparison.OrdinalIgnoreCase)
+           || text.Contains("check your plan and billing", StringComparison.OrdinalIgnoreCase)
+           || text.Contains("余额不足", StringComparison.Ordinal)
+           || text.Contains("账户已欠费", StringComparison.Ordinal);
+
+    /// <summary>这一型值不值得<b>原样再发一遍</b>（片233·P-297 的重试分界）。断联/限流/超时/服务错是
+    /// "这一下没成"，再试一次可能就过；未配置/Key 拒/模型名不对/额度耗尽/协议不认是"这堵墙就在那里"，
+    /// 重试只是把同一堵墙再撞两遍——致命型由编排层直接熔断，⛔ 在这里做任何等待。</summary>
+    public static bool IsRetryable(AiFailureKind kind)
+        => kind is AiFailureKind.Unreachable or AiFailureKind.RateLimited
+            or AiFailureKind.TimedOut or AiFailureKind.ServiceError or AiFailureKind.Unknown;
 
     private static bool MentionsMissingModel(string text)
         => text.Contains("model", StringComparison.OrdinalIgnoreCase)
@@ -66,6 +91,8 @@ public static class AiFailures
         AiFailureKind.ModelNotFound => LocMessage.Of("ai.failure.modelNotFound", where),
         AiFailureKind.Unauthorized => LocMessage.Of("ai.failure.unauthorized"),
         AiFailureKind.RateLimited => LocMessage.Of("ai.failure.rateLimited"),
+        // 额度耗尽与限流分家（P-297）：这句要给出的是「下一步做什么」——充值或换通道，而不是"等一等"。
+        AiFailureKind.QuotaExhausted => LocMessage.Of("ai.failure.quotaExhausted", Shown(detail)),
         AiFailureKind.TimedOut => LocMessage.Of("ai.failure.timedOut"),
         AiFailureKind.ServiceError => LocMessage.Of("ai.failure.serviceError", Shown(detail)),
         AiFailureKind.BadResponse => LocMessage.Of("ai.failure.badResponse", Shown(detail)),

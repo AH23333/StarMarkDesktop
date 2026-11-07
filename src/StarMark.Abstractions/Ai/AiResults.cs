@@ -18,12 +18,15 @@ public sealed record AiUsage(int InputTokens, int OutputTokens, bool Estimated)
 
 /// <summary>一次补调的结果。<b>失败必须带种类，而且种类与原文原因都要留</b>：
 /// 种类决定"上哪儿改"，原文决定"改的时候该看哪一句"——只留一个都会让用户来回试。</summary>
+/// <param name="RetryAfterSeconds">服务在 <c>Retry-After</c> 响应头里给的「隔几秒再来」（429/503 常带）。
+/// null＝服务没说——编排层的固定退避顶上（片233·P-297）。</param>
 public sealed record AiReply(bool Ok, string? Text, AiFailureKind Failure = AiFailureKind.Unknown,
-    LocMessage? Detail = null, AiUsage? Usage = null)
+    LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null)
 {
     public static AiReply Success(string text, AiUsage? usage = null) => new(true, text, Usage: usage);
 
-    public static AiReply Fail(AiFailureKind kind, LocMessage? detail = null) => new(false, null, kind, detail);
+    public static AiReply Fail(AiFailureKind kind, LocMessage? detail = null, int? retryAfterSeconds = null)
+        => new(false, null, kind, detail, RetryAfterSeconds: retryAfterSeconds);
 
     /// <summary>界面/日志上的一句话。<see cref="AiSettings.DescribeWhere"/> 进来，
     /// 因为"连不上"必须说清是连不上<em>哪儿</em>。交 <see cref="LocMessage"/>＝两个消费者各按自己的时刻取词。</summary>

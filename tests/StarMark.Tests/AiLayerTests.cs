@@ -231,8 +231,36 @@ public sealed class AiLayerTests
     [InlineData(500, "boom", AiFailureKind.ServiceError)]
     [InlineData(400, "bad request", AiFailureKind.BadResponse)]
     [InlineData(404, "no route", AiFailureKind.BadResponse)]
+    // 额度耗尽是"掏钱"的事，和"太快了等一等"分开分型（P-297）——用户下一步完全不同
+    [InlineData(402, "payment required", AiFailureKind.QuotaExhausted)]
+    [InlineData(429, "You exceeded your current quota, please check your plan and billing details", AiFailureKind.QuotaExhausted)]
+    [InlineData(429, "insufficient_quota", AiFailureKind.QuotaExhausted)]
+    [InlineData(429, "Insufficient balance", AiFailureKind.QuotaExhausted)]
+    [InlineData(429, "余额不足", AiFailureKind.QuotaExhausted)]
     public void StatusCodesMapToKinds(int? status, string? body, AiFailureKind expected)
         => Assert.Equal(expected, AiFailures.FromStatus(status, body));
+
+    [Fact]
+    public void KindsSplitIntoRetryableAndFatal()
+    {
+        // 网络抖/限流/超时/5xx/看不懂 ⇒ 值得再试一次；配置/名字/钥匙/余额/格式 ⇒ 再试一百次也一样
+        foreach (AiFailureKind kind in Enum.GetValues<AiFailureKind>())
+        {
+            var expected = kind is AiFailureKind.Unreachable or AiFailureKind.RateLimited
+                or AiFailureKind.TimedOut or AiFailureKind.ServiceError or AiFailureKind.Unknown;
+            Assert.Equal(expected, AiFailures.IsRetryable(kind));
+        }
+    }
+
+    [Fact]
+    public void TheQuotaReasonTellsWhereToTopUp()
+    {
+        var where = new AiSettings(Provider: AiProviderKind.Ollama, Model: "q").DescribeWhere();
+        var reason = AiFailures.Reason(AiFailureKind.QuotaExhausted,
+            LocMessage.Of("common.rawValue", "余额不足"), where).Render();
+        Assert.Contains("充值", reason);
+        Assert.Contains("余额不足", reason);   // 服务商原话跟着走——用户对账时靠它认出是哪笔账
+    }
 
     [Theory]
     [InlineData("model \"qwen2.5:7b\" not found")]

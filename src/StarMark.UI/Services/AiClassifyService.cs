@@ -233,9 +233,12 @@ public sealed class AiClassifyService
             report.Batches.Sum(batch => batch.UnknownCount),
             pruned.DroppedTags.Count,
             pruned.DroppedItems,
-            report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
+            // 熔断那半句优先（P-297）：「第 N 批起没有再问：原因」比单批那句多说了"后面没再烧"这件事；
+            // 没熔断时照旧只报第一个坏批（六个批各自超时，用户要处理的是同一件事）。
+            report.AbortReason
+            ?? (report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
                 ? firstBad.Error
-                : null);
+                : null));
     }
 
     /// <summary>把一批的结果并进"目前为止"。<b>同一条目再出现时以新的那份为准而不是合并标签</b>：
