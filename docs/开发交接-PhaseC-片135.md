@@ -897,3 +897,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：build 0 错；定向 179/179（五族，`gates222.txt`）；RssPlural 24/24；全量 6944/6944（11 m 30 s，`full222.txt`）；docgates222 47/47（翻牌后复测）；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/284/12 VERDICT OK。
 
 - 下一刀：队列清理第八刀＝P-120（动工前先读账本拍板行定形状）。两颗用户裁决项在队：P-63 默认键、P-294 仪表盘细案——随统一测问用户。⛔ push（未推 30）。
+
+## 一百零四、片223 队列清理第八刀：P-120 扩展仓截断可见提示（第 2001 条起不再静默跳过）
+
+- 接手第一步照旧现读编号轴：报告到六百零九、交接到一百零四、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-120）；计数器现读＝296/285/11（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 12→11）。
+
+- 扩展仓已定位：`D:\Visual Studio Code\Something\StarMark`（wxt＋vitest）。P-120 落点（供复核，全部在扩展仓）：`src/core/ai/classify.ts`（ClassifyResult.truncated＋runClassifyLoop 截断计数＋读侧正规化＋导入补 0）、`src/entrypoints/options/panels/AiPanel.tsx`（完成通知追加＋常驻 warn-text 提示）、`src/core/locales/{zh-CN,en,ja}.json`（opt.ai.clsTruncated）；测＝classify.test.ts 新 describe 两格；commit `7ab89b6`（未推 2・该仓用户预暂存的 README/package.json 已按 pathspec 绕开）。
+
+- 统一测清单（P-120 项・扩展侧）：扩展页塞 2001 条可见条目跑一轮 AI 整理——看完成通知与 state 行下方常驻提示都报「另有 1 条未参与本轮」；再跑一轮 51 条确认无误报提示；三语各看一眼词条。
+
+- 读数：扩展 `npm test` 152/152（+2）・`tsc --noEmit` 0 错；桌面零码改零测改；docgates223 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/285/11 VERDICT OK。
+
+- 下一刀：队列清理第九刀＝i18n 按批（P-168／169／172／192，动工前先读各条拍板行定批形状）。两颗用户裁决项在队：P-63 默认键、P-294 仪表盘细案——随统一测问用户。⛔ push（桌面未推 31・扩展未推 2）。
