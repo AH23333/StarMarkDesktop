@@ -21,6 +21,13 @@ public static class HotkeyActions
     public const string MainShow = "main.show";
     public const string MainHide = "main.hide";
 
+    /// <summary>
+    /// 全局唤起剪贴板历史选择器（P-63：对标 Win+V 的键呼浮层——输入筛选、↑↓ 选择、回车即复制回剪贴板）。
+    /// 默认 Ctrl+Alt+V（用户裁决）：Win+V 是系统剪贴板占的键，RegisterHotKey 表达不了 Win 修饰键，
+    /// 取它的可绑近亲，设置页里可自行改绑。
+    /// </summary>
+    public const string ClipboardSelector = "clipboard.selector";
+
     public const string WidgetsShowAll = "widgets.showall";
     /// <summary>
     /// 置顶 / 不置顶<b>所有</b>组件（一个键来回）。与"显示/隐藏所有组件"是两件不同的事：
@@ -153,7 +160,7 @@ public static class HotkeyActions
     /// </summary>
     public static string CategoryOf(string action, IReadOnlyList<WidgetLayout>? layouts = null)
     {
-        if (action is MainToggle or MainShow or MainHide) return Category.Main;
+        if (action is MainToggle or MainShow or MainHide or ClipboardSelector) return Category.Main;
         if (action is WidgetsToggleAll or WidgetsShowAll or WidgetsHideAll or WidgetsToggleTopmostAll) return Category.Widgets;
         if (IsScreenAction(action)) return Category.Screen;
         if (IsCanvasAction(action)) return Category.Canvas;
@@ -223,6 +230,7 @@ public static class HotkeyActions
         var list = new List<string>
         {
             MainToggle, MainShow, MainHide,
+            ClipboardSelector,
             WidgetsToggleAll, WidgetsShowAll, WidgetsHideAll, WidgetsToggleTopmostAll,
             ScreenCapture, ScreenPin, ScreenPinToggleHidden, ScreenPinClickThrough, ScreenOcr,
         };
@@ -263,6 +271,7 @@ public static class HotkeyActions
             case MainToggle: return LocMessage.Of("hotkey.act.main.toggle");
             case MainShow: return LocMessage.Of("hotkey.act.main.show");
             case MainHide: return LocMessage.Of("hotkey.act.main.hide");
+            case ClipboardSelector: return LocMessage.Of("hotkey.act.clipboard.selector");
             case WidgetsShowAll: return LocMessage.Of("hotkey.act.widgets.showall");
             case WidgetsHideAll: return LocMessage.Of("hotkey.act.widgets.hideall");
             case WidgetsToggleAll: return LocMessage.Of("hotkey.act.widgets.toggleall");

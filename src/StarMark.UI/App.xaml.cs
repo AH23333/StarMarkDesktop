@@ -428,6 +428,8 @@ public partial class App : Application
                 hotkey.RegisterHandler(HotkeyActions.MainToggle, () => { ToggleMainWindow(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.MainShow, () => { PresentMainWindow(); return Task.CompletedTask; });
                 hotkey.RegisterHandler(HotkeyActions.MainHide, () => { HideMainWindow(); return Task.CompletedTask; });
+                // P-63：剪贴板历史选择器（默认 Ctrl+Alt+V，用户裁决）。窗自己是单例——连按是"刷新"，不是叠一扇。
+                hotkey.RegisterHandler(HotkeyActions.ClipboardSelector, () => { StarMark.UI.Views.ClipboardSelectorWindow.Present(); return Task.CompletedTask; });
 
                 hotkey.RegisterHandler(HotkeyActions.WidgetsShowAll, () => widgetManager.ShowAllAsync());
                 hotkey.RegisterHandler(HotkeyActions.WidgetsHideAll, () => widgetManager.HideAllAsync());

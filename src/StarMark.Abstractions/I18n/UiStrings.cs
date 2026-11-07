@@ -1197,6 +1197,11 @@ public static class UiStrings
         new Entry("clip.status.copied", "已复制到剪贴板：{0}", "Copied to the clipboard: {0}", "クリップボードにコピーしました: {0}"),
         new Entry("clip.status.copyFail", "复制失败：{0}", "Copy failed: {0}", "コピーに失敗しました: {0}"),
         new Entry("clip.status.imgFail", "这张图没能复制出去：{0}", "This image could not be copied out: {0}", "この画像をコピーできませんでした: {0}"),
+        // ===== 剪贴板历史选择器（P-63：全局热键唤起的键呼浮层，对标 Win+V）=====
+        // 窗上三句各自交键：筛选框的提示、筛不出东西时的空态、以及热键动作那颗名字（在 hotkey.act 那一段）。
+        // 复制回执⛔ 不在这里另写一份：回执沿 ClipboardPageViewModel 的状态行（clip.status.*），两处共用一颗。
+        new Entry("clip.selector.search", "输入以筛选，↑↓ 选择，回车复制", "Type to filter, ↑↓ to select, Enter to copy", "入力して絞り込み、↑↓ で選択、Enter でコピー"),
+        new Entry("clip.selector.noMatch", "没有匹配的剪贴板记录", "No matching clipboard entries", "一致するクリップボードの記録がありません"),
         // ===== 剪贴板图片那一路「为什么没成」（批次 片117 第二刀，P-192 第四颗）=====
         // 这八句从前住在 `ClipboardImageStore` 里写死中文，而两颗卡片出口只有一颗 `common.rawValue` 那道数据门
         // ——那道门只装<b>数据</b>（用户内容・字节数・系统原文），装句子就是第二个措辞出处（✅WI-61d 片1 的口径）。
@@ -1446,6 +1451,7 @@ public static class UiStrings
         new Entry("hotkey.act.main.toggle", "切换主界面（显示 / 隐藏）", "Toggle main window (show / hide)", "メイン画面の切り替え（表示／非表示）"),
         new Entry("hotkey.act.main.show", "显示主界面", "Show main window", "メイン画面を表示"),
         new Entry("hotkey.act.main.hide", "隐藏主界面", "Hide main window", "メイン画面を非表示"),
+        new Entry("hotkey.act.clipboard.selector", "弹出剪贴板历史选择器", "Open the clipboard history selector", "クリップボード履歴セレクターを開く"),
         new Entry("hotkey.act.widgets.showall", "显示所有组件", "Show all widgets", "すべてのウィジェットを表示"),
         new Entry("hotkey.act.widgets.hideall", "隐藏所有组件", "Hide all widgets", "すべてのウィジェットを非表示"),
         new Entry("hotkey.act.widgets.toggleall", "切换所有组件（显示 / 隐藏）", "Toggle all widgets (show / hide)", "すべてのウィジェットを切り替え（表示／非表示）"),

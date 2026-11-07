@@ -909,3 +909,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：扩展 `npm test` 152/152（+2）・`tsc --noEmit` 0 错；桌面零码改零测改；docgates223 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/285/11 VERDICT OK。
 
 - 下一刀：队列清理第九刀＝i18n 按批（P-168／169／172／192，动工前先读各条拍板行定批形状）。两颗用户裁决项在队：P-63 默认键、P-294 仪表盘细案——随统一测问用户。⛔ push（桌面未推 31・扩展未推 2）。
+
+## 一百零五、片224 队列清理第九刀：P-63 剪贴板选择器浮层（默认 Ctrl+Alt+V，对标 Win+V）
+
+- 接手第一步照旧现读编号轴：报告到六百一十、交接到一百零五、坑表到 #1157（本轮无新增）、账本到 P-295（本轮无新立账・一颗翻牌 ✅：P-63）；计数器现读＝296/286/10（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・未标记 11→10）。
+
+- P-63 落点（供复核）：`src/StarMark.Core/Hotkeys/HotkeyActions.cs`（const＋All()＋CategoryOf＋DisplayMessage case）、`src/StarMark.Core/Hotkeys/HotkeyBindings.cs`（VK_V＋Defaults 条目）、`src/StarMark.Abstractions/I18n/UiStrings.cs`（三颗词条）、`src/StarMark.UI/Views/ClipboardSelectorWindow.xaml(.cs)`（新窗）、`src/StarMark.UI/App.xaml.cs`（handler 注册・主界面族后）；测＝`tests/StarMark.Tests/ClipboardSelectorGateTests.cs`（+7）。账本 5405 行那颗指向 HotkeyActions 的旧指针已按新行位修回（census 19 保形）。
+
+- 统一测清单（P-63 项・真机）：按 Ctrl+Alt+V 唤起浮层（Win+V 系统行为不受影响）；输入即筛、↑↓ 选择、回车复制并收起、点一条复制并收起；Esc／点到别处收起；复制失败时窗口留着亮原因；设置页改绑后旧键不再占；主窗剪贴板页与浮层数据同源（同一只 LoadCommand）。
+
+- 读数：build224 0 错；gates224 374/374；全量 6951/6951（基线 6944＋7）；docgates224 47/47；census 19；flipcheck PASS（加行 2 行 0 禁词）；计数器 296/286/10 VERDICT OK。
+
+- 下一刀：队列清理第十刀＝P-294 AI 请求仪表盘（用户裁决已到手：设置页 AI 栏新卡＝最近请求明细＋汇总读数＋按天趋势小图，三项全选；动工前先读账本拍板行与 AI 请求链路定数据源）。其后 i18n 按批（P-168／169／172／192）→P-172→P-192。⛔ push（桌面未推 32・扩展未推 2）。

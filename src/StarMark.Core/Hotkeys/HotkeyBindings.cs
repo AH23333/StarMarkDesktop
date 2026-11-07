@@ -50,6 +50,13 @@ public static class HotkeyBindings
     public const uint VirtualKeyD = 0x44;
 
     /// <summary>
+    /// VK_V：剪贴板历史选择器的默认键（P-63 用户裁决：默认 Ctrl+Alt+V）。
+    /// Win+V 是系统剪贴板占的键——RegisterHotkey 表达不了 Win 修饰键，抢不到，
+    /// 取它的可绑近亲；设置页里可改绑。
+    /// </summary>
+    public const uint VirtualKeyV = 0x56;
+
+    /// <summary>
     /// 画布内那批动作的默认键（A–Z 的虚拟键码就是其 ASCII 码，这里逐个写出来是为了让
     /// <see cref="Defaults"/> 那一段能读出"这条字母对应哪件事"）。
     /// <para>
@@ -74,6 +81,11 @@ public static class HotkeyBindings
         {
             [HotkeyActions.MainToggle] = new HotkeyGesture(
                 HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeySpace),
+            // 剪贴板历史选择器（P-63）：用户裁决的默认键 Ctrl+Alt+V——Win+V 是系统剪贴板的键，
+            // RegisterHotkey 没有 Win 修饰键、抢不到，取它的可绑近亲；撞上时按批次 KL
+            // "只提示、不阻碍注册"的口径处理，设置页里一键改绑。
+            [HotkeyActions.ClipboardSelector] = new HotkeyGesture(
+                HotkeyModifiers.Control | HotkeyModifiers.Alt | HotkeyModifiers.NoRepeat, VirtualKeyV),
             // 截图/贴图/隐藏贴图/穿透用裸 F1/F3/F4/F5（前三条与 Snipaste 默认一致，无修饰键）。
             // 与主界面呼出键不冲突：那条是 Ctrl+Alt+Space。装了 Snipaste 的机器上会撞，
             // 但批次 KL 已把冲突改成"只提示、不阻碍注册"，用户在设置里改一键即可，不必先关别的产品。
