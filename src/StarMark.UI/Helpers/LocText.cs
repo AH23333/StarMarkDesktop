@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.UI.Xaml;
@@ -402,7 +403,13 @@ public static class LocText
         }
     }
 
-    /// <summary>换语言的那一刻：把所有还活着的注册项（元素上的字与窗口标题）按新的语言重取一次词。</summary>
+    /// <summary>换语言的那一刻：把所有还活着的注册项（元素上的字与窗口标题）按新的语言重取一次词。
+    /// <para>逐颗兜底＋断线逐出（片246・坑表 #1170）：<see cref="Locale"/> 那一层片205 的逐户兜底救的是
+    /// <b>订阅链上户与户之间</b>——本方法自己循环里一颗已断线的元素（窗已关/树已拆，但对象仍被别处揪着没放）
+    /// 一抛，foreach 当场断链：排在它后面的注册项整批停在旧语言，且每次切换都断在同一颗
+    /// （真机三连切三发 COMException・starmark-20261108.log pid 46592・19:42 段）。所以这里每颗 try 一层：
+    /// 抛了的那颗<b>当场逐出名单</b>（断线的树回不来，留着它只保证每次断在同一处），两轮结束后用一行把丢的
+    /// 谁点出来——揪着那颗元素不放的那处（根因）按这行名单另立一案，⛔ 在这一拍里滚雪球。</para></summary>
     private static void ReapplyAll()
     {
         Registration[] snapshot;
@@ -414,15 +421,39 @@ public static class LocText
             WindowTitles.RemoveAll(t => !t.TryGetTarget(out _));
             titles = WindowTitles.ToArray();
         }
+        List<string>? dropped = null;
         foreach (var registration in snapshot)
         {
             if (!registration.TryGetTarget(out var target)) continue;
-            target.SetValue(registration.Property, Text(registration.Key, registration.Args));
+            try
+            {
+                target.SetValue(registration.Property, Text(registration.Key, registration.Args));
+            }
+            catch (Exception)
+            {
+                (dropped ??= new List<string>()).Add($"{registration.Key}（{target.GetType().Name}）");
+                lock (Gate) Live.RemoveAll(r => ReferenceEquals(r, registration));
+            }
         }
         foreach (var title in titles)
         {
             // Title 是普通 CLR 属性（Window 不是 DependencyObject），所以这里只能整句重设，不能 SetValue。
-            if (title.TryGetTarget(out var window)) window.Title = Text(title.Key, title.Args);
+            try
+            {
+                if (title.TryGetTarget(out var window)) window.Title = Text(title.Key, title.Args);
+            }
+            catch (Exception)
+            {
+                (dropped ??= new List<string>()).Add($"窗口标题 {title.Key}");
+                lock (Gate) WindowTitles.RemoveAll(t => ReferenceEquals(t, title));
+            }
+        }
+        if (dropped is { Count: > 0 })
+        {
+            var listed = string.Join("、", dropped.Take(3));
+            StarLog.Warn($"文案重贴丢弃已断线注册 ×{dropped.Count}：{listed}"
+                + (dropped.Count > 3 ? " 等" : "")
+                + "（已逐出名单；揪着这些已拆窗/树里元素不放的那处按此名单另立一案）");
         }
     }
 

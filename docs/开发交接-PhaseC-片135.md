@@ -1139,3 +1139,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 片244 交付后用户实测（pid 46592）：启动「陆续亮起」✓，但 19:42:10 点设置→UI 线程阻塞 ~1500ms（自耗 828ms・tree→settings）；再进又是全新 ctor（「页面已加载=False」）＝每次进页重解析 131KB SettingsPage.xaml（18 TabViewItem）＋ctor/OnNavigatedTo 双跑 LoadHealthAsync 与三族行构建。坑 **#1169**：无 NavigationCacheMode 的页每次导航全新构造——XAML 解析是进页成本大头；缓存就绪形状（OnNavigatedTo 刷新＋OnNavigatedFrom 清场）的页一行 Required 即可；双跑初始化删 ctor 份留 OnNavigatedTo 份（首建直贴 VM 值的 LoadFromStoreSilently 例外留在 BuildAccentPane 前）。
 - 三刀：①SettingsPage.xaml 根节点 NavigationCacheMode="Required"（2nd+ 进页零 ctor 零解析・新鲜度由 OnNavigatedTo 每次进页 LoadFromStore 保）；②ctor 去重（删 LoadHealthAsync＋三族行构建）；③新 SettingsOpenTrace 分步取证（Step 100ms/Total 300ms・快路径零日志・首建表与进页表分开——「首建全程」应只一次、「进页刷新全程」每次导航一条）。
 - 测试与账：新 SettingsOpenCacheGateTests 五格；定向 9/9；census 顶漂当场抓红（ctor 插行顶漂两颗 SettingsPage.xaml.cs 行号指针・一颗落空 20↔19→按坑 #1164 换锚回 19・该族 13/13）；宽口径 **180/180**；UI 编译 0 警 0 错；新构建 pid 17504 交付（20:34:28 起・第二次开设置页秒开待实测）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：全量 6983 待用户实测后跑・[呈现] 读数等托盘恢复复现・LocText.ReapplyAll 切语言三发 COMException 记观察项（被片205 兜底接住）。⛔ push（桌面未推 0・扩展未推 0）。
+
+## 一百二十七、片246：换语言重贴逐颗兜底——一颗断线元素不再让整批停在旧语言（坑 #1170）
+
+- pid 46592・19:42 段：开设置页连切三次语言，每次同发 LocText.ReapplyAll COMException（片205 逐户兜底接住・切换本身成功）；ReapplyAll 循环内没有逐颗兜底——Live 名单一颗已断线元素（窗已关/树已拆・弱引用仍指得到）一抛，foreach 断链：后面注册项整批停在旧语言・每次断在同一颗。坑 **#1170**：逐户兜底的粒度止于户；遍历注册名单的循环要逐颗兜底＋断线当场逐出＋丢弃留名（有界一行），根因按点名名单另立一案。
+- 刀法：ReapplyAll 两轮（Live＋WindowTitles）各逐颗 try/catch；抛了按注册项身份（ReferenceEquals）当场逐出；仅真有丢弃发一行 StarLog.Warn（×颗数・Take(3) 封顶）；死引用照旧快照前先清。
+- 测试与账：新 LocTextReapplyResilienceGateTests 五格；定向 5/5；census 19 未涨；宽口径 **185/185**；UI 编译 0 警 0 错；新构建 pid 1816 交付（21:14:22 起・含 245＋246 两刀）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：新构建上实测——开设置两次验 245 缓存（第二次应秒开・「首建全程」一次「进页刷新全程」多次）＋开设置切语言验 246（COMException WARN 应消失或换成一行点名）＋揪着已拆元素的那处按点名另立一案；全量 6983 待用户测完再跑。⛔ push（桌面未推 1・扩展未推 0）。
