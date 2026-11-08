@@ -38,7 +38,12 @@ public sealed partial class SettingsPage
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        // 进页计时取证（片245）：缓存刀（NavigationCacheMode=Required）后 ctor 每应用会话只跑一次，
+        // 这里就是每次进设置页的真实成本——慢步（≥100ms）留名、总账（≥300ms）补一行，快路径零日志。
+        var entrySw = System.Diagnostics.Stopwatch.StartNew();
+        long entryMark = 0;
         LoadFromStoreSilently();
+        entryMark = SettingsOpenTrace.Step(entrySw, entryMark, "进页 LoadFromStoreSilently");
         _ = ViewModel.LoadHealthAsync();
         _ = ViewModel.LoadDiagnosticsAsync();
         RefreshEngineSize();
@@ -57,8 +62,12 @@ public sealed partial class SettingsPage
         ActualThemeChanged -= OnPageActualThemeChanged;
         ActualThemeChanged += OnPageActualThemeChanged;
         BuildWidgetRows();
+        entryMark = SettingsOpenTrace.Step(entrySw, entryMark, "进页 BuildWidgetRows");
         BuildHotkeyRows();
+        entryMark = SettingsOpenTrace.Step(entrySw, entryMark, "进页 BuildHotkeyRows");
         BuildLayoutRows();
+        entryMark = SettingsOpenTrace.Step(entrySw, entryMark, "进页 BuildLayoutRows");
+        SettingsOpenTrace.Total(entrySw, "进页刷新全程");
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)

@@ -68,7 +68,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     public SettingsPage()
     {
+        // 首建计时取证（片245）：单步 ≥100ms 记一行、总账 ≥300ms 补一行——快路径零日志。
+        // 缓存刀（NavigationCacheMode=Required）后本构造每应用会话只跑一次，
+        // 这几行读数就是「首建还剩多少」与「进页刷新还剩多少」的分离依据。
+        var buildSw = System.Diagnostics.Stopwatch.StartNew();
+        long mark = 0;
         InitializeComponent();
+        mark = SettingsOpenTrace.Step(buildSw, mark, "首建 InitializeComponent");
         ViewModel = App.Services.GetRequiredService<SettingsPageViewModel>();
         InitRssSection();   // 网址来源（RSS）那一栏：状态只服务它自己，见 SettingsPage.Rss.cs
         InitAiSection();      // AI 助手那一栏：同上，见 SettingsPage.Ai.cs
@@ -78,6 +84,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         _hkHook.KeyUp += OnHookKeyUp;       // 修饰键抬起时回显同步
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;  // 实时生效：属性变更去抖落盘
         LoadFromStoreSilently();
+        mark = SettingsOpenTrace.Step(buildSw, mark, "首建 LoadFromStoreSilently");
         BuildAccentPane();      // 「主题色」那一格：与组件「外观」编辑器共用同一颗取色器（片144）
         ApplyEyeRestMessages();   // 回灌出来的那两句也要当场贴上去（换语言重贴走同一条门，见下面那颗方法）
         ApplyExtensionStatuses(); // 「拓展功能」那一屏的七行同理：VM 交的是身份，贴上屏幕才取词
@@ -87,11 +94,13 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         // 开机自启开关初始态以注册表为准（SetEnabled 幂等，程序化置位不会误写）。
         // 它归在「常规 → 托盘与呼出」，所以由页面构造时读一次，不再挂在组件列表的构建里。
         AutostartToggle.IsOn = AutostartService().IsEnabled();
-        _ = ViewModel.LoadHealthAsync();
-        BuildWidgetRows();
-        BuildHotkeyRows();
-        BuildLayoutRows();
+        // 片245 缓存刀：ctor 与 OnNavigatedTo 的重复工从此只归 OnNavigatedTo——
+        // LoadHealthAsync 与三族行构建（Widget/Hotkey/Layout）在首开时本来就要跑两遍
+        // （Frame.Navigate 先 ctor 再 OnNavigatedTo），缓存后 OnNavigatedTo 更是每次进页必到，
+        // 放这里＝每次都白干一遍。LoadFromStoreSilently 刻意留下：BuildAccentPane/
+        // Apply* 首建要直读直贴 VM 值，不押「值变了才有通知」那层间接。
         BuildGuideTab();      // 「使用说明」那一栏：正文在 Core 的 PageGuides，这里只是宿主
+        SettingsOpenTrace.Total(buildSw, "首建全程");
     }
 
     /// <summary>

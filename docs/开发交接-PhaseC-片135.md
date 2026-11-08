@@ -1133,3 +1133,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 两刀：①WidgetStartupPolicy.RevealIntervalMs=80——RestoreOnStartupAsync 回退路径与 ApplyLayoutSlicedAsync（启动布局/设置页应用布局共用）每颗 Reveal 后接 Task.Delay；②ApplyBackdrop 两腿（实色 None/背衬材质）各记 (材质/明暗/成色) 指纹，成色已折叠染料・逐窗底色・纯色不透明度，值未变即零互操作跳过（命中留节流日志可数）。
 - 新构建 pid 46592（19:26:27 起）读数：组合帧 **+21ms**（原 +726）・Show 框 **+11ms**（原 +1663）・**启动全程零卡顿告警**・12 颗逐颗点亮（恢复 3572ms 全程可交互）・指纹命中日志已见（None/Solid 两处「值未变」）。
 - 测试与账：StartupRestoreSliceGateTests 扩两格＋新 BackdropFingerprintGateTests 六格；宽口径 **175/175**；census 基线 19 未涨・指针门全绿；UI 编译 0 警 0 错（42.31s）；计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297）。下一刀候选：设置页导航缓存（等用户实测「打开设置还卡不卡」）・[呈现] 读数等托盘恢复复现・全量 6983 待用户测完再跑。⛔ push（桌面未推 53・扩展未推 2）。
+
+## 一百二十六、片245：设置页导航缓存——「打开设置仍卡」一刀（坑 #1169）
+
+- 片244 交付后用户实测（pid 46592）：启动「陆续亮起」✓，但 19:42:10 点设置→UI 线程阻塞 ~1500ms（自耗 828ms・tree→settings）；再进又是全新 ctor（「页面已加载=False」）＝每次进页重解析 131KB SettingsPage.xaml（18 TabViewItem）＋ctor/OnNavigatedTo 双跑 LoadHealthAsync 与三族行构建。坑 **#1169**：无 NavigationCacheMode 的页每次导航全新构造——XAML 解析是进页成本大头；缓存就绪形状（OnNavigatedTo 刷新＋OnNavigatedFrom 清场）的页一行 Required 即可；双跑初始化删 ctor 份留 OnNavigatedTo 份（首建直贴 VM 值的 LoadFromStoreSilently 例外留在 BuildAccentPane 前）。
+- 三刀：①SettingsPage.xaml 根节点 NavigationCacheMode="Required"（2nd+ 进页零 ctor 零解析・新鲜度由 OnNavigatedTo 每次进页 LoadFromStore 保）；②ctor 去重（删 LoadHealthAsync＋三族行构建）；③新 SettingsOpenTrace 分步取证（Step 100ms/Total 300ms・快路径零日志・首建表与进页表分开——「首建全程」应只一次、「进页刷新全程」每次导航一条）。
+- 测试与账：新 SettingsOpenCacheGateTests 五格；定向 9/9；census 顶漂当场抓红（ctor 插行顶漂两颗 SettingsPage.xaml.cs 行号指针・一颗落空 20↔19→按坑 #1164 换锚回 19・该族 13/13）；宽口径 **180/180**；UI 编译 0 警 0 错；新构建 pid 17504 交付（20:34:28 起・第二次开设置页秒开待实测）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：全量 6983 待用户实测后跑・[呈现] 读数等托盘恢复复现・LocText.ReapplyAll 切语言三发 COMException 记观察项（被片205 兜底接住）。⛔ push（桌面未推 0・扩展未推 0）。
