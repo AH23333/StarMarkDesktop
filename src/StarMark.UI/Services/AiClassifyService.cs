@@ -331,14 +331,57 @@ public sealed class AiClassifyService
 
     /// <summary>
     /// 应用方案（整份或某一组）。返回真正加上标签的条目数。
-    /// <para>写库全部交给 <see cref="IItemRepository.TagItemsAsync"/>：一次事务、每条目一次索引重建、
+    /// <para>写库全部交给 <see cref="IItemRepository.TagItemsRecordedAsync"/>：一次事务、每条目一次索引重建、
     /// 整批一次通知。<b>不要在界面上自己转圈逐条 AddTagAsync</b>——那正是这个方法要避免的形状。</para>
+    /// <para>P-90「整批撤销」：每次应用把<b>真的新挂上的差集</b>并进撤销记录（按组应用会点好几次，
+    /// 记录跟着累加——「这次整理」的边界是这一轮预览时代，不是其中某一组）。
+    /// 应用前就挂着的同名标签不进记录，撤销时才摘得掉 AI 加的而保得住用户手打的。
+    /// 即时分类（<see cref="TryInstantClassifyAsync"/>）<b>刻意不记</b>：那是收藏动作的顺风车，
+    /// 用户没对它点过「应用」，单条不满意手删即可——混进记录会把「这次整理」的边界搅浑。</para>
     /// </summary>
     public async Task<int> ApplyAsync(ClassifyPlan plan, CancellationToken ct)
     {
         if (plan.IsEmpty) return 0;
-        return await _repo.TagItemsAsync(
+        var outcome = await _repo.TagItemsRecordedAsync(
             plan.Proposals.Select(proposal => new ItemTagAssignment(proposal.Id, proposal.Tags)).ToList(), ct);
+        if (outcome.Additions.Count > 0) SaveUndoAdditions(outcome.Additions);
+        return outcome.ChangedItems;
+    }
+
+    /// <summary>把这次应用真的新挂上的差集并进撤销记录。<b>同一条目再出现时标签取并集</b>：
+    /// 撤销要摘掉的是 AI 应用路径加过的全部，少并一次就有一条标签摘不掉。</summary>
+    private void SaveUndoAdditions(IReadOnlyList<ItemTagAssignment> additions)
+    {
+        var record = _store.LoadAiUndoRecord();
+        var merged = new Dictionary<long, List<string>>();
+        foreach (var proposal in record.Proposals) merged[proposal.Id] = proposal.Tags.ToList();
+        foreach (var addition in additions)
+        {
+            if (!merged.TryGetValue(addition.ItemId, out var names)) merged[addition.ItemId] = names = new List<string>();
+            foreach (var tag in addition.Tags)
+                if (!names.Any(has => string.Equals(has, tag, StringComparison.OrdinalIgnoreCase))) names.Add(tag);
+        }
+        _store.SaveAiUndoRecord(new ClassifyPlan(
+            merged.Select(pair => new TagProposal(pair.Key, pair.Value)).ToList(),
+            record.IsEmpty ? DateTimeOffset.UtcNow : record.CreatedAt));
+    }
+
+    /// <summary>撤销记录里记着几条条目。0＝没有可撤销的整理（按钮据此不现身）。</summary>
+    public int UndoRecordCount() => _store.LoadAiUndoRecord().ItemCount;
+
+    /// <summary>
+    /// 整批撤销最近这轮整理（P-90）：把撤销记录在案的挂接一次事务摘掉，撤完记录清空——
+    /// 撤销是单程票，再应用会重新记录。返回真正摘掉标签的条目数
+    /// （条目已删、挂接已被手删的跳过，不抛：撤销面对的是"应用之后库又动过"的常态）。
+    /// </summary>
+    public async Task<int> UndoLastOrganiseAsync(CancellationToken ct)
+    {
+        var record = _store.LoadAiUndoRecord();
+        if (record.IsEmpty) return 0;
+        var removed = await _repo.UntagItemsAsync(
+            record.Proposals.Select(proposal => new ItemTagAssignment(proposal.Id, proposal.Tags)).ToList(), ct);
+        _store.ClearAiUndoRecord();
+        return removed;
     }
 
     /// <summary>

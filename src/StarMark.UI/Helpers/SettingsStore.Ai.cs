@@ -123,6 +123,56 @@ public sealed partial class SettingsStore
         Save(d);
     }
 
+    /// <summary>读「整批撤销」的记录（P-90）。坏档按"没有记录"处理不抛——<b>这一格只是撤销的路标，
+    /// 不是数据本身</b>：条目与标签都在库里，记录读不出时最坏结果是撤销按钮不现身，库一个字不少。</summary>
+    public ClassifyPlan LoadAiUndoRecord()
+    {
+        var json = Load()?.AiUndoRecordJson;
+        if (string.IsNullOrWhiteSpace(json)) return ClassifyPlan.Empty;
+        try
+        {
+            var record = JsonSerializer.Deserialize<AiPlanRow>(json);
+            if (record is null) return ClassifyPlan.Empty;
+            var proposals = new List<TagProposal>();
+            foreach (var row in record.Items ?? new List<AiProposalRow>())
+            {
+                if (row is not { Id: > 0 } || row.Tags is not { Count: > 0 } tags) continue;
+                var clean = TagText.Sanitize(tags);          // 存档里的标签再过一次闸门：那是用户可以手改的文件
+                if (clean.Count > 0) proposals.Add(new TagProposal(row.Id, clean));
+            }
+            return new ClassifyPlan(proposals, record.At == default ? DateTimeOffset.UtcNow : record.At);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[AI] 整批撤销的记录读不出，按没有记录处理：{ex.Message}");
+            return ClassifyPlan.Empty;
+        }
+    }
+
+    public void SaveAiUndoRecord(ClassifyPlan record)
+    {
+        var d = Load() ?? new SettingsData();
+        // 空记录＝清格：撤销记录没有"存一份空的"的道理（撤完这格就该回 None）
+        if (record.IsEmpty) d.AiUndoRecordJson = null;
+        else d.AiUndoRecordJson = JsonSerializer.Serialize(new AiPlanRow
+        {
+            At = record.CreatedAt,
+            Items = record.Proposals.Select(proposal => new AiProposalRow
+            {
+                Id = proposal.Id,
+                Tags = proposal.Tags.ToList(),
+            }).ToList(),
+        });
+        Save(d);
+    }
+
+    public void ClearAiUndoRecord()
+    {
+        var d = Load() ?? new SettingsData();
+        d.AiUndoRecordJson = null;
+        Save(d);
+    }
+
     /// <summary>读预算档位。三格都容错（这文件用户可以手改）：预算数字认不出来回默认、
     /// 熔断位 null 按"没过"、预警线越界同样回默认，<b>都不抛</b>。<b>读出的值一律过一遍
     /// <see cref="AiBudget.WithMonthlyTokens"/> 与 <see cref="AiBudget.WithWarnRatio"/></b>——

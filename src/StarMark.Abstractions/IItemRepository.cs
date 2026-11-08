@@ -240,6 +240,25 @@ public interface IItemRepository
     Task<int> TagItemsAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct = default);
 
     /// <summary>
+    /// 与 <see cref="TagItemsAsync"/> 同一核心的"留档"出口：除了变动条目数，还把<b>这次真的新挂上的 (条目, 标签) 差集</b>
+    /// 交回来。P-90「整批撤销这次整理」的撤销记录只信这一份差集——<b>应用前就挂着的同名标签不在里面</b>，
+    /// 撤销时才摘得掉 AI 加的而保得住用户手打的。判据与 <see cref="TagItemsAsync"/> 同源（同一核心方法），
+    /// ⛔ 在调用方再自己读一遍现状算差集——那是第二个事实源，与写入事务之间没有隔离。
+    /// </summary>
+    Task<TagItemsOutcome> TagItemsRecordedAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct = default);
+
+    /// <summary>
+    /// <b>一次事务里</b>摘掉一批条目身上列名的标签挂接，返回真正发生变化的条目数（P-90 撤销路径的写半边，
+    /// 形状镜像 <see cref="TagItemsAsync"/>：连接 1 次、每条目最多重建一次索引、整批通知一次）。
+    /// <para>
+    /// 只摘<b>列出来的挂接</b>：条目身上没列到的标签原样保留——撤销 AI 整理不许顺手把用户自己挂的也摘了。
+    /// 列到的挂接已经不在（用户事后手删过、或条目已删）就跳过，<b>不抛</b>：撤销面对的是"应用之后库又动过"的常态。
+    /// 全批没有任何可摘的东西时<b>不发任何写语句</b>（幂等重放不留在活动流里的足迹）。
+    /// </para>
+    /// </summary>
+    Task<int> UntagItemsAsync(IReadOnlyList<ItemTagAssignment> removals, CancellationToken ct = default);
+
+    /// <summary>
     /// 取"还没有任何标签"的条目，按浏览页同一套最近优先顺序，最多 <paramref name="limit"/> 条。
     /// <para>
     /// <b>这个条件只能在 SQL 里判</b>：先取一批再看有没有标签，取的那一批是有窗口的——
@@ -341,6 +360,10 @@ public sealed record TagEditResult(bool Changed, int Added, int Removed, IReadOn
 
 /// <summary>"给这个条目追加这些标签"。<see cref="IItemRepository.TagItemsAsync"/> 的入参。</summary>
 public sealed record ItemTagAssignment(long ItemId, IReadOnlyList<string> Tags);
+
+/// <summary>批量打标签（留档出口）的结果：变动条目数＋这次<b>真的新挂上</b>的差集。
+/// <see cref="IItemRepository.TagItemsRecordedAsync"/> 的返回值。</summary>
+public sealed record TagItemsOutcome(int ChangedItems, IReadOnlyList<ItemTagAssignment> Additions);
 
 /// <summary>浏览过滤器（非搜索模式）。</summary>
 public sealed class BrowseFilter

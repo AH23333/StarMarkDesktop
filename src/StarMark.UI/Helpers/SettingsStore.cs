@@ -182,6 +182,13 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 应用完或用户明确丢弃时清空。与 <c>Ai*</c> 那六个一样保持独立 key，谁也不覆盖谁。</summary>
         public string? AiPendingPlanJson { get; set; }
 
+        /// <summary>「整批撤销这次整理」的<strong>撤销记录</strong>（JSON，P-90）：每次应用时
+        /// <b>真的新挂上的 (条目, 标签) 差集</b>逐次并进来（用户应用前就有的同名标签不在里面），
+        /// 撤销整批摘掉、撤完清空。与 <see cref="AiPendingPlanJson"/> 分格是刻意的：
+        /// 方案是"还没写的"，记录是"已经写了的"——前者应用完清空，后者应用完才诞生，共用一格会在
+        /// "应用一组"那条路上互相覆盖。</summary>
+        public string? AiUndoRecordJson { get; set; }
+
         /// <summary>月度 token 预算（§20.2）。null＝从没设过＝用出厂默认 500K；
         /// <b>不做"0＝无限"</b>：预算要关到最低有 MinMonthlyTokens 兜底，想彻底停 AI 该关总开关，
         /// 一格只管一件事（这是扩展侧"storage key 语义化"教训的延续——同一份文件里

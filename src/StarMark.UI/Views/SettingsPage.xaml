@@ -427,7 +427,7 @@
                                     就放在通道配置下面——通道没接通时这里点了也只会在状态行给出原因。
                                     旁边那颗「停止」不是第二个入口，是同一段忙碌的出口：只在忙的时候现身。
                                 -->
-                                <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                                <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6">
                                     <NumberBox Grid.Column="0" x:Name="AiScopeBox" i18n:LocText.Key="settings.ai.scope"
                                                Minimum="1" Maximum="500" SmallChange="10" LargeChange="50" SpinButtonPlacementMode="Compact"
                                                Value="100" FontSize="12" HorizontalAlignment="Stretch"/>
@@ -441,6 +441,13 @@
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" Visibility="Collapsed"/>
                                     <Button Grid.Column="3" x:Name="AiApplyAllButton" i18n:LocText.Key="settings.ai.applyAll" Click="AiApplyAll_Click"
                                             Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" IsEnabled="False"/>
+                                    <!--
+                                        P-90「整批撤销这次整理」：只在撤销记录非空时现身。它与应用是成对的动作
+                                        （应用攒记录、撤销清记录），但撤的是<b>整轮</b>而不是某一组——按组应用过几次
+                                        都记在同一份记录里，这颗按下去一次摘完。
+                                    -->
+                                    <Button Grid.Column="4" x:Name="AiUndoButton" i18n:LocText.Key="settings.ai.undo" Click="AiUndo_Click"
+                                            Style="{StaticResource SecondaryButton}" VerticalAlignment="Bottom" Visibility="Collapsed"/>
                                 </Grid>
 
                                 <!-- 三格只读展示（批次 R4）：数字全部从代码里的常数来，界面不写第二份。 -->

@@ -96,6 +96,13 @@ public sealed class AiWordGateTests : IDisposable
         "settings.ai.applyNoop",
         "settings.ai.rejectedAll",
         "settings.ai.rejectedOne",
+        // P-90「整批撤销」一族（片240）：确认框三颗＋两句读数。按钮那颗 settings.ai.undo 是静态键
+        // （XAML 挂 LocText.Key，与 settings.ai.start 同族），由 AiUndoWiringGateTests ⑥ 对账，⛔ 进这份名单。
+        "settings.ai.undoConfirm.title",
+        "settings.ai.undoConfirm.body",
+        "settings.ai.undoConfirm.go",
+        "settings.ai.undoDone",
+        "settings.ai.undoNone",
         "settings.ai.usage.warnNote",
         "settings.ai.usage.warnRejected",
         "settings.ai.usage.noLedger",
@@ -146,12 +153,13 @@ public sealed class AiWordGateTests : IDisposable
     private static int Times(string haystack, string needle) =>
         haystack.Length == 0 || needle.Length == 0 ? 0 : haystack.Split(new[] { needle }, StringSplitOptions.None).Length - 1;
 
-    /// <summary>①颗数：名单长度当场对平（这颗数的是<b>我自己抄进本档的那一串</b>，加一颗不登记就红）。</summary>
+    /// <summary>①颗数：名单长度当场对平（这颗数的是<b>我自己抄进本档的那一串</b>，加一颗不登记就红）。
+    /// 72（片234 后）→ 77：P-90「整批撤销」补入五颗（确认框三颗＋两句读数）。</summary>
     [Fact]
     public void TheRosterHasExactlyTheKeysThisBatchHandedIn()
     {
-        Assert.Equal(72, Keys.Length);
-        Assert.Equal(72, Keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(77, Keys.Length);
+        Assert.Equal(77, Keys.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在五档里恰好被点名一次、在标记里一次都没有。</summary>
@@ -317,6 +325,8 @@ public sealed class AiWordGateTests : IDisposable
         // 现场数（<b>片7 之后重跑同一颗尺</b>）：15 → 9。少掉那六处不是"门被拆了"，是<b>过门的不再是词</b>：
         // AiSettings.Problem()／DescribeWhere()、probe.Report、firstBad.Error 都改成交键（✅P-193 片7），
         // 留在门里的只剩异常正文、服务响应体、URL 这类<b>机器事实</b>——那才是这道门本来的用途。
+        // 片240（P-90 整批撤销）：仍是 9——撤销的 catch 没有另开第二道门，「应用」与「撤销」
+        // 的失败句收进同一颗 ShowWriteFailed（一颗键一个主人），过门的还是原来那一发。
         Assert.Equal(9, Times(all, door));
         // 每一处都必须在实参位上（⛔ 把成品字当整句贴：那正是 P-188 的确证形状）。
         Assert.Contains("LocText.SetMessage(AiStatusText, probe.Report)", CodeOf(Ai));

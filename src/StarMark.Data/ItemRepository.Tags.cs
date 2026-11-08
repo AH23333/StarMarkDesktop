@@ -137,8 +137,30 @@ public sealed partial class ItemRepository
     /// </para>
     /// </summary>
     public async Task<int> TagItemsAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct)
+        => (await TagItemsCoreAsync(assignments, ct)).ChangedItems;
+
+    /// <summary>P-90「整批撤销」的读半边：同一核心，把<b>真的新挂上的差集</b>一并交回来。</summary>
+    public async Task<TagItemsOutcome> TagItemsRecordedAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct)
+        => await TagItemsCoreAsync(assignments, ct);
+
+    /// <summary>
+    /// 批量追加的核心（<see cref="TagItemsAsync"/> 与 <see cref="TagItemsRecordedAsync"/> 共用，判据单源）。
+    /// <b>存在的理由是把往返压下来</b>：逐条 <see cref="AddTagAsync"/>
+    /// 时"500 条各加 2 个标签"要开 1000 次连接、起 1000 个事务、把同一条目的 search_text 重建 2 遍、
+    /// 通知 1000 次；这里压成 1 次连接、每条目最多重建 1 次、整批通知 1 次。
+    /// <para>
+    /// <b>语义与逐条调用严格一致</b>：只追加不替换、已关联的跳过、标签名按 NOCASE 复用同一行、
+    /// 发生变化的条目各写一条「修改」活动。两点是有意的差别：
+    /// ① 全批都没有可加的东西时<b>一条语句都不多发</b>（幂等重放不该在活动流里留下足迹）；
+    /// ② 条目在读取后已被删除，则整条跳过——不给一个不存在的条目建关联（外键会拒，但那时已经花了语句）。
+    /// </para>
+    /// <para>差集（<paramref name="captureAdditions"/> 路径的返回值）＝<b>已关联的不算</b>：应用前就挂着的
+    /// 同名标签不在里面——撤销记录只信这份差集，才摘得掉 AI 加的而保得住用户手打的。</para>
+    /// </summary>
+    private async Task<TagItemsOutcome> TagItemsCoreAsync(IReadOnlyList<ItemTagAssignment> assignments, CancellationToken ct)
     {
-        if (assignments is null || assignments.Count == 0) return 0;
+        if (assignments is null || assignments.Count == 0)
+            return new TagItemsOutcome(0, Array.Empty<ItemTagAssignment>());
 
         // 入参先收口：同一条目重复出现要并起来，否则后面按差集算会漏
         var wanted = new Dictionary<long, List<string>>();
@@ -153,7 +175,8 @@ public sealed partial class ItemRepository
                 if (!names.Any(has => string.Equals(has, name, StringComparison.OrdinalIgnoreCase))) names.Add(name);
             }
         }
-        if (wanted.Count == 0) return 0;
+        if (wanted.Count == 0)
+            return new TagItemsOutcome(0, Array.Empty<ItemTagAssignment>());
 
         var ids = wanted.Keys.ToList();
         using var conn = _factory.Open();
@@ -184,7 +207,8 @@ public sealed partial class ItemRepository
             var fresh = names.Where(name => !has.Contains(name)).ToList();
             if (fresh.Count > 0) additions[id] = fresh;
         }
-        if (additions.Count == 0) return 0;      // 没有任何可加的：直接结束，不写不通知
+        if (additions.Count == 0)
+            return new TagItemsOutcome(0, Array.Empty<ItemTagAssignment>());      // 没有任何可加的：直接结束，不写不通知
 
         // ③ 条目现在还在不在（批量整理跑几分钟，期间用户删掉某条是完全正常的）
         var rows = new Dictionary<long, (string Title, string? Uri, string Source, string SourceId, string? Description, string? Notes)>();
@@ -206,7 +230,8 @@ public sealed partial class ItemRepository
         }
 
         var live = additions.Where(pair => rows.ContainsKey(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
-        if (live.Count == 0) return 0;
+        if (live.Count == 0)
+            return new TagItemsOutcome(0, Array.Empty<ItemTagAssignment>());
 
         // ④ 标签行：已知的名字一次查回来，缺的才建（RETURNING 省掉一次 last_insert_rowid）
         var neededNames = live.Values.SelectMany(names => names).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -264,6 +289,121 @@ public sealed partial class ItemRepository
 
         await tx.CommitAsync(ct);
         DataChangeHub.Notify(DataChangeKind.Items);       // 整批只通知一次：每条都通知会让所有常驻组件各重读一遍库
+        // 差集只交"落在活条目上的"：读取后被删的条目一个挂接都没建，撤销记录里也⛔ 有它。
+        return new TagItemsOutcome(live.Count,
+            live.Select(pair => new ItemTagAssignment(pair.Key, pair.Value)).ToList());
+    }
+
+    /// <summary>
+    /// P-90「整批撤销」的写半边：一次事务摘掉一批条目身上列名的标签挂接（形状镜像
+    /// <see cref="TagItemsCoreAsync"/>）。<b>只摘列出来的</b>——没列到的原样保留，
+    /// 列到但已不在（手删过/条目已删）的跳过不抛；全批没有可摘的时不发任何写语句。
+    /// </summary>
+    public async Task<int> UntagItemsAsync(IReadOnlyList<ItemTagAssignment> removals, CancellationToken ct)
+    {
+        if (removals is null || removals.Count == 0) return 0;
+
+        // 入参先收口：同一条目重复出现要并起来（与 TagItemsCoreAsync 同一形状）
+        var wanted = new Dictionary<long, List<string>>();
+        foreach (var removal in removals)
+        {
+            if (removal is null || removal.ItemId <= 0 || removal.Tags is null) continue;
+            if (!wanted.TryGetValue(removal.ItemId, out var names)) wanted[removal.ItemId] = names = new List<string>();
+            foreach (var raw in removal.Tags)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var name = raw.Trim();
+                if (!names.Any(has => string.Equals(has, name, StringComparison.OrdinalIgnoreCase))) names.Add(name);
+            }
+        }
+        if (wanted.Count == 0) return 0;
+
+        var ids = wanted.Keys.ToList();
+        using var conn = _factory.Open();
+        using var tx = conn.BeginImmediate();
+
+        // ① 一次读回这批条目现在真挂着的标签：撤销面对的是"应用之后库又动过"的常态，只摘两边都点名的
+        var existing = new Dictionary<long, HashSet<string>>();
+        foreach (var chunk in Chunks(ids))
+        {
+            using var read = conn.CreateCommand();
+            read.CommandText = @$"
+                SELECT it.item_id, t.name FROM item_tags it JOIN tags t ON t.id = it.tag_id
+                WHERE it.item_id IN ({InParams(chunk, read)});";
+            await using var r = await read.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                var id = r.GetInt64(0);
+                if (!existing.TryGetValue(id, out var set)) existing[id] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                set.Add(r.GetString(1));
+            }
+        }
+
+        // ② 差集：列到的 ∩ 真挂着的——没挂着的跳过（幂等），没列到的一根手指都不碰
+        var toRemove = new Dictionary<long, List<string>>();
+        foreach (var (id, names) in wanted)
+        {
+            if (!existing.TryGetValue(id, out var has)) continue;
+            var doomed = names.Where(has.Contains).ToList();
+            if (doomed.Count > 0) toRemove[id] = doomed;
+        }
+        if (toRemove.Count == 0) return 0;      // 没有任何可摘的：直接结束，不写不通知
+
+        // ③ 条目现在还在不在（撤销离应用可能隔了很久，期间删条目完全正常）
+        var rows = new Dictionary<long, (string Title, string? Uri, string Source, string SourceId, string? Description, string? Notes)>();
+        foreach (var chunk in Chunks(toRemove.Keys.ToList()))
+        {
+            using var read = conn.CreateCommand();
+            read.CommandText = @$"
+                SELECT id, title, uri, source, source_id, description, notes FROM items
+                WHERE id IN ({InParams(chunk, read)});";
+            await using var r = await read.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+                rows[r.GetInt64(0)] = (
+                    r.IsDBNull(1) ? string.Empty : r.GetString(1),
+                    r.IsDBNull(2) ? null : r.GetString(2),
+                    r.IsDBNull(3) ? string.Empty : r.GetString(3),
+                    r.IsDBNull(4) ? string.Empty : r.GetString(4),
+                    r.IsDBNull(5) ? null : r.GetString(5),
+                    r.IsDBNull(6) ? null : r.GetString(6));
+        }
+
+        var live = toRemove.Where(pair => rows.ContainsKey(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value);
+        if (live.Count == 0) return 0;
+
+        // ④ 摘挂接：与 DetachTagsAsync 同一口径——只删关联、不删 tags 行（孤儿由 GetAllTagsAsync 的 INNER JOIN 挡掉）
+        foreach (var (id, names) in live)
+        {
+            using var unlink = conn.CreateCommand();
+            unlink.CommandText = $@"
+                DELETE FROM item_tags
+                WHERE item_id = @item
+                  AND tag_id IN (SELECT id FROM tags WHERE name COLLATE NOCASE IN ({InParams(names.ToList(), unlink, "dn")}));";
+            unlink.Parameters.AddWithValue("@item", id);
+            await unlink.ExecuteNonQueryAsync(ct);
+        }
+
+        // ⑤ 索引重建：每个变动的条目一次，最终状态＝现有的减去刚摘的，不必再回库里读一遍
+        foreach (var (id, names) in live)
+        {
+            var finalTags = existing.TryGetValue(id, out var has)
+                ? has.Where(tag => !names.Any(doomed => string.Equals(doomed, tag, StringComparison.OrdinalIgnoreCase))).ToList()
+                : new List<string>();
+            var row = rows[id];
+            await WriteSearchTextAsync(conn, id, row.Title, row.Description, row.Notes, finalTags, ct);
+        }
+
+        // ⑥ 活动流水：整批一次多行 INSERT + 一次裁剪（与批量打标签同款）
+        var activityRows = new List<(ActivityKind Kind, string? Key, string Title, string? Uri)>();
+        foreach (var id in live.Keys.OrderBy(id => id))
+        {
+            var row = rows[id];
+            activityRows.Add((ActivityKind.ItemModify, row.Source + ":" + row.SourceId, row.Title, row.Uri));
+        }
+        await LogActivitiesOnConnection(conn, tx, activityRows, ct);
+
+        await tx.CommitAsync(ct);
+        DataChangeHub.Notify(DataChangeKind.Items);       // 整批只通知一次
         return live.Count;
     }
 

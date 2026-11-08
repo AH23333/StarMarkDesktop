@@ -1077,3 +1077,16 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：docgates 六类宽口径 34/34（翻牌后复测）・计数器 298/294/4（本批加减＝结案 2・开放头行剩 P-90/P-147/P-296/P-297 四颗）。
 
 - 下一刀：P-90 实现（先读 P-90 条目全貌再立方案）；全量 6983 待用户真机测完（片237 卡顿＋片238 圆角观感归用户测）再跑。⛔ push（桌面未推 49・扩展未推 2）。
+## 一百二十一、片240：P-90「整批撤销这次 AI 整理」落地＋结案翻牌
+
+- 接手第一步照旧现读编号轴：报告到六百二十五、交接到一百二十、坑表到 #1163、账本到 P-297（开放四颗 P-90/P-147/P-296/P-297・P-296/P-297 均落地未翻牌）；计数器接手现读＝298/294/4（仓根跑 bin/WI37C/count_ledger.py・VERDICT OK）。
+
+- P-90 落地四层＋结案翻牌：①仓储（`IItemRepository.cs`＋`ItemRepository.Tags.cs`）——`TagItemsOutcome`（ChangedItems＋真新挂差集）/`TagItemsRecordedAsync`（留档出口）/`UntagItemsAsync`（一次连接事务・只摘列出的・宽容语义・全批无可摘零写语句）；`TagItemsAsync` 重构薄壳＋`TagItemsCoreAsync` 判据单源。②存档——`SettingsData` 新独立格 `AiUndoRecordJson`（与 `AiPendingPlanJson` 分格防误清连坐）・三出口（Load 坏档回空不抛/Save 空记录＝清格/Clear）。③服务（`AiClassifyService.cs`）——ApplyAsync 记差集并单槽累积（同条目并集・CreatedAt 保首次）・即时分类刻意不记・`UndoRecordCount` 唯一可见性出口・`UndoLastOrganiseAsync`＝摘＋清记录。④UI——`SettingsPage.xaml` 按钮行五列＋`AiUndoButton`・`SettingsPage.Ai.cs` 三刷新点＋确认默认取消＋`ShowWriteFailed` 收口・`UiStrings.cs` 六键三语（roster 72→77）。翻牌：✅P-90 题行尾断换「片240 已做：…」・片240 结案注入册（历史注原样）。
+
+- 语义三钉：撤销记录＝「真的新挂的差集」（应用前就有的同名标签不进・撤销保得住手打的）；差集在写入事务内算（⛔ 调用方再读现状自己算＝第二事实源）；单程票（撤销清记录・再应用重新记录）。新重开条件＝真机点名「整批太粗」⇒ 按批次号细分。
+
+- 测试：`AiUndoTests` 真库 10 例＋`AiUndoWiringGateTests` source-gate 六格（测试工程 ⛔ 引 UI 工程既有口径）＋`AiWordGateTests` roster 77/rawValue 门回 9。坑 **#1164**（census 棘轮：往被活档行号指针指着的源档插行＝端点滑进空白行必红・本批 SettingsPage.xaml 插两行顶偏 P-169 census 里 BackupRow 那颗・已换锚回 19・修法换锚不挪号——片222 那次挪号本批又漂即是证）。
+
+- 读数：撤销五族定向 47/47・宽口径（词表契约＋docgates＋性能）99/99・UI 工程编译 0 警告 0 错误（后台跑・杀旧 pid 1292 重启新构建 **pid 37724** 交付真机）・计数器 **298/295/3 VERDICT OK**（本批加减＝结案 1・开放头行剩 P-147/P-296/P-297 三颗）。
+
+- 下一刀：等用户真机测（撤销按钮出现/整批摘回/保手打标签・片237 卡顿＋片238 圆角 0 档真直角＋P-296/P-297 观感）⇒ 测完收 P-296/P-297 裁决＋跑全量 6983。⛔ push（桌面未推 50・扩展未推 2）。

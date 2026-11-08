@@ -208,6 +208,15 @@ public sealed partial class SettingsPage
             _aiLoading = false;
         }
         RefreshAiTimeoutNote();
+        RefreshAiUndoButton();      // P-90：应用之后重开设置页（甚至重启程序），撤销这颗还得在——记录是跨会话的
+    }
+
+    /// <summary>撤销那颗按不现身由记录说话：有记录才亮。败走时不收起（记录还在，还该让人再试）。</summary>
+    private void RefreshAiUndoButton()
+    {
+        AiUndoButton.Visibility = App.Services.GetRequiredService<AiClassifyService>().UndoRecordCount() > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     /// <summary>三格只读展示。<b>数字全部取自代码里的常数</b>：写死在界面里就会和常数分岔（同一份预算两处各说一次）。
@@ -430,6 +439,51 @@ public sealed partial class SettingsPage
                     row.Group.Tags.Select(tag => LocMessage.Of("common.rawValue", tag)))!));
     }
 
+    /// <summary>
+    /// 整批撤销最近这轮整理（P-90）。确认框默认「取消」——一次摘掉几百条身上的标签，
+    /// 顺手回车不该等于撤了；撤的是整轮（按组应用过几次都记在同一份记录里），没有"只撤某一组"。
+    /// </summary>
+    private async void AiUndo_Click(object sender, RoutedEventArgs e)
+    {
+        var classifier = App.Services.GetRequiredService<AiClassifyService>();
+        // 一颗键一个主人："没记录"与"撤完发现没摘到"念同一句，字面量只出现这一次
+        var none = LocMessage.Of("settings.ai.undoNone");
+        var recorded = classifier.UndoRecordCount();
+        if (recorded == 0)
+        {
+            LocText.SetMessage(AiStatusText, none);   // 按钮此刻本就不现身（可见⟺记录非空），不用再刷一次
+            return;
+        }
+        if (!await CenteredDialog.ConfirmAsync(
+                LocMessage.Of("settings.ai.undoConfirm.title"),
+                LocMessage.Of("settings.ai.undoConfirm.body", recorded),
+                LocMessage.Of("settings.ai.undoConfirm.go"), LocMessage.Of("dialog.cancel"),
+                owner: App.MainWindow, dedupeKey: "aiundoconfirm"))
+            return;
+        try
+        {
+            var removed = await classifier.UndoLastOrganiseAsync(CancellationToken.None);
+            LocText.SetMessage(AiStatusText, removed > 0
+                ? LocMessage.Of("settings.ai.undoDone", removed)
+                : none);
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("[AI] 整批撤销失败", ex);
+            ShowWriteFailed(ex);
+        }
+        finally
+        {
+            RefreshAiUndoButton();      // 撤完记录清空→收起；没撤成记录还在→留着再试
+        }
+    }
+
+    /// <summary>「写入没能完成」那句只有一个主人（P-90 起「应用」与「撤销」两条路共用同一句）：
+    /// 键在两处各点一遍就是两个事实源——哪天这句要改口，改了一处漏一处。</summary>
+    private void ShowWriteFailed(Exception ex)
+        => LocText.SetMessage(AiStatusText,
+            LocMessage.Of("settings.ai.status.writeFailed", LocMessage.Of("common.rawValue", ex.Message)));
+
     /// <summary>只应用这一组：把组内条目从总方案里切出来交给服务，应用完再从预览里摘掉。</summary>
     private async Task ApplyAsync(ClassifyPlan plan, LocMessage label)
     {
@@ -448,6 +502,7 @@ public sealed partial class SettingsPage
             ShowPlan(new ClassifyPlan(
                 _aiPlan.Proposals.Where(proposal => !appliedIds.Contains(proposal.Id)).ToList(), _aiPlan.CreatedAt));
             App.Services.GetRequiredService<AiClassifyService>().SavePending(_aiPlan);
+            RefreshAiUndoButton();      // P-90：应用攒了撤销记录，这颗当场现身——不用重开设置页
             LocText.SetMessage(AiStatusText, applied > 0
                 ? LocMessage.Of("settings.ai.applyDone", label, applied)
                 : LocMessage.Of("settings.ai.applyNoop", label));
@@ -455,8 +510,7 @@ public sealed partial class SettingsPage
         catch (Exception ex)
         {
             StarLog.Error("[AI] 应用整理结果失败", ex);
-            LocText.SetMessage(AiStatusText,
-                LocMessage.Of("settings.ai.status.writeFailed", LocMessage.Of("common.rawValue", ex.Message)));
+            ShowWriteFailed(ex);
         }
         finally
         {
