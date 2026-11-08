@@ -40,6 +40,10 @@ public abstract class BrowserBookmarksSource : IItemSource
             return list;
         var userData = Path.GetDirectoryName(defaultDir);
         if (userData is null) return list;
+        // 浏览器没装／没跑过＝User Data 整个不在场：这是装机差异不是故障（IsAvailable 本就交 false，
+        // 可用性提示也只递"找过哪条路径"的事实）。此前不加判直接 EnumerateDirectories，对着不存在的
+        // 目录每轮同步都抛一次 DirectoryNotFoundException，把「Chrome 未安装」常年挂成 WARN 噪声（坑 #1171）。
+        if (!Directory.Exists(userData)) return list;
         try
         {
             foreach (var dir in Directory.EnumerateDirectories(userData)

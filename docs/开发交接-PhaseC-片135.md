@@ -1145,3 +1145,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - pid 46592・19:42 段：开设置页连切三次语言，每次同发 LocText.ReapplyAll COMException（片205 逐户兜底接住・切换本身成功）；ReapplyAll 循环内没有逐颗兜底——Live 名单一颗已断线元素（窗已关/树已拆・弱引用仍指得到）一抛，foreach 断链：后面注册项整批停在旧语言・每次断在同一颗。坑 **#1170**：逐户兜底的粒度止于户；遍历注册名单的循环要逐颗兜底＋断线当场逐出＋丢弃留名（有界一行），根因按点名名单另立一案。
 - 刀法：ReapplyAll 两轮（Live＋WindowTitles）各逐颗 try/catch；抛了按注册项身份（ReferenceEquals）当场逐出；仅真有丢弃发一行 StarLog.Warn（×颗数・Take(3) 封顶）；死引用照旧快照前先清。
 - 测试与账：新 LocTextReapplyResilienceGateTests 五格；定向 5/5；census 19 未涨；宽口径 **185/185**；UI 编译 0 警 0 错；新构建 pid 1816 交付（21:14:22 起・含 245＋246 两刀）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：新构建上实测——开设置两次验 245 缓存（第二次应秒开・「首建全程」一次「进页刷新全程」多次）＋开设置切语言验 246（COMException WARN 应消失或换成一行点名）＋揪着已拆元素的那处按点名另立一案；全量 6983 待用户测完再跑。⛔ push（桌面未推 1・扩展未推 0）。
+
+## 一百二十八、片247：装机差异≠枚举故障——浏览器未安装不再每轮同步 WARN 一遍（坑 #1171）
+
+- 本机没装 Chrome：书签同步每轮 DiscoverProfiles 都对不存在的 User Data EnumerateDirectories→DirectoryNotFoundException→WARN 同一句，全天 8 条全是装机差异被当故障的噪声。坑 **#1171**：「源缺席」与「源故障」是两类事实——可用性/提示/对账各有既定语义，谁也不需要这条 WARN；枚举外部目录先判 Directory.Exists，缺席走静默快路径。
+- 刀法：DiscoverProfiles 枚举前 if (!Directory.Exists(userData)) return list;——只交 Default、不枚举、不记日志；在场照旧枚举；真枚举失败仍 catch＋WARN；排序稳定不动。
+- 测试与账：新 BrowserProfileAbsenceGateTests 五格；定向 16/16；census 19 未涨；宽口径 **190/190**；UI 编译 0 警 0 错；新构建 pid 22832 交付（21:41:19 起・含 245＋246＋247）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测三刀（开设置两次验 245・开着设置切语言验 246・跑一轮书签同步看 chrome WARN 是否消失验 247）；②媒体会话 COMException 0x80070015（ERROR_NOT_READY・Music 轮询播放器刚关那一拍・双发要查双轮询根因）；③全量 6983 待用户测完再跑。⛔ push（桌面未推 2・扩展未推 0）。
