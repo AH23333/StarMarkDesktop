@@ -611,4 +611,81 @@ public sealed class AiClassifyTests
         Assert.Equal(1, report.Batches[0].MissingCount);
         Assert.Equal(2, report.Batches[0].ItemCount);
     }
+
+    // ────────── 行级去重（P-296）：同款只问一遍，标签扇出全体 ──────────
+
+    [Fact]
+    public void IdenticalLinesAreAskedOnceAndTheirTagsFanOutToEveryTwin()
+    {
+        var items = new[]
+        {
+            Item(1, "GitHub 仓库"), Item(2, "GitHub 仓库"), Item(3, "GitHub 仓库"),   // 三胞胎：同一网址收进多个目录的那一族
+            Item(4, "本地文件"),                                                       // 独行侠
+        };
+
+        var dedup = ClassifyPrompt.DistinctByLine(items);
+
+        Assert.Equal(2, dedup.Representatives.Count);                // 只问两行
+        Assert.Equal(1, dedup.Representatives[0].Id);                // 代表者＝组内第一条（首现序）
+        Assert.Equal(4, dedup.Representatives[1].Id);
+        Assert.Equal(3, dedup.Groups[1].Count);                      // 三胞胎一组
+        Assert.Single(dedup.Groups[4]);
+
+        var fanned = ClassifyPrompt.FanOut(new[] { new TagProposal(1, new[] { "开发" }) }, dedup.Groups);
+        Assert.Equal(3, fanned.Count);                               // 一行的答案，三条都拿到
+        Assert.All(fanned, proposal => Assert.Equal(new[] { "开发" }, proposal.Tags));
+        Assert.Equal(new long[] { 1, 2, 3 }, fanned.Select(proposal => proposal.Id));
+    }
+
+    [Fact]
+    public void DedupFollowsTheSentLineNotTheRawTitle()
+    {
+        // 两条原始标题不同（末字各是「甲」「乙」），但发给模型的那一行都在 40 字截断后完全一样——
+        // 判据钉 ItemLine：模型看得见的载荷一字不差才并组；标题差一个字的两条是两行。
+        var shared = new string('前', 40);
+        var nearTwins = new[]
+        {
+            Item(1, shared + "甲"),
+            Item(2, shared + "乙"),
+            Item(3, "完全不同的另一条"),
+        };
+
+        var dedup = ClassifyPrompt.DistinctByLine(nearTwins);
+
+        Assert.Equal(2, dedup.Representatives.Count);                // 「甲」「乙」截断后同一行 ⇒ 并组；第三条独行
+        Assert.Equal(2, dedup.Groups[1].Count);
+        Assert.Single(dedup.Groups[3]);
+    }
+
+    [Fact]
+    public void DistinctItemsPassThroughUnchanged()
+    {
+        // 判据 ③：零重复时行为零差——原序原样进批，扇出是恒等映射，一个字都不多不少
+        var items = new[] { Item(1, "书签 A"), Item(2, "书签 B"), Item(3, "文件 C") };
+
+        var dedup = ClassifyPrompt.DistinctByLine(items);
+
+        Assert.Equal(3, dedup.Representatives.Count);
+        Assert.Equal(items, dedup.Representatives);                  // 同序同款逐字对平
+        Assert.All(dedup.Groups.Values, group => Assert.Single(group));
+
+        var proposals = new[] { new TagProposal(1, new[] { "工具" }), new TagProposal(3, new[] { "本地" }) };
+        var fanned = ClassifyPrompt.FanOut(proposals, dedup.Groups);
+        Assert.Equal(proposals, fanned);                             // 恒等：一行一条的旧世界原样回来
+    }
+
+    [Fact]
+    public void BatchCountAndEstimateFollowTheDedupedLines()
+    {
+        // 判据 ④：96 条里 95 条是同款 ⇒ 去重后 2 行 1 批——不去重就是 2 批，省的不只是行，还有整批的系统段
+        var items = Enumerable.Range(1, 95).Select(n => Item(n, "完全同款")).ToList();
+        items.Add(Item(96, "独一条"));
+
+        var dedup = ClassifyPrompt.DistinctByLine(items);
+        var (batches, tokens) = ClassifyPrompt.Estimate(dedup.Representatives, Array.Empty<string>());
+
+        Assert.Equal(1, batches);
+        Assert.Single(ClassifyPrompt.Batches(dedup.Representatives));
+        Assert.True(tokens > 0);
+    }
 }

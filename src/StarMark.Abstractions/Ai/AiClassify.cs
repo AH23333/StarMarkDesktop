@@ -237,6 +237,69 @@ public static class ClassifyPrompt
         return (batches.Count, total);
     }
 
+    // ────────── 行级去重（P-296）：同款只问一遍，标签扇出全体 ──────────
+
+    /// <summary>行级去重的结果（P-296）。<b>判据钉 <see cref="ItemLine"/> 而不是标题</b>：
+    /// ItemLine 才是真正发给模型的那一行——两条标题不同但行体相同（长标题截到同一截、或薄标题垫同一段摘要）的条目，
+    /// 模型看得见的载荷一字不差 ⇒ 答什么就给什么，扇出是恒等式而不是近似。</summary>
+    /// <param name="Representatives">进批的条目：每组的第一条，按首次出现序。</param>
+    /// <param name="Groups">代表者 id → 同款全体（含代表者）。扇出时每组的标签复制给全体成员。</param>
+    public sealed record DedupedItems(
+        IReadOnlyList<ClassifyItem> Representatives,
+        IReadOnlyDictionary<long, IReadOnlyList<ClassifyItem>> Groups);
+
+    /// <summary>把「发给模型的行完全相同」的条目并成一组、只留代表者（P-296）。
+    /// <para>真实库里同款条目常见——同一网址收进多个目录、同一文件多次收藏——这些行今天各发各的，
+    /// 而模型对一字不差的两行理应给出一样的答案。<b>零重复时输出与输入恒等</b>（每组一条），
+    /// 行为零差；有重复时批数与 token 预估跟着 <see cref="Representatives"/> 走——省的量在开跑前可见。</para>
+    /// <para>⚠ 判据是 <see cref="ItemLine"/> 的<b>逐字</b>比较（Ordinal）：标题差一个字的两条是两行，
+    /// 不会被并；已打标签的条目早在候选阶段就被过滤（<c>GetUntaggedAsync</c>），与本刀无关。</para></summary>
+    public static DedupedItems DistinctByLine(IReadOnlyList<ClassifyItem> items)
+    {
+        var representatives = new List<ClassifyItem>();
+        var groups = new Dictionary<long, IReadOnlyList<ClassifyItem>>();
+        if (items.Count == 0) return new DedupedItems(representatives, groups);
+
+        var byLine = new Dictionary<string, List<ClassifyItem>>(StringComparer.Ordinal);
+        foreach (var item in items)
+        {
+            var line = ItemLine(item);
+            if (byLine.TryGetValue(line, out var members))
+            {
+                members.Add(item);
+                continue;
+            }
+            members = new List<ClassifyItem> { item };
+            byLine[line] = members;
+            representatives.Add(item);        // 组内第一条＝代表者：组序＝首次出现序
+            groups[item.Id] = members;
+        }
+        return new DedupedItems(representatives, groups);
+    }
+
+    /// <summary>把代表者拿到的标签扇出给全体同款（P-296）。<b>在编排层收完、写库之前跑</b>——
+    /// 批次检查点存的方案就已含同款全体，中途被杀回来也不会丢掉孪生条目的标签。
+    /// 编号不在组里的提案原样放行（防御：扇出表与提案不同源时宁可多放一条也不吞结果）。</summary>
+    public static IReadOnlyList<TagProposal> FanOut(
+        IReadOnlyList<TagProposal> proposals, IReadOnlyDictionary<long, IReadOnlyList<ClassifyItem>> groups)
+    {
+        if (groups.Count == 0) return proposals;
+        var result = new List<TagProposal>(proposals.Count);
+        foreach (var proposal in proposals)
+        {
+            if (groups.TryGetValue(proposal.Id, out var members))
+            {
+                foreach (var member in members)
+                    result.Add(new TagProposal(member.Id, proposal.Tags));
+            }
+            else
+            {
+                result.Add(proposal);
+            }
+        }
+        return result;
+    }
+
 
     /// <summary>
     /// 解读答复。<b>四种形状都认</b>（O4 后行格式是提示词要求的主输出，JSON 三态是旧习惯的兼容层）：

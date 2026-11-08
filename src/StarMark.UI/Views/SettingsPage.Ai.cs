@@ -289,7 +289,10 @@ public sealed partial class SettingsPage
                 var rulesJson = App.Services.GetRequiredService<SettingsStore>().LoadAiClassifyRulesJson();
                 var (forAi, ruled) = ClassifyRules.Split(candidates, ClassifyRules.Merged(rulesJson));
                 var catalog = await classifier.ReferenceTagsAsync(CancellationToken.None);
-                var (batchCount, approxTokens) = ClassifyPrompt.Estimate(forAi, catalog);
+                // P-296：预估与执行同一把去重刀——弹窗报的批数/token 就是去重后的真实开销（省的量在确认前可见），
+                // 与 service 内部 DistinctByLine 同源；漏了这一处＝"弹窗说 15K 实际花 40K"换一件马甲回来。
+                var (batchCount, approxTokens) = ClassifyPrompt.Estimate(
+                    ClassifyPrompt.DistinctByLine(forAi).Representatives, catalog);
                 if (batchCount > 0 && !await ConfirmOrganiseAsync(candidates.Count, ruled.Count, batchCount, approxTokens))
                     return;    // finally 把忙碌态收回去，什么都没发
             }

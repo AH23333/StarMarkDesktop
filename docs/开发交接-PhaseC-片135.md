@@ -1026,3 +1026,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 判据六条全钉：瞬时失败一试救回・三试全败不扩轮・连败熔断零调用・Retry-After 被读被尊重有上限・退避中叫停照收・限流文案与实现一致（坑 #1159 还债）。真机观感归用户统一测，翻牌随用户裁决。
 
 - 下一刀：片235 P-296 落地（ClassifyPrompt 行级去重纯函数＋AiClassifyService 接线＋状态行「去重后 M 条」新 settings.ai 键＋AiWordGateTests roster 71→72/73）。⛔ push（桌面未推 41・扩展未推 2）。
+
+## 一百一十六、片235：P-296 落地（AI 分类省 token——同款条目行级去重・只问一遍・标签扇出）
+
+- 接手第一步照旧现读编号轴：报告到六百二十一、交接到一百一十六、坑表到 #1160、账本到 P-297（P-296/P-297 均落地未翻牌）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73／P-90／P-147／P-153／P-296／P-297）。
+
+- 本刀三源码＋一文档键：AiClassify.cs（ClassifyPrompt 加 DedupedItems record＋DistinctByLine＋FanOut 两颗纯函数）・AiClassifyService.cs（OrganiseAsync：Split 后 DistinctByLine・代表者进批・两处 Merge 前 FanOut〔检查点那处也扇出〕・状态行 planPlain/planRuled 传 deduped 可空尾参）・SettingsPage.Ai.cs（预估段同刀去重）；UiStrings.cs 新键 settings.ai.service.deduped 三语（初名 dedupedNote 踩说明族预算射程・坑 #1160 改名）＋planPlain/planRuled 各加槽。
+
+- 测试三档：AiClassifyTests 新增 4（三胞胎一行／ItemLine 非 Title〔40 字截断后同行〕／零重复恒等／95 同款 ⇒ 2 行 1 批）／AiWordGateTests roster 71→72／AiSettingsWiringGateTests 新钉 DedupSitsBetweenSplitAndEveryMergeAndTheEstimateSeesItToo（执行＋预估两处同刀・两处 FanOut・预估漏刀＝「弹窗说 15K 实际花 40K」马甲回来即红）。
+
+- 判据四条全钉：①同款标签恒等（ItemLine 一字不差・扇出复制）；②去重量如实上报（deduped 可空半句）；③零重复零差（每组一条・扇出恒等）；④批数/token 预估跟去重后行数（预估段同刀・wiring 钉守）。真机观感归用户统一测，翻牌随用户裁决。
+
+- 下一刀：用户放行连续开发——code review 本片或深度测试（候选：去重与 O2 规则先后次的再核・Estimate 与实际 token 的抽样对账）。⛔ push（桌面未推 41・扩展未推 2）。

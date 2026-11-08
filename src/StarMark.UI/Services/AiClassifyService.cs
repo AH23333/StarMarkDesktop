@@ -168,20 +168,29 @@ public sealed class AiClassifyService
 
         // O2 规则预分类：命中的折算成提案、不进 AI 批次，但照常进预览确认（规则错了用户还是那一刀）。
         // 自定义 JSON 坏了整份按"只有内置"生效，并随状态行出声——"加了规则没生效"必须当场可见，不能静默。
-        var (forAi, ruled) = ClassifyRules.Split(candidates,
+        var (forAiRaw, ruled) = ClassifyRules.Split(candidates,
             ClassifyRules.Merged(_store.LoadAiClassifyRulesJson()));
         var customRulesJson = _store.LoadAiClassifyRulesJson();
         var customRulesBroken = customRulesJson is not null && ClassifyRules.Parse(customRulesJson).Count == 0
             && !customRulesJson.Trim().StartsWith("[]", StringComparison.Ordinal);
+
+        // P-296 行级去重：发给模型的行（ItemLine）完全相同的条目只问一遍，标签扇出给全体同款——
+        // 模型看得见的载荷一字不差，扇出是恒等式而不是近似；批数、token 与状态行读数都跟着去重后的行数走。
+        var dedup = ClassifyPrompt.DistinctByLine(forAiRaw);
+        var forAi = dedup.Representatives;
 
         var catalog = await ReferenceTagsAsync(ct);
         var total = ClassifyPrompt.Batches(forAi).Count;
         // "有没有那半句警告"是数据，"这一句怎么排"是语言 ⇒ 两句各留一颗可空槽（⛔ `status +=` 拼）。
         // 警告那颗键⛔ 在两条臂里各点一次：两处各写一遍就是第二个出处（✅WI-61b2 那颗分岔同一形状）。
         var warning = customRulesBroken ? LocMessage.Of("settings.ai.service.customRulesIgnored") : null;
+        // 去重那半句同样可空：零重复时一个字都不多念（判据 ③ 零差）。
+        var dedupedNote = forAiRaw.Count > forAi.Count
+            ? LocMessage.Of("settings.ai.service.deduped", forAiRaw.Count - forAi.Count)
+            : null;
         var status = ruled.Count > 0
-            ? LocMessage.Of("settings.ai.service.planRuled", candidates.Count, ruled.Count, forAi.Count, total, warning)
-            : LocMessage.Of("settings.ai.service.planPlain", candidates.Count, total, warning);
+            ? LocMessage.Of("settings.ai.service.planRuled", candidates.Count, ruled.Count, forAi.Count, total, warning, dedupedNote)
+            : LocMessage.Of("settings.ai.service.planPlain", candidates.Count, total, warning, dedupedNote);
         onStatus(status);
 
         // 从"上次整理好但还没应用"的方案接着写：<b>不种子就会让这一轮把旧结果整档覆盖掉</b>——
@@ -207,7 +216,7 @@ public sealed class AiClassifyService
                         CancellationToken.None);   // <b>记账不跟叫停走</b>：这一批 token 已经花掉，
                                                    // 若账随 ct 取消，停在检查点上的那一批会"花了钱没留账"，
                                                    // 还会连累后面的方案落盘——账本必须比取消更硬。
-                Merge(proposals, done.Proposals);
+                Merge(proposals, ClassifyPrompt.FanOut(done.Proposals, dedup.Groups));   // P-296：检查点存的方案已含同款全体——中途被杀回来孪生条目也不丢标签
                 SavePending(new ClassifyPlan(proposals.ToList(), DateTimeOffset.UtcNow));
                 onProgress(done.Index + 1, total);
             },
@@ -216,7 +225,7 @@ public sealed class AiClassifyService
             // 本地大模型冷启动慢的机器上，"等不到"是能被用户自己调的，不该只能等程序改默认值。
             timeoutSeconds: _store.LoadAiBatchTimeout().Seconds);
 
-        Merge(proposals, report.Proposals);                 // 编排层给的汇总为准（含回调没覆盖到的情况）
+        Merge(proposals, ClassifyPrompt.FanOut(report.Proposals, dedup.Groups));   // P-296：编排层给的汇总为准（含回调没覆盖到的情况）；扇出后才算全体拿到标签
         // 最后再砍一刀：整个方案里只挂上一条条目的标签不叫分类（用户要的正是"别再一条一个词"）。
         // 计数按<b>整个方案</b>而不是按批：同一个词在两批里各出现一次，合起来是两条，它够格留下。
         var pruned = new ClassifyPlan(proposals, DateTimeOffset.UtcNow).WithoutSingletonTags();

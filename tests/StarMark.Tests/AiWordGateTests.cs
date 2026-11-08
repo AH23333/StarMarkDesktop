@@ -111,6 +111,7 @@ public sealed class AiWordGateTests : IDisposable
         "settings.ai.service.loadingCandidates",
         "settings.ai.service.nothingToOrganise",
         "settings.ai.service.customRulesIgnored",
+        "settings.ai.service.deduped",
         "settings.ai.service.planRuled",
         "settings.ai.service.planPlain",
         "settings.ai.service.budgetTripped",
@@ -149,8 +150,8 @@ public sealed class AiWordGateTests : IDisposable
     [Fact]
     public void TheRosterHasExactlyTheKeysThisBatchHandedIn()
     {
-        Assert.Equal(71, Keys.Length);
-        Assert.Equal(71, Keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(72, Keys.Length);
+        Assert.Equal(72, Keys.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在五档里恰好被点名一次、在标记里一次都没有。</summary>

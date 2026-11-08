@@ -135,4 +135,31 @@ public sealed class AiSettingsWiringGateTests
         Assert.Contains("MonthlyTokenBudget * WarnRatio", judge);
         Assert.DoesNotContain("WarnRatioOverride", judge);
     }
+
+    // ───────── 4）行级去重（P-296）：问的那一行与报的那个数必须是同一把刀 ─────────
+
+    [Fact]
+    public void DedupSitsBetweenSplitAndEveryMergeAndTheEstimateSeesItToo()
+    {
+        // 破了会怎样：预估漏了去重这一步＝弹窗报的是去重前的批数与 token，"弹窗说 15K 实际花 40K"
+        // 换一件马甲回来（§20.3 那课）；执行漏了＝状态行的"分 N 批"与实际发出的批各说各话。
+        var service = ReadRepoFile(Service);
+        var organise = MethodBody(service, "public async Task<OrganiseOutcome> OrganiseAsync");
+        Assert.Contains("ClassifyPrompt.DistinctByLine(", organise);
+        // 扇出必须在写库（Merge）之前、且两个落点都在——批次检查点也扇出，中途被杀回来孪生条目才不丢标签。
+        Assert.Equal(2, CountOccurrences(organise, "ClassifyPrompt.FanOut("));
+        var estimate = MethodBody(ReadRepoPartials(PageAi), "private async void AiOrganise_Click");
+        // 预估与执行同一把刀：弹窗那一行读数必须出自去重后的代表者，而不是 forAi 原表。
+        Assert.Contains("ClassifyPrompt.DistinctByLine(", estimate);
+    }
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        var count = 0;
+        for (var index = haystack.IndexOf(needle, StringComparison.Ordinal);
+             index >= 0;
+             index = haystack.IndexOf(needle, index + needle.Length, StringComparison.Ordinal))
+            count++;
+        return count;
+    }
 }
