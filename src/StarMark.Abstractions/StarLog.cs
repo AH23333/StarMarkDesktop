@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 
@@ -7,16 +8,39 @@ namespace StarMark.Abstractions;
 /// <summary>
 /// 统一日志门面：每日滚动文件（%LOCALAPPDATA%\StarMark\logs\starmark-YYYYMMDD.log）+ Debug 输出。
 /// 线程安全。替代此前分散的 starmark-startup.log / Trace.WriteLine。
+/// <para>
+/// 片243 起落盘走<b>后台队列</b>：调用线程（常是 UI 线程）只做一次线程安全入队，
+/// 专职线程攒批刷盘。此前每条日志＝调用者线程一次同步 open-append-close＋全局锁——
+/// 打开设置页一轮 60+ 条全在 UI 线程上打文件 I/O，是全天微卡顿的固定成分。
+/// 顺序由单队列 FIFO 保证；进程退出由 <c>ProcessExit</c> 保尾 flush（刷盘线程是 IsBackground，不拦进程走）。
+/// </para>
 /// </summary>
 public static class StarLog
 {
     private static readonly object Gate = new();
 
-    // 每条日志都要落一次盘，热路径上先把"目录已建"与"当日文件名"记下来：
-    // 否则每行都会做一遍环境目录查询 + CreateDirectory + 日期格式化。
+    // 每批落盘前先把"目录已建"与"当日文件名"记下来：
+    // 否则每批都要做一遍环境目录查询 + CreateDirectory + 日期格式化。
     private static bool _dirEnsured;
     private static string? _dayFile;
     private static DateTime _dayFileExpiry;
+
+    // ───────────────────────── 后台写盘队列 ─────────────────────────
+    // 无界是有意的：日志风暴（一次打开设置页几十条）只涨内存不阻塞调用者；有界满了丢日志比卡 UI 更糟。
+    private const int FlushBatchCap = 256;
+    private static readonly BlockingCollection<string> Pending = new();
+    private static Thread? _flushThread;
+    private static readonly object FlushThreadGate = new();
+
+    static StarLog()
+    {
+        // 进程退出保尾：IsBackground 的刷盘线程不会拦着进程走，滞留队列必须在这里倒干净——
+        // 最后一批往往正是崩溃/退出前那几条最有诊断价值的行。
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { FlushNow(); } catch { /* 保尾失败也不许把退出流程砸了 */ }
+        };
+    }
 
     /// <summary>
     /// 日志目录覆盖，<b>只为测试准备</b>：默认写进 <c>%LOCALAPPDATA%\StarMark\logs</c>，
@@ -89,32 +113,99 @@ public static class StarLog
         // 主事件行恒为一行（消息内的 CR/LF 折成字面量）；异常堆栈另起、逐行缩进续写。
         var body = ex is null ? SanitizeMessage(message) : SanitizeMessage(message) + StackTail(ex);
         var line = $"[{DateTimeOffset.Now:O}] {level} {body}";
+        EnqueueOrAppend(line);
+        Debug.WriteLine($"[StarMark] {level} {body}");
+    }
+
+    /// <summary>调用线程只入队（纳秒级）；队列不可用时才退回同步落盘——宁可慢，不可丢。</summary>
+    private static void EnqueueOrAppend(string line)
+    {
+        try
+        {
+            EnsureFlushThread();
+            Pending.Add(line);
+            return;
+        }
+        catch { }
+        AppendLines(new[] { line });
+    }
+
+    private static void EnsureFlushThread()
+    {
+        if (_flushThread is not null) return;
+        lock (FlushThreadGate)
+        {
+            if (_flushThread is not null) return;
+            _flushThread = new Thread(FlushLoop)
+            {
+                IsBackground = true,
+                Name = "StarLog-Flush",
+            };
+            _flushThread.Start();
+        }
+    }
+
+    private static void FlushLoop()
+    {
+        var batch = new List<string>(FlushBatchCap);
+        while (true)
+        {
+            batch.Clear();
+            // 无日志时阻塞等首条（零 CPU）；首条到手后零超时收割余量攒成一批，一次开-写-关写完整批
+            if (!Pending.TryTake(out var first, Timeout.Infinite)) continue;
+            batch.Add(first);
+            while (batch.Count < FlushBatchCap && Pending.TryTake(out var more, 0)) batch.Add(more);
+            AppendLines(batch);
+        }
+    }
+
+    /// <summary>把滞留队列倒干净并同步落盘：进程退出保尾用；单测也用它把「已入队」钉成「已到盘上」再断言。</summary>
+    internal static void FlushNow()
+    {
         lock (Gate)
         {
-            try
-            {
-                if (!_dirEnsured)
-                {
-                    Directory.CreateDirectory(LogDirectory);
-                    _dirEnsured = true;
-                }
-                var now = DateTime.Now;
-                if (_dayFile is null || now >= _dayFileExpiry)
-                {
-                    _dayFile = Path.Combine(LogDirectory,
-                        $"starmark-{now.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
-                    _dayFileExpiry = now.Date.AddDays(1);   // 跨零点自动换档
-                }
-                File.AppendAllText(_dayFile, line + Environment.NewLine);
-            }
-            catch
-            {
-                // 日志失败不影响主流程；但作废缓存，下一行会重试建目录（目录被手工删过也能自愈）
-                _dirEnsured = false;
-                _dayFile = null;
-            }
+            var rest = new List<string>();
+            while (Pending.TryTake(out var line, 0)) rest.Add(line);
+            if (rest.Count > 0) AppendCore(rest);
         }
-        Debug.WriteLine($"[StarMark] {level} {body}");
+    }
+
+    private static void AppendLines(IReadOnlyList<string> lines)
+    {
+        lock (Gate)
+        {
+            AppendCore(lines);
+        }
+    }
+
+    private static void AppendCore(IReadOnlyList<string> lines)
+    {
+        try
+        {
+            var dir = LogDirectory;
+            var now = DateTime.Now;
+            // 缓存的当日档只在「同一目录」内有效：LogDirectory 变了（测试改道目录切换、数据根变化）
+            // 还用旧缓存路径＝整批写向已不存在的目录、被自愈吞掉。换目录即作废，重走建目录。
+            if (_dayFile is null || now >= _dayFileExpiry || Path.GetDirectoryName(_dayFile) != dir)
+            {
+                _dirEnsured = false;
+                _dayFile = Path.Combine(dir,
+                    $"starmark-{now.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
+                _dayFileExpiry = now.Date.AddDays(1);   // 跨零点自动换档
+            }
+            if (!_dirEnsured)
+            {
+                Directory.CreateDirectory(dir);
+                _dirEnsured = true;
+            }
+            File.AppendAllText(_dayFile, string.Join(Environment.NewLine, lines) + Environment.NewLine);
+        }
+        catch
+        {
+            // 日志失败不影响主流程；但作废缓存，下一行会重试建目录（目录被手工删过也能自愈）
+            _dirEnsured = false;
+            _dayFile = null;
+        }
     }
 
     /// <summary>

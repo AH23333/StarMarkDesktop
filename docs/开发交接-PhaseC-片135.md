@@ -1116,3 +1116,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 过程注：OpenSettingsPage 无缓存导航（每次进设置页全量 new・ctor 重链全在 UI 线程）——ctor 链本次不动（RefreshBackups 有意同步・件数钉死・注释写明）；SettingsPage.xaml.cs 删过行且账本多颗行号指针指着 ⇒ census 必跑（坑 #1164 规矩）未落空。测试：新 SettingsOpenJankGateTests 四格 source-gate・宽口径 **155/155**（含 census＋片241 分帧 gate）・UI 编译 0 警告 0 错误（64.60s）・新构建 **pid 48192** 交付真机（17:30:28 起）・计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297 三颗）。
 
 - 下一刀：等用户真机测（打开设置是否还卡＋片241 展开更多顺滑度＋片240 撤销＋片237/238 观感）⇒ 测完收 P-296/P-297 裁决＋跑全量 6983。若打开设置仍卡，下一手候选＝SettingsPage ctor 重链瘦身（导航缓存 NavigationCacheMode 或 ctor 重活后置）。⛔ push（桌面未推 51・扩展未推 2）。
+
+## 一百二十四、片243：全面性能审查三刀——StarLog 后台写盘队列＋启动组件恢复分帧＋Present() 分步插桩（坑 #1167）
+
+- 全天日志普查（四代构建会话）钉住三处全局浪费：①StarLog 每条＝UI 线程同步 open-append-close＋全局锁（打开设置页一轮 60+ 条）；②启动 12 颗组件窗同一 UI 回合连建（1.7-2.1s・每轮启动必报）；③托盘恢复/热键呼出三例等待型（1.2-1.8s・CPU≈0・16:11×2＋17:27）走 Present() 零读数。坑 **#1167**：后台队列化日志时读方不许碰内容句柄（刷盘线程撞共享锁整批被吞・首轮风暴测 143/200）；day-file 缓存只在同一目录内有效（换目录不作废＝首批写向已删路径被吞・单跑 200/200・组合跑稳定 199/200 才咬出）；断言全局静态（DirectoryOverride）的行为测必须 DisableParallelization 独占跑。
+
+- 三刀：①StarLog.cs 后台队列（调用线程只入队・StarLog-Flush 攒批≤256 一次开-写-关・ProcessExit→FlushNow 保尾・AppendCore 换目录即作废缓存）；②RestoreOnStartupAsync/ApplyLayoutAsync 分帧（一颗一拍 UI 回合・数据/建窗/落盘全留 UI 回合・ApplyGeometryEntryCore 单条目帮手同源——同步版/分帧版/快照不另写第二份匹配实现・布局/逐个/回退三路全覆盖）；③Present() 五步差值计时（单步≥100ms・全程≥500ms 才记・快路径零日志）——用户下次从托盘/热键呼出若仍卡，[呈现] 读数直接留名是哪步在等。
+
+- 新构建 pid 39024（18:35:28 起）读数：分帧生效——12 颗逐拍建窗（每颗 32-65ms・桌面组件恢复 602ms）・日志后台队列在跑。**组合帧突发仍 1860ms**（12 窗首次合成一批落地）——恢复回合切开了、合成没切开；下一刀候选＝首组合帧分摊（错峰 Reveal 或合成循环插拍）＋设置页导航缓存（NavigationCacheMode/ctor 重活后置，等用户测完「打开设置还卡不卡」再动）。
+
+- 测试与账：LogFlushQueueGateTests 五格＋StartupRestoreSliceGateTests 四格＋PresentStepTraceGateTests 两格；宽口径 **167/167**；census 抓到 StarLog.cs:34 落空已换锚（待决策事项.md:2830→「StarLog.cs 的 CurrentLogFile」・census 回 19）；UI 编译 0 警告 0 错（68.39s）；计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297）。下一刀：用户复现托盘恢复读 [呈现] 各步读数钉死等待源；启动组合帧分摊；全量 6983 待用户测完再跑。⛔ push（桌面未推 52・扩展未推 2）。

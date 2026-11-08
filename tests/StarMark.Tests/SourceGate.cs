@@ -143,6 +143,11 @@ internal static class SourceGate
     internal static int Count(string text, string needle)
         => text.Split(new[] { needle }, StringSplitOptions.None).Length - 1;
 
+    /// <summary>把所有空白压成单空格。分帧/插桩类守门断言「某语句在派发表达式里」时，
+    /// 缩进与换行不该让判据脆断（格式化一遍就假失败）。片243 起 Present 插桩与启动分帧两族共用。</summary>
+    internal static string Squash(string text)
+        => System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ");
+
     /// <summary>
     /// 抹掉注释后的源码。<b>"某句话全库只许有一个出处"这类禁项一律读这个</b>：
     /// 注释里引用一句旧话是为了讲清为什么，不是又开一个出口——按原文数会把这种引用算成违规，

@@ -283,17 +283,51 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 唤起并前置主窗口；settings=true 时直接打开设置页，<paramref name="settingsTabId"/> 给要落在哪一栏的
     /// <b>身份</b>（<see cref="Views.SettingsTabIds"/>）——不是标题，标题会跟着界面语言变。
+    /// <para>
+    /// 片243 起逐步计时取证：全天三例等待型阻塞（托盘恢复/热键呼出・1.2-1.8s・CPU≈0）都走这条路，
+    /// 此前零读数。每步差值超阈值各记一行、全程超阈值补一行总账——下一轮用户复现时，
+    /// Show/Activate/Restore/SetForeground 谁在等，读数直接留名。快路径（合计几十 ms）一条日志都不发。
+    /// </para>
     /// </summary>
     public void Present(bool settings, string? settingsTabId = null)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        long mark = 0;
         try
         {
-            if (!AppWindow.IsVisible) AppWindow.Show();
+            if (!AppWindow.IsVisible)
+            {
+                AppWindow.Show();
+                mark = TracePresentStep(sw, mark, "AppWindow.Show");
+            }
             Activate();
+            mark = TracePresentStep(sw, mark, "Activate");
             WindowInterop.ShowWindow(MainHwnd, WindowInterop.SW_RESTORE);
+            mark = TracePresentStep(sw, mark, "ShowWindow(SW_RESTORE)");
             WindowInterop.SetForegroundWindow(MainHwnd);
-            if (settings) OpenSettingsPage(settingsTabId);
+            mark = TracePresentStep(sw, mark, "SetForegroundWindow");
+            if (settings)
+            {
+                OpenSettingsPage(settingsTabId);
+                mark = TracePresentStep(sw, mark, "OpenSettingsPage");
+            }
+            sw.Stop();
+            if (sw.ElapsedMilliseconds >= PresentTotalLogMs)
+                StarLog.Info($"[呈现] Present 全程 {sw.ElapsedMilliseconds} ms（托盘恢复/热键呼出路径）");
         }
         catch (Exception ex) { StarLog.Error("唤起主窗口失败", ex); }
+    }
+
+    // 单步超过这数才记一行：取证只在慢现场说话，快路径零日志开销
+    private const int PresentStepLogMs = 100;
+    private const int PresentTotalLogMs = 500;
+
+    /// <summary>Present 单步差值取证：<paramref name="sw"/> 不停表，读的是相邻两步的差。</summary>
+    private static long TracePresentStep(System.Diagnostics.Stopwatch sw, long fromMs, string label)
+    {
+        var now = sw.ElapsedMilliseconds;
+        if (now - fromMs >= PresentStepLogMs)
+            StarLog.Info($"[呈现] {label}：{now - fromMs} ms");
+        return now;
     }
 }

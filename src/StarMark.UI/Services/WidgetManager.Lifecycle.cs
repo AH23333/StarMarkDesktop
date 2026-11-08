@@ -89,51 +89,63 @@ public sealed partial class WidgetManager
     /// <paramref name="loadOnStartup"/>＝设置页那颗「开机自动加载组件」（用户裁决：取舍给他自己选，默认开＝今天的观感）。
     /// 关掉时<b>一颗都不建</b>，而不是"先建再收"——后者退不回来是真机量出来的（报告 §二百零九：私有内存 0 变化）。
     /// </para>
+    /// <para>
+    /// 片243 起<b>分帧</b>：一颗组件＝一拍 UI 回合（建窗＋套外观之间 UI 线程能喘气）。
+    /// 此前 12 颗在同一回合里连建，UI 线程连占 1.7-2.1s——UIStallWatchdog 每轮启动都报，
+    /// 用户感知就是「启动那两秒点不动」。数据与窗口操作仍全部在 UI 线程串行（回合之间用户可交互，
+    /// 状态一致性与原同步版等价：同一根线程，只是回合切开了）。
+    /// </para>
     /// </summary>
-    public Task RestoreOnStartupAsync(bool loadOnStartup = true) => OnUiAsync(() =>
+    public async Task RestoreOnStartupAsync(bool loadOnStartup = true)
     {
-        var data = _storage.Load();
+        // 拿数据/建窗全在 UI 回合里（WidgetStorage 与窗口集合的非线程安全口径不变）；
+        // 方法体自身只做回合编排，落在哪根线程无所谓。
+        var data = await OnUiAsync(() => _storage.Load());
 
         if (!loadOnStartup)
         {
-            // 这句日志不能省：开机内存突然少了几十兆，第一种猜测会是"组件功能坏了"，而不是"你上周关过那个开关"。
-            StarLog.Info($"[内存] {WidgetStartupPolicy.DescribeSkipped(data.Instances.Count)}");
-            StarMark.Abstractions.StartupProfile.Mark($"桌面组件未加载（{data.Instances.Count} 个实例在册）");
+            await OnUiAsync(() =>
+            {
+                // 这句日志不能省：开机内存突然少了几十兆，第一种猜测会是"组件功能坏了"，而不是"你上周关过那个开关"。
+                StarLog.Info($"[内存] {WidgetStartupPolicy.DescribeSkipped(data.Instances.Count)}");
+                StarMark.Abstractions.StartupProfile.Mark($"桌面组件未加载（{data.Instances.Count} 个实例在册）");
+            });
             return;
         }
 
         var layout = !string.IsNullOrEmpty(data.DefaultLayoutId)
-            ? _storage.FindLayout(data.DefaultLayoutId!)
+            ? await OnUiAsync(() => _storage.FindLayout(data.DefaultLayoutId!))
             : null;
 
+        var applied = false;
         if (layout is not null)
         {
             try
             {
-                ApplyLayoutCore(data, layout);
-                _storage.Save(data);     // 保证默认布局状态与磁盘一致
+                await ApplyLayoutSlicedAsync(data, layout);
+                await OnUiAsync(() => _storage.Save(data));     // 保证默认布局状态与磁盘一致
+                applied = true;
             }
             catch (Exception ex)
             {
                 StarLog.Error("应用默认布局失败，回退为逐个显示实例", ex);
-                foreach (var inst in data.Instances)
-                {
-                    try { ShowInternal(inst.Id); }
-                    catch (Exception iex) { StarLog.Error($"恢复桌面组件失败 ({inst.Kind})", iex); }
-                }
             }
         }
-        else
+        if (!applied)
         {
+            // 无布局（逐个显示）与「应用默认布局失败回退」同走这条分帧路
             foreach (var inst in data.Instances)
             {
-                try { ShowInternal(inst.Id); }
-                catch (Exception ex) { StarLog.Error($"恢复桌面组件失败 ({inst.Kind})", ex); }
+                await OnUiAsync(() =>
+                {
+                    try { ShowInternal(inst.Id); }
+                    catch (Exception ex) { StarLog.Error($"恢复桌面组件失败 ({inst.Kind})", ex); }
+                });
             }
         }
         // 这一段是启动里最重的一块（建窗口＋套材质），单独计时才有"改完有没有变快"的对照
-        StarMark.Abstractions.StartupProfile.Mark($"桌面组件恢复（{data.Instances.Count} 个实例）");
-    });
+        await OnUiAsync(() => StarMark.Abstractions.StartupProfile.Mark($"桌面组件恢复（{data.Instances.Count} 个实例）"));
+    }
 
     public Task ShutdownAllAsync() => OnUiAsync(() =>
     {
