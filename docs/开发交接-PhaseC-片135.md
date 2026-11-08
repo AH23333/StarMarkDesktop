@@ -1104,3 +1104,15 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：分帧 gate 定向 5/5・宽口径 151/151・UI 编译 0 警告 0 错误（45.67s）・新构建 pid 33700 交付真机（17:07:12 起）・计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297 三颗）。
 
 - 下一刀：用户复报「打开设置时尤其卡」——追设置页打开路径（OpenSettingsPage→SettingsPage 装载链）找那轮 1.4s 等待型阻塞的等待点。⛔ push（桌面未推 50・扩展未推 2）。
+
+## 一百二十三、片242：打开设置页卡顿修复——去抖保存链双份材质刷新＋装载回灌触发保存＋语言 zh→zh 写盘三刀清（坑 #1166）
+
+- 接手第一步照旧现读编号轴：报告到六百二十七、交接到一百二十二、坑表到 #1165、账本到 P-297（开放三颗 P-147/P-296/P-297）；计数器接手现读＝298/295/3（仓根跑 bin/WI37C/count_ledger.py・VERDICT OK）。
+
+- 日志三证定位：①打开设置页后 ~374ms（350ms 去抖到期）发一轮「设置已保存」——用户一个字没改；②同窗 5s 内 backdrop ApplyBackdrop 59 条（≈一轮保存×双份×主窗+12 组件窗・每条 3 个 DWM 跨进程互操作・全在 UI 线程）；③16:11 两轮「阻塞 1453/1172ms・CPU 仅 16/15ms」等待型＝DWM 互操作跨进程等待指纹。坑 **#1166**：保存即生效挂保存出口后 Tick ⛔ 再直调同款（那是把同一轮刷新翻倍）；装载抑制必须罩到 Loaded；值没变写入＝装载回填取证照记写盘跳过。
+
+- 修复三刀（SettingsPage.xaml.cs＋SettingsPage.I18n.cs）：①BuildAutoSaveTimer.Tick 删直调「主窗＋全部组件窗」材质刷新两行（ViewModel.Save 尾部已带同款・SaveCommand 唯一出口全覆盖）；②装载抑制解除点从 LoadFromStoreSilently 的 finally 挪到 Page_Loaded 开头（ctor→Loaded 间一切变化都是装载回灌）；③语言下拉值没变早退（取证日志保留・P-170 口径）。
+
+- 过程注：OpenSettingsPage 无缓存导航（每次进设置页全量 new・ctor 重链全在 UI 线程）——ctor 链本次不动（RefreshBackups 有意同步・件数钉死・注释写明）；SettingsPage.xaml.cs 删过行且账本多颗行号指针指着 ⇒ census 必跑（坑 #1164 规矩）未落空。测试：新 SettingsOpenJankGateTests 四格 source-gate・宽口径 **155/155**（含 census＋片241 分帧 gate）・UI 编译 0 警告 0 错误（64.60s）・新构建 **pid 48192** 交付真机（17:30:28 起）・计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297 三颗）。
+
+- 下一刀：等用户真机测（打开设置是否还卡＋片241 展开更多顺滑度＋片240 撤销＋片237/238 观感）⇒ 测完收 P-296/P-297 裁决＋跑全量 6983。若打开设置仍卡，下一手候选＝SettingsPage ctor 重链瘦身（导航缓存 NavigationCacheMode 或 ctor 重活后置）。⛔ push（桌面未推 51・扩展未推 2）。

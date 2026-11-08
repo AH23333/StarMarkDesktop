@@ -86,8 +86,12 @@ public sealed partial class SettingsPage
         // 判不了（规则 74：没拿到读数不许猜因）。这两行不改任何行为，只把事实记下来：旧值→新值、下拉与页面
         // 的状态、生效与否；拿到下一笔读数之前 ⛔ 顺手加任何护栏。
         var store = App.Services.GetRequiredService<SettingsStore>();
-        StarMark.Abstractions.StarLog.Info($"[设置页] 界面语言写入取证：{store.LoadUiLanguageCode() ?? "跟随系统"} → {code ?? "跟随系统"}" +
+        var previous = store.LoadUiLanguageCode();
+        StarMark.Abstractions.StarLog.Info($"[设置页] 界面语言写入取证：{previous ?? "跟随系统"} → {code ?? "跟随系统"}" +
             $"（SelectedIndex={LanguageSelect.SelectedIndex}，新增项={e.AddedItems.Count}，移除项={e.RemovedItems.Count}，页面已加载={IsLoaded}）");
+        // 值没变（如 zh→zh）＝装载期回填或重复选择，不是用户改（片242 实锤读数：打开设置页后
+        // 每次都带一发同步写盘——设置档原子替换在 UI 线程）。取证照记，写盘与生效链跳过。
+        if (string.Equals(previous, code, StringComparison.Ordinal)) return;
         store.SetUiLanguageCode(code);
         var switched = Locale.TrySet(Locale.Resolve(code, AppLanguages.SystemLanguageTags()));
         StarMark.Abstractions.StarLog.Info($"[设置页] 界面语言生效取证：TrySet={switched}（{(code is null ? "跟随系统" : code)}）");

@@ -115,7 +115,11 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         StarMark.Abstractions.StarLog.Warn($"[设置页] 没有身份为「{tabId}」的页签（那一栏的 Tag 漏写了，还是整栏被删了？）");
     }
 
-    /// <summary>读取设置但不触发「实时保存」（加载本身产生的属性变更无须回写）。</summary>
+    /// <summary>读取设置但不触发「实时保存」（加载本身产生的属性变更无须回写）。
+    /// <para>抑制窗口到 <see cref="Page_Loaded"/> 才解除（片242）：ctor 到 Loaded 之间的装载期变化
+    /// （x:Bind 首拍回推、控件初始化事件）没有一件是用户操作——此前只在 LoadFromStore 区内抑制，
+    /// 打开设置页后 ~374ms（350ms 去抖到期）就发一轮「设置已保存」＋主窗与全部组件窗材质刷新，
+    /// 用户一个字都没改（日志实锤：打开页面后无操作的「设置已保存」）。</para></summary>
     private void LoadFromStoreSilently()
     {
         _suppressSave = true;
@@ -137,7 +141,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             // 那会让 Frame.Navigate 失败，用户点「设置」即卡死崩溃（历史事故）。
             StarMark.Abstractions.StarLog.Error("加载设置到设置页失败", ex);
         }
-        finally { _suppressSave = false; }
+        // 刻意不在 finally 复位：装载抑制到 Page_Loaded 才解除（见方法头注释）。
     }
 
     /// <summary>界面那一头的 Token → ViewModel（批次 UI/P-146）。<b>这是"读回"的唯一下方</b>：
@@ -310,9 +314,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
             timer.Stop();
             ViewModel.SaveCommand.Execute(null);   // 实时落盘（含外观 / 磁吸）
             App.MainWindow?.ApplyTraySettings();   // 托盘/热键即时生效
-            // 材质 / 背景不透明度即时预览：主窗口与所有已打开组件重新套用外观
-            App.MainWindow?.RefreshAppearance();
-            _ = WidgetManager()?.RefreshAppearanceAsync();
+            // 材质即时预览（主窗＋全部组件窗）不在这里直调：ViewModel.Save 尾部已带同款即时应用
+            // （保存即生效的唯一出口），这里再刷一遍＝一轮去抖保存把 13 次 ApplyBackdrop（每次 3 个
+            // DWM 跨进程互操作・全在 UI 线程）跑两遍——片242 之前「打开设置卡一下」的双份浪费（坑 #1166）。
         };
         return timer;
     }
@@ -322,6 +326,9 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
 
     private void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        // 装载抑制到这一刻才解除（片242）：到这里页面才可见、用户才能改东西——
+        // 此前（ctor→Loaded）的一切属性变化都是装载回灌，⛔ 触发去抖保存。
+        _suppressSave = false;
         // 诊断那一行念的是"进页时采回来的事实"（键＋实参），而换语言⛔ 重新采集——那一趟里有 COUNT(*) 全表扫描。
         // 所以本页自己订阅重贴，并在 Unloaded 成对摘掉（坑表 #386）：这颗 VM 是 AddTransient，
         // 挂着不摘就是每进一次设置页多一份订阅，而那些页面早就不在了。
