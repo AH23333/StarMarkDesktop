@@ -18,7 +18,7 @@ public interface IMemoryReclaimParticipant
 /// 内存门禁（DeskBox 的 <c>MemoryReclaimer</c> 同款思路）：常驻应用的进程工作集监控器。
 /// <para>
 /// 按 <see cref="PerformanceSettingsPolicy.EffectiveBudgetMb"/> 的预算，每隔一段时间检查进程工作集，
-/// 超预算即触发回收——先 <see cref="GC.Collect(int)"/>，再通知所有注册的参与者（有界缓存等）<see cref="IMemoryReclaimParticipant.Trim"/>。
+/// 超预算即触发回收——通知所有注册的参与者（有界缓存等）<see cref="IMemoryReclaimParticipant.Trim"/>（⛔ 强制 GC 已移除——坑 #1161/#1162）。
 /// 任意一步异常都静默吞掉，绝不冒泡到 UI 线程（否则可能演变成未处理异常致应用崩溃）。
 /// </para>
 /// </summary>
@@ -87,16 +87,15 @@ public sealed class MemoryReclaimer
             LastReclaimAt = DateTimeOffset.Now;
             Reclaiming?.Invoke(mb);
 
-            // 1) 托管堆回收（最便宜、最常生效）。
-            // ⛔ blocking:false（后台并发 GC）在这里踩过真崩溃（2026-11-08・坑 #1161）：后台 GC 线程遍历
-            // WinRT/WinUI 外部引用追踪链表（coreclr!WalkExternalTrackerObjects）与 XAML UI 线程并发解绑/重建
-            // 竞态 ⇒ 访问违例整进程崩（try/catch 兜不住硬崩；dotnet/runtime#93059 同族）。改阻塞式：STW 期间
-            // XAML 线程也停，链表无人并发修改，窗口消除；代价是超预算的这一瞬 UI 卡一小段（可接受——
-            // 门禁本来就该在"内存真的压不住"时才走到这里）。
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            GC.WaitForPendingFinalizers();
+            // ⛔ 这里曾有一对强制 GC.Collect(2)＋WaitForPendingFinalizers——整对拿掉（2026-11-08・坑 #1161/#1162）。
+            // 两个机检读数把它钉死：①本应用托管堆全天 3-7 MB（工作集 366-776 MB 几乎全是 WebView2/WinUI
+            // 原生内存），强制 Gen2 恒零回收——原生内存 GC 一步压不动；②预算（省资源 160／均衡 384／自定义
+            // 任意值）恒低于原生基线 ⇒ 门禁每 15 s 必走到这里：blocking:false 版与 XAML 线程竞态整进程
+            // 崩过一次（coreclr!WalkExternalTrackerObjects・dotnet/runtime#93059 同族）；blocking:true 版把
+            // 「每 15 s 一发 STW」递到用户手上成「点啥都卡」。托管堆交给 GC 自己管；门禁的正事是下面的
+            // 参与者通知与诊断读数。
 
-            // 2) 通知参与者各自丢弃最不常用的条目
+            // 通知参与者各自丢弃最不常用的条目
             List<IMemoryReclaimParticipant> alive;
             lock (_lock)
             {

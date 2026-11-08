@@ -1048,3 +1048,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 止血一档：MemoryReclaimer.cs Trim 的 GC.Collect 改 blocking:true（坑 #1161）——STW 期间 XAML 线程同停・竞态窗口消除；样本=1 不深改。若复现：下一手候选＝升 .NET 9.0.x runtime patch 或去掉 Reclaimer 强推 GC（与用户对齐再动）。
 
 - 下一刀：Debug 构建重建后交用户继续真机测试（清单在案：P-296 去重半句/孪生标签、P-297 断网熔断/停止语义、P-153 三选一、P-73 看一眼、P-90 用后感受）；测完收裁决翻牌。⛔ push（桌面未推 42・扩展未推 2）。
+
+## 一百一十八、片237：卡顿深修（MemoryReclaimer 强推 GC 移除——零收益门禁每 15 s 一发 STW）
+
+- 接手第一步照旧现读编号轴：报告到六百二十二、交接到一百一十七、坑表到 #1161、账本到 P-297（P-296/P-297 均落地未翻牌）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73/P-90/P-147/P-153/P-296/P-297）。
+
+- 卡顿取证：片236 止血后用户报「点啥都卡」；日志钉「UI 线程阻塞 1000ms→1500ms」＝UI 线程自干活。两读数钉死根因：①托管堆全天 3-7 MB（工作集 366-776 MB 几乎全原生）⇒ 强制 Gen2 零收益；②三档预算恒低于原生基线 ⇒ Trim 每 15 s 必触发 ⇒ blocking:true＝每 15 s 一发 STW 上脸（blocking:false＝坑 #1161 竞态硬崩）——两个 blocking 档都不对，错的是「强推」本身。
+
+- 处置：MemoryReclaimer.Trim 的 GC.Collect＋WaitForPendingFinalizers 整对移除（坑 #1162）；托管堆交 GC 自管；门禁只做参与者通知与诊断。全 src 唯一一发 GC.Collect 清零；Trim 无其他调用方。
+
+- 下一刀：片238 圆角 0 档修复（用户报「圆角拖到最小反而回到默认圆角」——SetRoundedWindowRegion 的 ≤0 分支调 DWMWCP_ROUND・改 DONOTROUND＋source-gate 闸门）。⛔ push（桌面未推 47・扩展未推 2）。
