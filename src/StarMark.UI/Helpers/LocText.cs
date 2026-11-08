@@ -57,6 +57,11 @@ public static class LocText
 
     private static readonly HashSet<string> ReportedUnwritable = new(StringComparer.Ordinal);
 
+    /// <summary><see cref="ReapplyAll"/> 的丢弃点名单槽（片250）：类级预分配、进方法先清——重贴那一拍
+    /// 零分配零 <c>new</c>（「重贴不等于重建」的钝钉不许破）；ReapplyAll 只随 <c>Locale.Changed</c> 在
+    /// UI 线程跑，单槽不抢。</summary>
+    private static readonly List<string> DroppedNames = new();
+
     /// <summary><see cref="KeyProperty"/> 那句正文的实参（配 <c>Locale.Fmt</c> 的位置式占位符）。
     /// <para>为什么要有这一颗：状态行那一族的话是"半句固定的话＋一个当场算出来的读数"
     /// （抓了多少条、哪几个源到期、还剩多少 MB）。没有这一颗时只有两条坏路：①把整句留在 code-behind
@@ -409,7 +414,8 @@ public static class LocText
     /// 一抛，foreach 当场断链：排在它后面的注册项整批停在旧语言，且每次切换都断在同一颗
     /// （真机三连切三发 COMException・starmark-20261108.log pid 46592・19:42 段）。所以这里每颗 try 一层：
     /// 抛了的那颗<b>当场逐出名单</b>（断线的树回不来，留着它只保证每次断在同一处），两轮结束后用一行把丢的
-    /// 谁点出来——揪着那颗元素不放的那处（根因）按这行名单另立一案，⛔ 在这一拍里滚雪球。</para></summary>
+    /// 谁点出来——揪着那颗元素不放的那处（根因）按这行名单另立一案，⛔ 在这一拍里滚雪球。
+    /// <para>点名走类级单槽 <see cref="DroppedNames"/>（片250）：进方法先清、方法体零 <c>new</c>。</para></summary>
     private static void ReapplyAll()
     {
         Registration[] snapshot;
@@ -421,7 +427,7 @@ public static class LocText
             WindowTitles.RemoveAll(t => !t.TryGetTarget(out _));
             titles = WindowTitles.ToArray();
         }
-        List<string>? dropped = null;
+        DroppedNames.Clear();
         foreach (var registration in snapshot)
         {
             if (!registration.TryGetTarget(out var target)) continue;
@@ -431,7 +437,7 @@ public static class LocText
             }
             catch (Exception)
             {
-                (dropped ??= new List<string>()).Add($"{registration.Key}（{target.GetType().Name}）");
+                DroppedNames.Add($"{registration.Key}（{target.GetType().Name}）");
                 lock (Gate) Live.RemoveAll(r => ReferenceEquals(r, registration));
             }
         }
@@ -444,15 +450,15 @@ public static class LocText
             }
             catch (Exception)
             {
-                (dropped ??= new List<string>()).Add($"窗口标题 {title.Key}");
+                DroppedNames.Add($"窗口标题 {title.Key}");
                 lock (Gate) WindowTitles.RemoveAll(t => ReferenceEquals(t, title));
             }
         }
-        if (dropped is { Count: > 0 })
+        if (DroppedNames is { Count: > 0 })
         {
-            var listed = string.Join("、", dropped.Take(3));
-            StarLog.Warn($"文案重贴丢弃已断线注册 ×{dropped.Count}：{listed}"
-                + (dropped.Count > 3 ? " 等" : "")
+            var listed = string.Join("、", DroppedNames.Take(3));
+            StarLog.Warn($"文案重贴丢弃已断线注册 ×{DroppedNames.Count}：{listed}"
+                + (DroppedNames.Count > 3 ? " 等" : "")
                 + "（已逐出名单；揪着这些已拆窗/树里元素不放的那处按此名单另立一案）");
         }
     }

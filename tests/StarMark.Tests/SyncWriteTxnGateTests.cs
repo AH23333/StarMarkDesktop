@@ -161,8 +161,10 @@ public sealed class SyncWriteTxnGateTests : IDisposable
         }
         Assert.Equal(0, deferred);                     // DEFERRED 写事务全数退役
         // 片215·P-5B 起＝20：18 ＋ ReconcileStaleAsync 与 DeleteStaleAsync 各一处
-        // （对账的置/清位与一键清都是写事务，同一把 IMMEDIATE 锁语义）。
-        Assert.Equal(20, immediate);                   // 20 处写事务全部走 IMMEDIATE
+        // （对账的置/清位与一键清都是写事务，同一把 IMMEDIATE 锁语义）；
+        // 片240 起＝21：AI 整批撤销的差集留档（ItemRepository.Tags.cs）也是写事务——它落刀时没回写这颗
+        // 计数（坑表 #1174），射域网第一次跑到这里才把红捞出来。
+        Assert.Equal(21, immediate);                   // 21 处写事务全部走 IMMEDIATE
         Assert.Equal(1, literal);                      // 裸 BEGIN 只有一个出处
         Assert.Equal(0, providerTxn);                  // provider 事务类型不再出现
         Assert.Equal(0, enlisted);                     // 连接级事务：命令自动入伍，逐条挂 Transaction 的旧簿记全删

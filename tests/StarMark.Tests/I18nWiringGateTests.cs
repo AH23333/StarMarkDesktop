@@ -1856,9 +1856,12 @@ public sealed class I18nWiringGateTests
     /// <para>钉三件事：① 挂与摘成对（本页那颗 Loaded 用"先退再订"的老形状，Unloaded 里必须再摘一次——
     /// 这颗页会被反复导航回来，挂着＝每进一次多一份重算手臂，坑表 #386 那一族）；
     /// ② 重算那一颗只读内存里那份布局表（⛔ 回库、⛔ 顺手落盘）；
-    /// ③ 快照页那一列<b>不用</b>补——它的行在 <c>OnNavigatedTo</c> 里建，而全仓没有任何 <c>NavigationCacheMode</c>
-    /// ⇒ 进一次建一次，换语言后再进去必然是新语言。③ 这一半是<b>结构</b>判据：哪天有人开了页缓存，那颗断言就红，
-    /// 红的意思＝这一族要重新读一次屏（⛔ 让结构事实悄悄过期）。</para>
+    /// ③ 快照页那一列<b>不用</b>补——它的行在 <c>OnNavigatedTo</c> 里建，页本身永不缓存 ⇒ 进一次建一次，
+    /// 换语言后再进去必然是新语言。片245 起设置页开了页缓存，这颗绊线照它自己写的规矩响过、这一族重读过一遍：
+    /// 快照页仍零缓存；设置页的行名不靠缓存幸存，靠「进页必到」的 <c>OnNavigatedTo</c> 重算（新鲜度全在那颗，
+    /// SettingsOpenCacheGateTests 钉住）。绊线重设（片250）＝两层：<c>.cs</c> 层（含注释——注释里落下这颗
+    /// 字面量会钝掉绊线）零出现；xaml 层恰一颗＝设置页那颗 <c>Required</c>。再有人开页缓存就红，
+    /// 红的意思照旧＝先重读这一族再改判据（⛔ 让结构事实悄悄过期）。</para>
     /// </summary>
     [Fact]
     public void TheLayoutRowNameIsRebuiltInsideOneSettingsPageVisit()
@@ -1876,8 +1879,17 @@ public sealed class I18nWiringGateTests
         var snap = Code(ReadRepoFile("src/StarMark.UI/Views/SnapshotPage.xaml.cs"));
         Assert.Contains("BuildRows();", MethodBody(snap, "protected override void OnNavigatedTo"), StringComparison.Ordinal);
         Assert.DoesNotContain("Locale.Changed", snap, StringComparison.Ordinal);   // 这一列⛔ 需要重贴手臂：进一次建一次
+        // 片250 绊线重设——两层：.cs 层（含注释）零字面量（注释里落下这颗词会钝掉「第二颗缓存页」的绊线）；
+        // xaml 层恰一颗＝设置页（那颗 Required 的形状由 SettingsOpenCacheGateTests 钉住）。
         Assert.DoesNotContain("NavigationCacheMode",
             string.Join("\n", ReadRepoUnder("src/StarMark.UI").Select(f => f.Text)), StringComparison.Ordinal);
+        var cached = Directory.GetFiles(Path.Combine(RepoRoot(), "src/StarMark.UI"), "*.xaml", SearchOption.AllDirectories)
+            .Where(f => { var p = f.Replace(Path.DirectorySeparatorChar, '/'); return !p.Contains("/obj/") && !p.Contains("/bin/"); })
+            .Where(f => File.ReadAllText(f).Contains("NavigationCacheMode", StringComparison.Ordinal))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Single(cached);
+        Assert.EndsWith("src/StarMark.UI/Views/SettingsPage.xaml", cached[0].Replace(Path.DirectorySeparatorChar, '/'));
     }
 
     /// <summary>

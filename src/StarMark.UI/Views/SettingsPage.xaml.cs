@@ -69,7 +69,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
     public SettingsPage()
     {
         // 首建计时取证（片245）：单步 ≥100ms 记一行、总账 ≥300ms 补一行——快路径零日志。
-        // 缓存刀（NavigationCacheMode=Required）后本构造每应用会话只跑一次，
+        // 缓存刀（页缓存＝Required）后本构造每应用会话只跑一次，
         // 这几行读数就是「首建还剩多少」与「进页刷新还剩多少」的分离依据。
         var buildSw = System.Diagnostics.Stopwatch.StartNew();
         long mark = 0;

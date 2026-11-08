@@ -38,7 +38,7 @@ public sealed partial class SettingsPage
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
-        // 进页计时取证（片245）：缓存刀（NavigationCacheMode=Required）后 ctor 每应用会话只跑一次，
+        // 进页计时取证（片245）：缓存刀（页缓存＝Required）后 ctor 每应用会话只跑一次，
         // 这里就是每次进设置页的真实成本——慢步（≥100ms）留名、总账（≥300ms）补一行，快路径零日志。
         var entrySw = System.Diagnostics.Stopwatch.StartNew();
         long entryMark = 0;

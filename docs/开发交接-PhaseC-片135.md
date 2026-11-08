@@ -1163,3 +1163,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 片248 的 OutDir 旁路全量重编照出全仓唯一警（SYSLIB0057・EverythingDownloadTrust.cs:122 CreateFromSignedFile 过时；此前 0 警全是增量口径）。坑 **#1173**：迁移前先查接棒 API 落没落地——LoadCertificateFromSignedFile 要 .NET 10、本仓 net9 直接迁移 CS0117；压制要定向（disable/restore 只裹一行・恰一处・TFM 升 10 换 loader 拆压制）；顺手收掉裸 new X509Certificate2 漏的句柄。
 - 刀法：pragma 只裹那一行（注释写明 .NET 10 落地点）；using var signer 收证书；CryptographicException→null 不动。
 - 测试与账：EverythingDownloadTrustTests 补形状⑩⑪⑫；定向 19/19；census 19 未涨；宽口径 **214/214**（信任族纳入宽口径）；UI OutDir 旁路全量重编 **0 警告 0 错误**（片248 探针 1 警归零）；新构建不交付（app 22832 在用）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测四刀（等 app 空闲换新构建后：开设置两次/开着设置切语言/书签同步/开关播放器）；②全量 6983 待用户测完再跑；③TFM net10 升级（长期・loader 换装＋压制拆除在本片注释里）。⛔ push（桌面未推 3・扩展未推 0）。
+
+## 一百三十一、片250：射域网首捞三红——片240 欠账回写＋片245 绊线重读重设＋片246 单槽零分配（坑 #1174）
+
+- 全量 6983 等用户空闲，先跑四刀射域网（314 格・书签/Music/Media/Everything/Locale/I18n/Sync/Stale・22 族精确类名）——首跑三红可复现。坑 **#1174**：①片246 的懒惰分配破「重贴不等于重建」钝钉（gate 不在宽口径里・从没跑过）；②片245 的页缓存踩响绊线（gate 注释明写：红＝先重读这一族再改判据）；③片240 的第 21 处 BeginImmediate 没回写计数钉（它的网里没有这颗 gate）——改共享不变量要回写钉它的 gate，找钉子不能只靠自家的网。
+- 刀法：①丢弃名单改类级预分配单槽 DroppedNames（进方法先 Clear・方法体零 new・单槽只随 Locale.Changed 在 UI 线程跑不抢）；②重读后绊线重设两层（.cs 层含注释零字面量——两颗注释改口「页缓存＝Required」；xaml 层恰一档＝SettingsPage.xaml）；③计数 20→21 补片240 出处。另：a11y 正门锁着**有案底不重开**（§282 已结案「机制不可得」・探针留守报警器等框架修好自动翻案）。
+- 测试与账：LocTextReapplyResilienceGateTests 换锚＋补第六格（单槽・现六格）；定向五族 143/143；射域网 314/314 收口；census 19 未涨；UI OutDir 旁路全量重编 0 警 0 错（app 22832 在用）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测五刀（等 app 空闲跑 bin\WI37C\ship_latest.ps1 换新构建：开设置两次验 245・开着设置切语言验 246・书签同步验 247・开关播放器验 248・信任族静默验 249）；②全量 6983 待用户测完再跑；③揪着已拆元素不放的那处（等 246 点名行出证据后另立一案）。⛔ push（桌面未推 5・扩展未推 0）。

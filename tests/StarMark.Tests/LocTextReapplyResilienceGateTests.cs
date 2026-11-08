@@ -11,13 +11,15 @@ namespace StarMark.Tests;
 /// 片205 在 Locale（StarMark.Abstractions.I18n）那一层逐户兜底救的是<b>订阅链上户与户之间</b>，
 /// 救不了 <c>ReapplyAll</c> 自己循环内部：一颗已断线的元素（窗已关/树已拆但对象仍被别处揪着）一抛，
 /// foreach 当场断链——排在它后面的注册项整批停在旧语言，且每次切换都断在同一颗（坑表 #1170）。
-/// 这里守五半，缺一算没做：
+/// 这里守六半，缺一算没做：
 /// ① 死引用照旧先清（快照前的既有行为不许被顺手删）；
 /// ② 每颗注册项自己裹一层 try（SetValue 在 try 里，catch 在它后面）；
 /// ③ 抛了的那颗当场按<b>注册项身份</b>逐出名单——断线的树回不来，留着只保证每次断在同一处；
 /// ④ 窗口标题那张名单同款（Window 不是 DependencyObject，但关掉的窗一样会断链）；
 /// ⑤ 丢弃要在一行有界汇总里点名（仅丢弃时发・封顶三颗・带颗数）——揪着已拆窗/树里元素不放的那处
-/// （根因）按这行名单另立一案，⛔ 在重贴那一拍里滚雪球。
+/// （根因）按这行名单另立一案，⛔ 在重贴那一拍里滚雪球；
+/// ⑥ 名单槽是类级预分配单槽（片250）：进方法先清、方法体零 <c>new</c>——片246 的懒惰分配破了
+/// I18nWiring「重贴不等于重建」的钝钉（<c>DoesNotContain("new ", 重贴体)</c>），射域网把它捞了回来。
 /// </para>
 /// </summary>
 public sealed class LocTextReapplyResilienceGateTests
@@ -62,7 +64,7 @@ public sealed class LocTextReapplyResilienceGateTests
         var body = ReapplyAllBody();
         var liveCatch = body.Substring(body.IndexOf("catch (Exception)", System.StringComparison.Ordinal));
         Assert.Contains("Live.RemoveAll(r => ReferenceEquals(r, registration))", liveCatch);
-        Assert.Contains("(dropped ??= new List<string>()).Add($\"", liveCatch);
+        Assert.Contains("DroppedNames.Add($\"", liveCatch);
     }
 
     /// <summary>窗口标题那张名单同款：关掉的窗（或拆掉的树）一样会断链——Title 那一设也在 try 里，
@@ -87,12 +89,27 @@ public sealed class LocTextReapplyResilienceGateTests
     public void DropsAreNamedInOneBoundedLine()
     {
         var body = ReapplyAllBody();
-        Assert.Contains("if (dropped is { Count: > 0 })", body);
-        Assert.Contains("dropped.Take(3)", body);
-        Assert.Contains("×{dropped.Count}", body);
+        Assert.Contains("if (DroppedNames is { Count: > 0 })", body);
+        Assert.Contains("DroppedNames.Take(3)", body);
+        Assert.Contains("×{DroppedNames.Count}", body);
         var warn = body.IndexOf("StarLog.Warn", System.StringComparison.Ordinal);
         Assert.True(body.IndexOf("WindowTitles.RemoveAll(t => ReferenceEquals(t, title))", System.StringComparison.Ordinal)
                     < warn,
             "汇总行必须在两轮循环都结束之后（单轮丢弃要等另一轮的份一起报）");
+    }
+
+    /// <summary>名单槽＝类级预分配单槽（片250）：进方法先清、重贴体里零 <c>new</c>——片246 的懒惰分配
+    /// <c>??= new List&lt;string&gt;()</c> 破了 I18nWiring「重贴不等于重建」那颗钝钉；单槽只随
+    /// <c>Locale.Changed</c> 在 UI 线程跑，不抢；进方法不清＝上一次的点名漏进这一次的汇总行。</summary>
+    [Fact]
+    public void TheScratchIsOnePreallocatedSlotClearedPerCall()
+    {
+        var code = Code();
+        Assert.Contains("private static readonly List<string> DroppedNames", code);
+        var body = ReapplyAllBody();
+        Assert.DoesNotContain("new ", body);                    // 重贴那一拍零分配（重贴不等于重建）
+        Assert.True(body.IndexOf("DroppedNames.Clear()", System.StringComparison.Ordinal)
+                    < body.IndexOf("DroppedNames.Add", System.StringComparison.Ordinal),
+            "进方法先清单槽（上一次的点名不许漏进这一次的汇总行）");
     }
 }
