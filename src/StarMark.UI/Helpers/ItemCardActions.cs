@@ -156,14 +156,15 @@ public static class ItemCardActions
             // ② 不含引号（这条启动点不经 LaunchGuard.IsAllowedScheme，路径直拼进 explorer.exe
             // 命令行、被子进程重切参数；被污染备份/快照的 uri 可携双引号越界注入额外参数 → 任意本地程序被执行）；
             // ③ 磁盘上真有这个东西（合法「打开所在位置」恒满足；对已删除/伪造路径 explorer 本就无意义）。
-            if (!LocalFileIdentity.TryExistingPath(vm.Uri, IsShellSelectTarget, out var localPath)) return;
+            // 三道里的「在不在盘上」这一问进线程池（片251）：冷盘／网络路径上可达秒级，卡的是按下菜单后的那一帧。
+            var localPath = string.Empty;
+            if (!await Task.Run(() => LocalFileIdentity.TryExistingPath(vm.Uri, IsShellSelectTarget, out localPath))) return;
             System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{localPath}\"");
         }
         catch (Exception ex)
         {
             StarLog.Error($"打开所在位置失败 (id={vm.Id}, uri={vm.Uri})", ex);
         }
-        await Task.CompletedTask;
     }
 
     /// <summary>复制链接/路径到剪贴板（file:// 转本地路径）。</summary>
@@ -177,7 +178,9 @@ public static class ItemCardActions
                 // 复制出去的东西要"粘进资源管理器就能用"：先取磁盘上真存在的那个候选——
                 // 剪贴板图片行/快捷启动那些 percent 编码形态，只试原始形态会复制出一条带 %XX 的假路径。
                 // 两个候选都不存在时照抄原始形态（保留 '#'/%，与改道前一致），不猜、不静默造路径。
-                if (LocalFileIdentity.TryExistingPath(text, LauncherEx.ExistsOnDisk, out var real)) text = real;
+                // 「在不在盘上」这一问进线程池（片251）：冷盘／网络路径上可达秒级，卡的是点「复制」后的那一帧。
+                var real = string.Empty;
+                if (await Task.Run(() => LocalFileIdentity.TryExistingPath(text, LauncherEx.ExistsOnDisk, out real))) text = real;
                 else if (LocalFileIdentity.TryPathFromUri(text, out var localPath)) text = localPath;
             }
             else if (ClipboardPolicy.OpensAsCopy(vm.Type, text))
@@ -203,7 +206,6 @@ public static class ItemCardActions
         {
             StarLog.Error($"复制链接失败 (id={vm.Id})", ex);
         }
-        await Task.CompletedTask;
     }
 
     /// <summary>

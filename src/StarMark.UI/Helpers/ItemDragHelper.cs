@@ -28,40 +28,49 @@ public static class ItemDragHelper
         data.RequestedOperation = DataPackageOperation.Copy;
         data.SetText(uri);
 
-        // 本地文件 / 文件夹：取 IStorageItem 需要异步，挂 deferral 保活到填充完成后再放行拖放。
-        // 还原走 LocalFileIdentity 那颗（两类互补的 file:// 生产者）——只试原始形态时，剪贴板图片行那种
-        // percent 编码的 Uri 判不出"存在"，拖出去会静默退成一行文本（用户以为交出了文件）。
-        if (LocalFileIdentity.TryExistingPath(uri, LauncherEx.ExistsOnDisk, out var path))
-        {
-            var deferral = args.GetDeferral();
-            _ = FillStorageItemAsync(data, path, deferral);
-            return;
-        }
-
-        // 网页：拖出为快捷方式
+        // 网页：拖出为快捷方式（纯字符串判断，不碰盘）。
         if (Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
             && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
         {
             data.SetWebLink(parsed);
+            return;
         }
-    }
 
-    private static async Task FillStorageItemAsync(DataPackage data, string path, DragOperationDeferral deferral)
-    {
-        try
+        // 本地文件 / 文件夹：还原与「在不在盘上」那一问整段离 UI 线程（片251）——
+        // 冷盘／网络路径上 File.Exists 可达秒级，而这里卡的是 DragStarting 那一帧＝拖拽起手；
+        // 先挂 deferral 保活拖放，到填充完成后再放行（取 IStorageItem 需要异步）。
+        // 还原走 LocalFileIdentity 那颗（两类互补的 file:// 生产者）——只试原始形态时，剪贴板图片行那种
+        // percent 编码的 Uri 判不出"存在"，拖出去会静默退成一行文本（用户以为交出了文件）。
+        var deferral = args.GetDeferral();
+        _ = FillFromDiskAsync();
+
+        async Task FillFromDiskAsync()
         {
-            IStorageItem item = Directory.Exists(path)
-                ? await StorageFolder.GetFolderFromPathAsync(path)
-                : await StorageFile.GetFileFromPathAsync(path);
-            data.SetStorageItems(new IStorageItem[] { item });
-        }
-        catch (Exception ex)
-        {
-            StarLog.Error($"拖出准备存储项失败 (path={path})", ex);
-        }
-        finally
-        {
-            deferral.Complete();
+            try
+            {
+                // 目录与文件的判别（Directory.Exists）也问的是盘：跟着还原那一问一起进线程池，不在 UI 续体里再碰。
+                var path = string.Empty;
+                var isFolder = false;
+                if (!await Task.Run(() =>
+                        {
+                            if (!LocalFileIdentity.TryExistingPath(uri, LauncherEx.ExistsOnDisk, out path)) return false;
+                            isFolder = Directory.Exists(path);
+                            return true;
+                        }))
+                    return;
+                IStorageItem item = isFolder
+                    ? await StorageFolder.GetFolderFromPathAsync(path)
+                    : await StorageFile.GetFileFromPathAsync(path);
+                data.SetStorageItems(new IStorageItem[] { item });
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error($"拖出准备存储项失败 (uri={uri})", ex);
+            }
+            finally
+            {
+                deferral.Complete();
+            }
         }
     }
 }

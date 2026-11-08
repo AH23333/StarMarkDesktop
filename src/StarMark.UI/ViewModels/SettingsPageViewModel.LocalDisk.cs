@@ -83,10 +83,13 @@ public partial class SettingsPageViewModel
                 Limit = MissingScanWindow,
             }, CancellationToken.None);
 
-            var gone = rows.Where(static i => StarMark.Abstractions.ItemCardPolicy.IsLocalFileRow(i.Source, i.Type)
-                                              && !StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
-                                                  i.Uri, StarMark.UI.Helpers.LauncherEx.ExistsOnDisk, out _))
-                           .ToList();
+            // 失联判定＝每一行都要问一次盘（窗口 2000 行），整段进线程池（片251）：
+            // 冷盘／网络路径上一次扫描能把 UI 线程按住秒级——从按下「重新扫描」到出结果，设置页一直在卡。
+            var gone = await System.Threading.Tasks.Task.Run(() => rows
+                .Where(static i => StarMark.Abstractions.ItemCardPolicy.IsLocalFileRow(i.Source, i.Type)
+                                   && !StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
+                                       i.Uri, StarMark.UI.Helpers.LauncherEx.ExistsOnDisk, out _))
+                .ToList());
             _missingIds = gone.Select(static i => i.Id).ToList();
             // 扫过之后"一条没有"也要说一声：这一句与"坏消息"共用同一个可见性判据——
             // 点了按钮既不消失也不出声，就是本批要消掉的那个症状本身。

@@ -77,9 +77,11 @@ public static class LauncherEx
             {
                 // 还原规则（两类互补的生产者、原始形态优先）归 LocalFileIdentity.TryExistingPath 一颗，
                 // 这里只交出本宿主自己的判定语义：文件与目录都算"在"（目录要在资源管理器里打开）——那颗判据就是本类上面的 ExistsOnDisk。
-                var opened = StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
-                    uri, ExistsOnDisk, out var path);
-                if (!opened)
+                // 「在不在盘上」这一问整段进线程池（片251）：冷盘降速唤醒／网络路径上 File.Exists 可达秒级，
+                // 而点标题＝打开是卡片最高频的一路，卡的就是按下后的那一帧；await 续体回 UI 线程，ShellExecute 与回报照旧。
+                var path = string.Empty;
+                if (!await Task.Run(() => StarMark.Abstractions.LocalFileIdentity.TryExistingPath(
+                        uri, ExistsOnDisk, out path)))
                 {
                     // 两种还原都不存在（文件已删）：退化为 URI 激活（可能无效果，但不抛异常），
                     // 同时把"这一台机器上已经没有这个文件了"说给用户听——只退化不回报，就是点了没反应。
@@ -87,20 +89,18 @@ public static class LauncherEx
                     // 这句话归 ItemCardPolicy.MissingRowMessage 一颗（批次 SI 的口径：同一件事只许一个出处），
                     // 但递进去的是 DisplayPath 解过的那一串：库里存的是编码态时，别把 %E5%B7%A5… 念给用户听（批次 VR）。
                     // 种类那一格才是宿主判断"要不要就地递出删掉这一行"的依据。
-                    return (OpenFailure.MissingOnDisk, StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(
-                        StarMark.Abstractions.LocalFileIdentity.DisplayPath(uri, ExistsOnDisk)).Render());
+                    // DisplayPath 同样要问盘（挑哪一格给人看）：跟着上一问一起离 UI 线程。
+                    return (OpenFailure.MissingOnDisk, await Task.Run(() => StarMark.Abstractions.ItemCardPolicy.MissingRowMessage(
+                        StarMark.Abstractions.LocalFileIdentity.DisplayPath(uri, ExistsOnDisk)).Render()));
                 }
-                else
+                // ShellExecute（资源管理器双击等价）：.exe/.lnk 才真正能跑，文档走关联程序，文件夹在资源管理器打开。
+                // 早先走 Launcher.LaunchFileAsync 是"打不开应用"根因——WinRT 按设计拒启可执行文件，
+                // 且其返回的 bool 被丢弃 → 点了没反应、无任何提示。
+                try { Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); }
+                catch (Exception ex)
                 {
-                    // ShellExecute（资源管理器双击等价）：.exe/.lnk 才真正能跑，文档走关联程序，文件夹在资源管理器打开。
-                    // 早先走 Launcher.LaunchFileAsync 是"打不开应用"根因——WinRT 按设计拒启可执行文件，
-                    // 且其返回的 bool 被丢弃 → 点了没反应、无任何提示。
-                    try { Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true }); }
-                    catch (Exception ex)
-                    {
-                        StarMark.Abstractions.StarLog.Error($"打开本地路径失败（ShellExecute）：{path}", ex);
-                        return (OpenFailure.Error, "启动这个本机路径失败：" + ex.Message);
-                    }
+                    StarMark.Abstractions.StarLog.Error($"打开本地路径失败（ShellExecute）：{path}", ex);
+                    return (OpenFailure.Error, "启动这个本机路径失败：" + ex.Message);
                 }
                 return (OpenFailure.None, null);
             }

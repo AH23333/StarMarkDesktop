@@ -85,7 +85,10 @@ public sealed partial class PreviewHost : UserControl
         LoadingRing.IsActive = true;
         try
         {
-            if (TryGetLocalFile(vm.Uri, out var path))
+            // 「盘上有没有这个文件」那一问进线程池（片251）：判据 IsPreviewableFile 本质是一次 File.Exists，
+            // 冷盘／网络路径上可达秒级，卡的是预览窗点开后的那一帧。还原与判定本体（TryGetLocalFile）不动。
+            var path = string.Empty;
+            if (await System.Threading.Tasks.Task.Run(() => TryGetLocalFile(vm.Uri, out path)))
             {
                 var ext = Path.GetExtension(path);
                 if (PdfExts.Contains(ext))
@@ -105,7 +108,7 @@ public sealed partial class PreviewHost : UserControl
                 }
                 if (ArchiveExts.Contains(ext))
                 {
-                    ShowArchive(path);
+                    await ShowArchiveAsync(path);
                     return;
                 }
                 if (AudioExts.Contains(ext) || VideoExts.Contains(ext))
@@ -235,21 +238,26 @@ public sealed partial class PreviewHost : UserControl
         MediaPreview.Visibility = Visibility.Collapsed;
     }
 
-    /// <summary>zip：BCL 直接列条目，让用户不进资源管理器就知道包里有什么。</summary>
-    private void ShowArchive(string path)
+    /// <summary>zip：BCL 直接列条目，让用户不进资源管理器就知道包里有什么。
+    /// 读包与列条目整段进线程池（片251）：压缩包可以躺在冷盘上、条目可以上万，卡的是预览窗点开后的那一帧。</summary>
+    private async System.Threading.Tasks.Task ShowArchiveAsync(string path)
     {
         try
         {
-            using var zip = System.IO.Compression.ZipFile.OpenRead(path);
-            var sb = new StringBuilder();
-            sb.AppendLine($"{Path.GetFileName(path)}  ·  {StarMark.Abstractions.FileSizeText.Human(new FileInfo(path).Length)}"
-                + $"  ·  {zip.Entries.Count} 项");
-            const int cap = 80;
-            foreach (var entry in zip.Entries.Take(cap))
-                sb.AppendLine($"  {entry.FullName}  {StarMark.Abstractions.FileSizeText.Human(entry.Length)}");
-            if (zip.Entries.Count > cap)
-                sb.AppendLine($"  … 其余 {zip.Entries.Count - cap} 项未列出");
-            ShowText(sb.ToString());
+            var listing = await System.Threading.Tasks.Task.Run(() =>
+            {
+                using var zip = System.IO.Compression.ZipFile.OpenRead(path);
+                var sb = new StringBuilder();
+                sb.AppendLine($"{Path.GetFileName(path)}  ·  {StarMark.Abstractions.FileSizeText.Human(new FileInfo(path).Length)}"
+                    + $"  ·  {zip.Entries.Count} 项");
+                const int cap = 80;
+                foreach (var entry in zip.Entries.Take(cap))
+                    sb.AppendLine($"  {entry.FullName}  {StarMark.Abstractions.FileSizeText.Human(entry.Length)}");
+                if (zip.Entries.Count > cap)
+                    sb.AppendLine($"  … 其余 {zip.Entries.Count - cap} 项未列出");
+                return sb.ToString();
+            });
+            ShowText(listing);
         }
         catch
         {
@@ -259,9 +267,15 @@ public sealed partial class PreviewHost : UserControl
 
     private async System.Threading.Tasks.Task ShowTextFileAsync(string path)
     {
-        var bytes = new byte[Math.Min(new FileInfo(path).Length, 200_000)];
-        await using var fs = File.OpenRead(path);
-        var read = await fs.ReadAsync(bytes.AsMemory(0, bytes.Length));
+        // 取长度与读首段整段进线程池（片251）：FileInfo.Length 与文件打开在冷盘／网络路径上可达秒级，
+        // 卡的是预览窗点开后的那一帧。解码判据（P-132）不动，仍在拿到字节之后。
+        var (bytes, read) = await System.Threading.Tasks.Task.Run(async () =>
+        {
+            var buffer = new byte[Math.Min(new FileInfo(path).Length, 200_000)];
+            await using var fs = File.OpenRead(path);
+            var read = await fs.ReadAsync(buffer.AsMemory(0, buffer.Length));
+            return (buffer, read);
+        });
         // P-132：磁盘上的文本文件不归我们定编码——BOM / 声明 / UTF-8 探测都不通才跟随本机 ANSI 码页。
         var text = ExternalText.Decode(bytes, read, null, AnsiText.Decode, AnsiText.SystemAnsiCodePage).Text;
         ShowText(text);
