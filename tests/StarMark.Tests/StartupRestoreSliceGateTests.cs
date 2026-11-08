@@ -4,15 +4,19 @@ using Xunit;
 namespace StarMark.Tests;
 
 /// <summary>
-/// 启动组件恢复分帧闸门（片243，扫源码不跑界面）。
+/// 启动组件恢复分帧闸门（片243 起，扫源码不跑界面）。
 /// <para>
 /// 现场（starmark-20261108.log）：12 颗组件窗在同一 UI 回合里连建（布局路径 ApplyGeometryCore 一口气
 /// foreach 完），UIStallWatchdog 每轮启动报 1.7-2.1s 阻塞——用户感知就是「启动那两秒点不动」。
-/// 分帧＝一颗一拍 UI 回合。这里守四半，缺一算没做：
+/// 分帧＝一颗一拍 UI 回合。片243 守四半；片244 真机复盘发现<b>回合切开≠合成切开</b>
+/// （12 颗首帧仍一批 1860 ms、UI 自耗 CPU 1657 ms），补两半，共六半，缺一算没做：
 /// ① 启动恢复逐颗经 OnUiAsync 派发（含「无布局」与「布局失败回退」两条路）；
 /// ② 布局套用抽出单条目帮手（ApplyGeometryEntryCore），同步版与分帧版同源——⛔ 第二份匹配实现；
 /// ③ 设置页「应用布局」同走分帧版（点按钮不再整轮秒级卡死）；
-/// ④ 数据读取/落盘/收尾计时全部留在 UI 回合里（WidgetStorage 非线程安全口径不变）。
+/// ④ 数据读取/落盘/收尾计时全部留在 UI 回合里（WidgetStorage 非线程安全口径不变）；
+/// ⑤ 每颗 Reveal 后接真墙钟间隔（Task.Delay＋WidgetStartupPolicy.RevealIntervalMs）——
+///    让每颗首帧落进各自的合成回合，两条恢复路（回退与分帧布局）同款；
+/// ⑥ 间隔数字只住 WidgetStartupPolicy 一颗（同一事实一份实现，80 ms 实测档）。
 /// </para>
 /// </summary>
 public sealed class StartupRestoreSliceGateTests
@@ -67,5 +71,29 @@ public sealed class StartupRestoreSliceGateTests
         Assert.Contains("await OnUiAsync(() => _storage.FindLayout(", squashed);
         Assert.Contains("await OnUiAsync(() => _storage.Save(data))", squashed);
         Assert.Contains("StartupProfile.Mark(", squashed);      // 收尾计时仍在（改完有没有变快的对照读数）
+    }
+
+    /// <summary>⑤ 点亮间隔（片244）：回合切开≠合成切开——12 颗首帧曾一批 1860 ms（UI 自耗 1657 ms）。
+    /// 两条恢复路每颗 Reveal 后都接真墙钟间隔，让每颗首帧落进各自的合成回合。</summary>
+    [Fact]
+    public void RevealsLeaveRealWallClockGaps()
+    {
+        var fallback = SourceGate.Squash(SourceGate.MethodBody(
+            Lifecycle(), "public async Task RestoreOnStartupAsync(bool loadOnStartup = true)"));
+        Assert.Contains("await Task.Delay(WidgetStartupPolicy.RevealIntervalMs)", fallback);
+        var sliced = SourceGate.Squash(SourceGate.MethodBody(
+            Layout(), "private async Task ApplyLayoutSlicedAsync(WidgetStoreData data, WidgetLayout layout)"));
+        // 每颗一间隔：间隔紧跟每拍派发（⛔ 只在循环外睡一大觉——那等于把分帧又合回一整轮）
+        Assert.Contains(
+            "await OnUiAsync(() => ApplyGeometryEntryCore(data, entry, mapping, used)); await Task.Delay(WidgetStartupPolicy.RevealIntervalMs);",
+            sliced);
+    }
+
+    /// <summary>⑥ 间隔数字的唯一出处：WidgetStartupPolicy 那颗 const（80 ms 实测档），别处不许再抄一份。</summary>
+    [Fact]
+    public void RevealIntervalLivesOnceInPolicy()
+    {
+        var policy = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Widgets/WidgetStartupPolicy.cs"));
+        Assert.Contains("public const int RevealIntervalMs = 80;", policy);
     }
 }

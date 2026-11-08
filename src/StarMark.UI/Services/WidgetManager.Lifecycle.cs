@@ -141,6 +141,9 @@ public sealed partial class WidgetManager
                     try { ShowInternal(inst.Id); }
                     catch (Exception ex) { StarLog.Error($"恢复桌面组件失败 ({inst.Kind})", ex); }
                 });
+                // 片244：回合切开≠合成切开——12 颗首帧曾一批落地 1860 ms（UI 自耗 CPU 1657 ms）。
+                // 每颗 Reveal 后留真墙钟间隔，让首帧各自落进合成回合（间隔数字住 WidgetStartupPolicy）。
+                await Task.Delay(WidgetStartupPolicy.RevealIntervalMs);
             }
         }
         // 这一段是启动里最重的一块（建窗口＋套材质），单独计时才有"改完有没有变快"的对照

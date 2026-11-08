@@ -215,6 +215,9 @@ public sealed partial class WidgetManager
         foreach (var entry in layout.Entries)
         {
             await OnUiAsync(() => ApplyGeometryEntryCore(data, entry, mapping, used));
+            // 片244：一拍回合只切开了建窗，首帧合成仍一批落地（1860 ms／UI 自耗 1657 ms 实测）。
+            // 每颗 Reveal 后留真墙钟间隔，让首帧各自落进合成回合——启动恢复与「应用布局」同待遇。
+            await Task.Delay(WidgetStartupPolicy.RevealIntervalMs);
         }
 
         await OnUiAsync(() =>

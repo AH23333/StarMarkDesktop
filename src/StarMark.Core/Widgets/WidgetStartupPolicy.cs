@@ -54,4 +54,19 @@ public static class WidgetStartupPolicy
     /// </summary>
     public static LocMessage TradeoffNote
         => LocMessage.Of("settings.widgets.startupTradeoff", PerWindowPrivateMb.ToString());
+
+    /// <summary>
+    /// 逐颗点亮之间的<b>真墙钟</b>间隔（毫秒）——启动恢复与「应用布局」共用（片244 实测取舍）。
+    /// <para>
+    /// 分帧（片243）只切开了「建窗回合」：12 颗逐拍建完、逐拍点亮，相邻回合之间却没有真时间——
+    /// vsync 合成 pass 把 12 颗首帧攒成<b>一批</b>落地（starmark-20261108.log 实测）：
+    /// 单批阻塞 1860 ms、其中 UI 线程自耗 CPU 1657 ms（≈155 ms/颗的首帧布局＋渲染）。
+    /// 「回合切开」≠「合成切开」：要让每颗首帧落进各自的合成回合，点亮之间必须留出真间隔。
+    /// </para>
+    /// <para>
+    /// 80 这一档：单批预计最多攒 1-2 颗首帧（&lt;400 ms，压回 UIStallWatchdog 的 1 s 线以下），
+    /// 12 颗墙钟多付约 0.9 s，换启动<b>全程可交互</b>——「点不动的那两秒」变成「陆续亮起来的一秒」。
+    /// </para>
+    /// </summary>
+    public const int RevealIntervalMs = 80;
 }

@@ -1126,3 +1126,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 新构建 pid 39024（18:35:28 起）读数：分帧生效——12 颗逐拍建窗（每颗 32-65ms・桌面组件恢复 602ms）・日志后台队列在跑。**组合帧突发仍 1860ms**（12 窗首次合成一批落地）——恢复回合切开了、合成没切开；下一刀候选＝首组合帧分摊（错峰 Reveal 或合成循环插拍）＋设置页导航缓存（NavigationCacheMode/ctor 重活后置，等用户测完「打开设置还卡不卡」再动）。
 
 - 测试与账：LogFlushQueueGateTests 五格＋StartupRestoreSliceGateTests 四格＋PresentStepTraceGateTests 两格；宽口径 **167/167**；census 抓到 StarLog.cs:34 落空已换锚（待决策事项.md:2830→「StarLog.cs 的 CurrentLogFile」・census 回 19）；UI 编译 0 警告 0 错（68.39s）；计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297）。下一刀：用户复现托盘恢复读 [呈现] 各步读数钉死等待源；启动组合帧分摊；全量 6983 待用户测完再跑。⛔ push（桌面未推 52・扩展未推 2）。
+
+## 一百二十五、片244：首组合帧分摊＋材质值指纹——分帧补完两刀（坑 #1168）
+
+- 片243 分帧真机复盘（pid 39024）：**回合切开≠合成切开**——12 颗逐拍建窗（每颗 32-65ms）但首组合帧仍 +726ms 一批落地・本轮阻塞 1860ms（UI 自耗 CPU 1657ms＝12 颗首帧布局+渲染）・「点亮后 UI 让出 +1663ms」；保存链值一分没变仍全量重挂（「此前 5s 内同类 35 条未记」＝13 扇窗×3 个 DWM 互操作在 UI 线程）。坑 **#1168**：分摊合成必须给 Reveal 之间插真墙钟延迟（攒批判据是墙钟间隔不是回合边界）；材质重挂按值指纹在唯一咽喉（ApplyBackdrop・组件/主窗两入口共享）跳过，跳过条件含 ReferenceEquals(window.SystemBackdrop, state.Tint)——背衬被外部摘挂指纹即刻失效。
+- 两刀：①WidgetStartupPolicy.RevealIntervalMs=80——RestoreOnStartupAsync 回退路径与 ApplyLayoutSlicedAsync（启动布局/设置页应用布局共用）每颗 Reveal 后接 Task.Delay；②ApplyBackdrop 两腿（实色 None/背衬材质）各记 (材质/明暗/成色) 指纹，成色已折叠染料・逐窗底色・纯色不透明度，值未变即零互操作跳过（命中留节流日志可数）。
+- 新构建 pid 46592（19:26:27 起）读数：组合帧 **+21ms**（原 +726）・Show 框 **+11ms**（原 +1663）・**启动全程零卡顿告警**・12 颗逐颗点亮（恢复 3572ms 全程可交互）・指纹命中日志已见（None/Solid 两处「值未变」）。
+- 测试与账：StartupRestoreSliceGateTests 扩两格＋新 BackdropFingerprintGateTests 六格；宽口径 **175/175**；census 基线 19 未涨・指针门全绿；UI 编译 0 警 0 错（42.31s）；计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297）。下一刀候选：设置页导航缓存（等用户实测「打开设置还卡不卡」）・[呈现] 读数等托盘恢复复现・全量 6983 待用户测完再跑。⛔ push（桌面未推 53・扩展未推 2）。

@@ -115,10 +115,19 @@ public static class WidgetAppearance
 
         /// <summary>
         /// 当前是否已用背衬画笔接管整窗着色（除「实色 None」外的所有材质均为 true）。
-        /// 为 true 时内容表面应保持透明，让这一层背衬单独着色——若再叠一层内容实色，
+        /// 为 true 时内容表面应保持透明，让这层背衬单独着色——若再叠一层内容实色，
         /// 就会与背衬两次 alpha 叠加导致过实 / 发灰（正是旧「纯色失效」的一半成因）。
         /// </summary>
         public bool BackdropSurfaceActive;
+
+        /// <summary>
+        /// 上一次<b>成功挂载</b>的那副值（片244 指纹）：值没变、背衬仍原样挂着 ⇒ 下一趟零互操作跳过。
+        /// <see cref="ReleaseBackdrop"/> 摘表即清零——指纹随窗口生死，绝不跨窗。
+        /// </summary>
+        public bool HasFingerprint;
+        public WidgetBackdropKind FingerprintKind;
+        public bool FingerprintDark;
+        public Windows.UI.Color FingerprintColor;
     }
 
     private static readonly ConditionalWeakTable<Window, WindowBackdropState> _states = new();
@@ -149,18 +158,41 @@ public static class WidgetAppearance
 
             if (kind == WidgetBackdropKind.None)
             {
+                // 指纹命中（片244）：同一实色档、同一明暗、背衬本就摘着 ⇒ 零 DWM 互操作跳过。
+                // 实测一趟「值一分没变」的保存链把 13 扇窗全量重挂 35 次（starmark-20261108 18:48 的
+                // 节流注记）；从前的「重挂＝顺带自愈」不是理由——背衬摘没摘有显式判据（state.Tint is null）。
+                if (state.HasFingerprint && state.FingerprintKind == WidgetBackdropKind.None
+                    && state.FingerprintDark == isDark && state.Tint is null)
+                {
+                    LogSkippedReapply(kind, isDark);
+                    return;
+                }
                 // 实色：关玻璃、摘背衬，内容表面铺不透明主题色，最省资源。
                 state.BackdropSurfaceActive = false;
                 ClearTintBackdrop(state, window);
                 WindowInterop.SetDwmSystemBackdropNone(window);
                 WindowInterop.ClearFullWindowFrame(window);
                 WindowInterop.SetImmersiveDarkMode(window, isDark);
+                RememberFingerprint(state, kind, isDark, default);
                 return;
             }
 
             // 其余材质统一：按材质性格取扁平背衬色（纯色吃滑杆，其余固定），玻璃化整窗让背衬透出。
             var color = MaterialTint.BackdropColor(
                 isDark, AccentColor(), kind, AppearanceSettingsPolicy.NormalizeOpacity(solidOpacity), tintOverride);
+
+            // 指纹命中（片244）：材质/明暗/成色全没变、背衬仍原样挂在窗口上 ⇒ 零 DWM 互操作跳过。
+            // color 已折叠全部视觉输入：染料（AccentColor）、逐窗底色（tintOverride）、纯色不透明度
+            // （solidOpacity 只在 Solid 参与取色——其余材质那颗滑杆本就不影响观感，跳过不丢事）。
+            // 「背衬仍挂着」按引用判：外部谁把 SystemBackdrop 换掉/摘掉，指纹即刻失效，
+            // 下一趟照旧全量重挂——跳过永远不能变成「画面错了也没人管」。
+            if (state.HasFingerprint && state.FingerprintKind == kind
+                && state.FingerprintDark == isDark && state.FingerprintColor.Equals(color)
+                && state.Tint is not null && ReferenceEquals(window.SystemBackdrop, state.Tint))
+            {
+                LogSkippedReapply(kind, isDark);
+                return;
+            }
 
             if (state.Tint is null)
             {
@@ -185,6 +217,8 @@ public static class WidgetAppearance
                 $"[材质诊断] backdrop kind={kind} dark={isDark} solidOpacity={NumberText.Fixed2(solidOpacity)} " +
                 $"tint=#{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}",
                 windowMs: 5000);
+
+            RememberFingerprint(state, kind, isDark, color);
         }
         catch (Exception ex)
         {
@@ -192,6 +226,21 @@ public static class WidgetAppearance
             try { window.SystemBackdrop = null; } catch { }
         }
     }
+
+    /// <summary>记下这一趟成功挂上去的那副值（片244 指纹）。字段增减只动这一处。</summary>
+    private static void RememberFingerprint(
+        WindowBackdropState state, WidgetBackdropKind kind, bool isDark, Windows.UI.Color color)
+    {
+        state.HasFingerprint = true;
+        state.FingerprintKind = kind;
+        state.FingerprintDark = isDark;
+        state.FingerprintColor = color;
+    }
+
+    /// <summary>指纹命中的那行日志（节流）：跳过不是无声——保存链值没变时，省掉多少趟互操作要数得出来。</summary>
+    private static void LogSkippedReapply(WidgetBackdropKind kind, bool isDark) =>
+        StarLog.InfoThrottled($"backdrop-skip:{kind}:{isDark}",
+            $"[材质诊断] 跳过重挂（kind={kind} dark={isDark}，值未变）", windowMs: 5000);
 
     /// <summary>
     /// 整窗背衬画笔当前是否真正挂在窗口上。为 true 时内容表面应保持透明，让扁平背衬单独着色，
