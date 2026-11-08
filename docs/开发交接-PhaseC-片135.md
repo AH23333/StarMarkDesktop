@@ -1058,3 +1058,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 处置：MemoryReclaimer.Trim 的 GC.Collect＋WaitForPendingFinalizers 整对移除（坑 #1162）；托管堆交 GC 自管；门禁只做参与者通知与诊断。全 src 唯一一发 GC.Collect 清零；Trim 无其他调用方。
 
 - 下一刀：片238 圆角 0 档修复（用户报「圆角拖到最小反而回到默认圆角」——SetRoundedWindowRegion 的 ≤0 分支调 DWMWCP_ROUND・改 DONOTROUND＋source-gate 闸门）。⛔ push（桌面未推 47・扩展未推 2）。
+
+## 一百一十九、片238：圆角 0 档修复（SetRoundedWindowRegion 直角分支——DWMWCP_ROUND 改 DONOTROUND）
+
+- 接手第一步照旧现读编号轴：报告到六百二十三、交接到一百一十八、坑表到 #1162、账本到 P-297（P-296/P-297 均落地未翻牌）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73/P-90/P-147/P-153/P-296/P-297）。
+
+- 取证：用户报「圆角拖到最小反而回到默认圆角」；全链排查（编辑器 wRadius=v 直写／EditAppearanceAsync／SaveInstanceAppearanceAsync／JSON 序列化 WhenWritingNull 保 0／WidgetStorage.Normalize／退出 PersistBoundsFor／OnUiAsync）全对 0 干净——0→null 假说推翻；widgets.json 佐证＝全档无 Appearance 键（用户取消了编辑器）。真凶＝SetRoundedWindowRegion 的 ≤0 分支调 DWMWCP_ROUND——SetWindowRgn 移除区域后 DWM 用系统默认半径重新圆化。
+
+- 修复：≤0 分支 DWMWCP_ROUND→DWMWCP_DONOTROUND（坑 #1163）＋doc 注释改单义；新增 WidgetCornerZeroGateTests source-gate（直角分支 0×DWMWCP_ROUND・1×DONOTROUND・含清区域那记；整方法反空转计数）。调用面三处核毕——唯 ApplyRoundedWindow（radius 0..48）走 ≤0 分支，另两处恒 10 不受影响。
+
+- 下一刀：片239 用户裁决落账（P-153 定 (A) 保持现状＋P-73 保持现状・结案翻牌）→ P-90 实现（整批撤销 AI 整理）；全量 6983 待用户真机测完再跑。⛔ push（桌面未推 48・扩展未推 2）。

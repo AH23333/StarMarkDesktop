@@ -327,7 +327,7 @@ internal static class WindowInterop
     /// 在缩放屏上后者会让区域与窗口实际尺寸不符，表现为「修改前/后两种圆角叠加」或裁切错位。
     /// </para>
     /// <para>
-    /// 半径 ≤ 0 时移除区域并恢复 DWM 自带圆角（直角 / 系统圆角）。
+    /// 半径 ≤ 0 时移除区域并<b>显式关掉</b> DWM 自带圆角（<c>DWMWCP_DONOTROUND</c>，真直角）。
     /// <see cref="SetWindowRgn"/> 会接管传入的新区域、并在下次替换时<b>自动释放</b>旧区域，
     /// 故<b>成功</b>时调用方无需手动 <c>DeleteObject</c>；但<b>失败</b>（返回 0）时窗口并未接管，
     /// 必须由调用方 <c>DeleteObject</c> 释放，否则每套用一次外观就泄漏一个 GDI 区域句柄。
@@ -347,9 +347,11 @@ internal static class WindowInterop
             if (w <= 0 || h <= 0) return;
             if (cornerRadiusLogical <= 0)
             {
-                // 直角 / 恢复 DWM 自带圆角：移除自定义区域
+                // 直角档：移除自定义区域，并<b>显式关掉</b> DWM 自带圆角。从前这里写的是
+                // DWMWCP_ROUND——「半径调到 0（用户要直角）」被 DWM 用系统默认半径重新圆化，
+                // 屏幕上正是「圆角拖到最小反而回到默认圆角」（坑表 #1163）。
                 SetWindowRgn(hwnd, IntPtr.Zero, true);
-                SetDwmCornerPreference(window, DWMWCP_ROUND);
+                SetDwmCornerPreference(window, DWMWCP_DONOTROUND);
                 return;
             }
             // 关掉 DWM 自带圆角，改用 SetWindowRgn 自定义半径，避免双重圆角
