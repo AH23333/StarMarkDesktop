@@ -253,7 +253,9 @@ public static class ClassifyPrompt
     /// 而模型对一字不差的两行理应给出一样的答案。<b>零重复时输出与输入恒等</b>（每组一条），
     /// 行为零差；有重复时批数与 token 预估跟着 <see cref="Representatives"/> 走——省的量在开跑前可见。</para>
     /// <para>⚠ 判据是 <see cref="ItemLine"/> 的<b>逐字</b>比较（Ordinal）：标题差一个字的两条是两行，
-    /// 不会被并；已打标签的条目早在候选阶段就被过滤（<c>GetUntaggedAsync</c>），与本刀无关。</para></summary>
+    /// 不会被并；已打标签的条目早在候选阶段就被过滤（<c>GetUntaggedAsync</c>），与本刀无关。</para>
+    /// <para>⚠ 前提：入参内 <see cref="ClassifyItem.Id"/> 互不重复（组表以 Id 为键・同 Id 二次出现会静默盖掉前一组）。
+    /// 候选来自主键查询天然满足；换数据源先保证这一点，或改键后再用。</para></summary>
     public static DedupedItems DistinctByLine(IReadOnlyList<ClassifyItem> items)
     {
         var representatives = new List<ClassifyItem>();
@@ -299,7 +301,6 @@ public static class ClassifyPrompt
         }
         return result;
     }
-
 
     /// <summary>
     /// 解读答复。<b>四种形状都认</b>（O4 后行格式是提示词要求的主输出，JSON 三态是旧习惯的兼容层）：
