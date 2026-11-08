@@ -95,10 +95,20 @@ public sealed partial class FolderTreePage : Page
     /// <summary>本次构建出的全部文件夹视图，用于在重建结束后恢复展开状态。</summary>
     private readonly List<FolderView> _views = new();
 
+    /// <summary>
+    /// 整树重建代次（片241）：RebuildTree 每次递增。旧代闭包里滞留的分帧渲染回调比对它自毙，
+    /// 不再往已分离的面板塞卡——树重建（换语言/换主题/改标签重载）时最常见的滞后现场。
+    /// </summary>
+    private int _treeEpoch = 0;
+
+    /// <summary>分帧渲染每回合的卡片封顶（片241）。每张 ItemCard ≈20ms，一回合 5 张 ≈100ms，回合间让出 UI 线程。</summary>
+    private const int CardRenderBatch = 5;
+
     private void OnRootsReady() => RebuildTree();
 
     private void RebuildTree()
     {
+        _treeEpoch++;   // 旧代闭包的分帧渲染批次从此自毙
         FolderRoot.Children.Clear();
         _views.Clear();
         foreach (var root in ViewModel.Roots)
@@ -139,6 +149,10 @@ public sealed partial class FolderTreePage : Page
         var itemsPanel = new StackPanel { Spacing = 2 };
         Button? expandBtn = null;
         int loaded = _loadedCountByPath.TryGetValue(key, out var saved) ? saved : 0;
+        // 本代身份（片241）：RebuildTree 递增 _treeEpoch 后，本闭包连同它的面板一起分离，滞留的渲染批次据此自毙。
+        var bornEpoch = _treeEpoch;
+        // 已渲染进 itemsPanel 的卡片数（增量游标）。渲染只补「已加载未渲染」的差额，⛔ 把已渲染卡片清场重建。
+        int rendered = 0;
 
         var header = new Button
         {
@@ -175,18 +189,45 @@ public sealed partial class FolderTreePage : Page
             _loadedCountByPath.Remove(key);
         }
 
+        // ===== 卡片渲染（片241：增量分帧） =====
+        // 片237 之前这里是「每次点展开更多都 itemsPanel.Children.Clear() 后全量重建」：
+        // 80 张已加载时单击＝UI 线程阻塞 1-2.5s（自耗 CPU ≈1.4s，每张 ItemCard ≈20ms）。
+        // 现在改增量游标 + 分帧：只补差额，每回合封顶 <see cref="CardRenderBatch"/> 张，回合间让出 UI 线程。
+
+        /// <summary>启动（或续上）分帧渲染：从 <c>rendered</c> 追到 <c>loaded</c>，连点展开更多时多个循环共用游标，不会重复。</summary>
         void RenderItems()
+            => DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderBatch);
+
+        void RenderBatch()
         {
-            itemsPanel.Children.Clear();
-            var entryPad = 6 + (depth + 1) * 18;
-            int shown = 0;
-            foreach (var vm in ViewModel.HydrateRange(node, 0, loaded))
+            if (bornEpoch != _treeEpoch) return;   // 整树已重建：本闭包已分离，滞留批次自毙
+            var target = Math.Min(loaded, node.Items.Count);
+            if (rendered >= target) return;
+            try
             {
-                var wrap = new StackPanel { Padding = new Thickness(entryPad, 4, 0, 0) };
-                wrap.Children.Add(CreateCard(vm));
-                itemsPanel.Children.Add(wrap);
-                shown++;
+                var entryPad = 6 + (depth + 1) * 18;
+                var take = Math.Min(CardRenderBatch, target - rendered);
+                foreach (var vm in ViewModel.HydrateRange(node, rendered, take))
+                {
+                    var wrap = new StackPanel { Padding = new Thickness(entryPad, 4, 0, 0) };
+                    wrap.Children.Add(CreateCard(vm));
+                    itemsPanel.Children.Add(wrap);
+                    rendered++;
+                }
             }
+            catch (Exception ex)
+            {
+                StarLog.Error($"RenderBatch failed for {node.Name}", ex);
+                return;   // 本回合作废：剩的差额下次展开自然补上，不让异常拖着循环空转
+            }
+            if (rendered < target)
+                DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderBatch);
+        }
+
+        /// <summary>「展开更多」按钮的建/删/文案：remaining 按 loaded 口径，与分帧进度无关（点击时即时反馈）。</summary>
+        void UpdateExpandButton()
+        {
+            var entryPad = 6 + (depth + 1) * 18;
             var remaining = node.Items.Count - loaded;
             if (remaining > 0)
             {
@@ -204,8 +245,8 @@ public sealed partial class FolderTreePage : Page
                     {
                         loaded = Math.Min(node.Items.Count, loaded + FolderTreePageViewModel.ExpandMoreStep);
                         _loadedCountByPath[key] = loaded;   // 重载后仍保留用户的展开深度
-                        // 延后构建，避免一次性创建大量卡片时界面卡住。
-                        DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
+                        UpdateExpandButton();   // 文案立即换新：按钮反馈不排队
+                        RenderItems();          // 只补差额，分帧追加（⛔ 全量重建）
                         StarLog.Info($"ExpandMore: {node.Name} loaded={loaded}/{node.Items.Count}");
                     };
                     body.Children.Add(expandBtn);
@@ -233,8 +274,9 @@ public sealed partial class FolderTreePage : Page
                     ? Math.Min(prev, node.Items.Count)
                     : Math.Min(FolderTreePageViewModel.MaxItemsPerFolder, node.Items.Count);
                 _loadedCountByPath[key] = loaded;
-                // 卡片创建较重，延后到下一消息帧：先让展开动画/头部切换立即呈现，消除点击卡顿。
-                DispatcherQueue.GetForCurrentThread()?.TryEnqueue(RenderItems);
+                // 卡片分帧追加（每回合 CardRenderBatch 张）：展开动画/头部切换先立即呈现，渲染期间 UI 可交互。
+                UpdateExpandButton();
+                RenderItems();
             }
             catch (Exception ex)
             {

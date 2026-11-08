@@ -1090,3 +1090,17 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 读数：撤销五族定向 47/47・宽口径（词表契约＋docgates＋性能）99/99・UI 工程编译 0 警告 0 错误（后台跑・杀旧 pid 1292 重启新构建 **pid 37724** 交付真机）・计数器 **298/295/3 VERDICT OK**（本批加减＝结案 1・开放头行剩 P-147/P-296/P-297 三颗）。
 
 - 下一刀：等用户真机测（撤销按钮出现/整批摘回/保手打标签・片237 卡顿＋片238 圆角 0 档真直角＋P-296/P-297 观感）⇒ 测完收 P-296/P-297 裁决＋跑全量 6983。⛔ push（桌面未推 50・扩展未推 2）。
+
+## 一百二十二、片241：tree 页「展开更多」卡顿修复（全量 Clear 重建改增量分帧）
+
+- 接手第一步照旧现读编号轴：报告到六百二十六、交接到一百二十一、坑表到 #1164、账本到 P-297（开放三颗 P-147/P-296/P-297）；计数器接手现读＝298/295/3（仓根跑 bin/WI37C/count_ledger.py・VERDICT OK）。
+
+- 用户报「还是有卡顿感，主要是主窗口的按钮」。日志钉主现场＝tree 页「展开更多」：单击后 UI 阻塞 1031→2000ms（自耗 CPU 1422ms・80 张已加载）——RenderItems 每点一次都清场全量重建已加载卡片（每张 ItemCard ≈20ms）。坑 **#1165**：全量 Clear 重建是 O(已加载) 反模式・TryEnqueue 延后一帧≠分帧（50 张同回合还是 1s）。
+
+- 修复三件套（FolderTreePage.xaml.cs）：①增量游标（rendered 追 loaded・取数从游标起 HydrateRange(node, rendered, take)・连点共用游标）；②每回合封顶（CardRenderBatch=5・回合间让出 UI 线程・点击时按钮文案即时换新）；③整树代次作废（RebuildTree 递增 _treeEpoch・旧闭包滞留批次比对 bornEpoch 自毙）。按钮建/删/文案抽独立帮手；RenderBatch 包 try/catch。新 FolderTreeRenderGateTests 五格 source-gate（⛔ Children.Clear・封顶 ≤8・增量游标・代次自毙・⛔ TryEnqueue(RenderItems) 老路）。
+
+- 诊断腿存档（片242 素材）：主窗顶栏按钮处理器全轻（六族全核）；「材质诊断风暴」（5s 59 条 ApplyBackdrop）集中在设置页操作期间非常驻刷；**16:11 两轮等待型阻塞（阻塞 1453/1172ms・CPU 仅 16/15ms・settings 页）样本少待追——等待型＝同步等锁/同步 IO 嫌疑**。
+
+- 读数：分帧 gate 定向 5/5・宽口径 151/151・UI 编译 0 警告 0 错误（45.67s）・新构建 pid 33700 交付真机（17:07:12 起）・计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放头行剩 P-147/P-296/P-297 三颗）。
+
+- 下一刀：用户复报「打开设置时尤其卡」——追设置页打开路径（OpenSettingsPage→SettingsPage 装载链）找那轮 1.4s 等待型阻塞的等待点。⛔ push（桌面未推 50・扩展未推 2）。
