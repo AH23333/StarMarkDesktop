@@ -241,4 +241,35 @@ public sealed class EverythingDownloadTrustTests : IDisposable
         Assert.Contains("var ownedRunning = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);", body, StringComparison.Ordinal);
         Assert.Contains("sdkReady && ownedRunning", body, StringComparison.Ordinal);
     }
+
+    /// <summary>形状⑩（坑 #1173）：全量重编唯一的警（SYSLIB0057）被定向压净——
+    /// 过时工厂全 src 仍恰一处出处（.NET 9 没有接棒 API：LoadCertificateFromSignedFile 要 .NET 10），
+    /// 压制也恰一处且 disable/restore 成对——<b>不许把压制铺成整档或整仓</b>，TFM 升 .NET 10 时
+    /// 换 loader 并拆压制。</summary>
+    [Fact]
+    public void TheSylib0057SuppressionIsScopedToTheSingleObsoleteCallSite()
+    {
+        Assert.Equal(1, CountInSrcCode("X509Certificate.CreateFromSignedFile"));
+        Assert.Equal(1, CountInSrcCode("#pragma warning disable SYSLIB0057"));
+        Assert.Equal(1, CountInSrcCode("#pragma warning restore SYSLIB0057"));
+    }
+
+    /// <summary>形状⑪（坑 #1173）：签名者证书用完即收——<c>X509Certificate2</c> 是 IDisposable，
+    /// 旧写法裸 new 不收，每次读签名者漏一颗证书句柄；using 收走。</summary>
+    [Fact]
+    public void TheSignerCertificateIsDisposedAfterReadingTheSubject()
+    {
+        var body = MethodBody(ReadRepoFile(TrustPath), "internal static string? TryGetSignerSubject(string path)");
+        Assert.Contains("using var signer = new X509Certificate2(X509Certificate.CreateFromSignedFile(path));",
+            body, StringComparison.Ordinal);
+    }
+
+    /// <summary>形状⑫（坑 #1173）：无签名回 null 的契约不动——<c>CryptographicException</c> 照旧
+    /// 被接住回 null（行为⑥的负证路径），不许因压制/收句柄把 null 兜底改抛。</summary>
+    [Fact]
+    public void TheUnsignedFallbackStillSwallowsCryptographicExceptionToNull()
+    {
+        var body = MethodBody(ReadRepoFile(TrustPath), "internal static string? TryGetSignerSubject(string path)");
+        Assert.Contains("catch (CryptographicException) { return null; }", body, StringComparison.Ordinal);
+    }
 }

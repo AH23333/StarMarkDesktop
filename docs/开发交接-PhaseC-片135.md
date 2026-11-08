@@ -1157,3 +1157,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - Music 轮询 SMTC：播放器关闭/切换瞬间会话在拆（ERROR_NOT_READY），TryGetMediaPropertiesAsync 抛 COMException 0x80070015；拆除事件风暴置脏位补跑→每关一次两连发 ERROR＋堆栈（全天 7 条）。坑 **#1172**：「源刚消失那一拍」是生命周期瞬态不是读取故障——按 HRESULT 精确匹配降级节流 INFO（先例 0x800401D0），不许一律吞（别的 HRESULT 才是故障）；双发来源的脏位补跑刻意保留（「切歌不刷新」那课的修复）。
 - 刀法：ReadSnapshotAsync catch 对 0x80070015 → InfoThrottled（key=media.session.notready・首条留痕・窗口合并）＋快照保持；其余照旧 ERROR。
 - 测试与账：新 MediaSessionNotReadyGateTests 五格；定向 5/5；census 19 未涨；宽口径 **195/195**；UI 编译 OutDir 旁路 0 错误（1 警＝Integrations 存量 SYSLIB0057・EverythingDownloadTrust.cs:122・全量重编才显现・观察项另立）；新构建不交付（app 22832 在用・用户明示不开应用——下次构建带上）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①SYSLIB0057 存量警（X509CertificateLoader 迁移・小刀）；②用户实测（等 app 空闲换新构建后：开设置两次验 245・开着设置切语言验 246・书签同步验 247・开关播放器看 ERROR 换节流 INFO 验 248）；③全量 6983 待用户测完再跑。⛔ push（桌面未推 3・扩展未推 0）。
+
+## 一百三十、片249：SYSLIB0057 定向压制——全量重编回到 0 警告 0 错误（坑 #1173）
+
+- 片248 的 OutDir 旁路全量重编照出全仓唯一警（SYSLIB0057・EverythingDownloadTrust.cs:122 CreateFromSignedFile 过时；此前 0 警全是增量口径）。坑 **#1173**：迁移前先查接棒 API 落没落地——LoadCertificateFromSignedFile 要 .NET 10、本仓 net9 直接迁移 CS0117；压制要定向（disable/restore 只裹一行・恰一处・TFM 升 10 换 loader 拆压制）；顺手收掉裸 new X509Certificate2 漏的句柄。
+- 刀法：pragma 只裹那一行（注释写明 .NET 10 落地点）；using var signer 收证书；CryptographicException→null 不动。
+- 测试与账：EverythingDownloadTrustTests 补形状⑩⑪⑫；定向 19/19；census 19 未涨；宽口径 **214/214**（信任族纳入宽口径）；UI OutDir 旁路全量重编 **0 警告 0 错误**（片248 探针 1 警归零）；新构建不交付（app 22832 在用）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测四刀（等 app 空闲换新构建后：开设置两次/开着设置切语言/书签同步/开关播放器）；②全量 6983 待用户测完再跑；③TFM net10 升级（长期・loader 换装＋压制拆除在本片注释里）。⛔ push（桌面未推 3・扩展未推 0）。

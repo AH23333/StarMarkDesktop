@@ -119,7 +119,17 @@ public static class EverythingDownloadTrust
     /// <summary>读签名者 Subject（无签名 / 读不出证书＝null，不抛——调用方拿 null 当验不过）。</summary>
     internal static string? TryGetSignerSubject(string path)
     {
-        try { return new X509Certificate2(X509Certificate.CreateFromSignedFile(path)).Subject; }
+        // SYSLIB0057 定向压制（坑 #1173）：X509Certificate.CreateFromSignedFile 在 .NET 9 已过时，
+        // 但接棒的 X509CertificateLoader.LoadCertificateFromSignedFile 要到 .NET 10 才落地
+        // （本机 targeting pack 实测 CS0117）——本仓 TFM＝net9.0-windows10.0.19041.0，此刻没有可迁的
+        // 替代 API。压制范围只裹这一行；TFM 升上 .NET 10 时换成 loader 并拆掉本压制（形状⑩钉着唯一出处）。
+        try
+        {
+#pragma warning disable SYSLIB0057
+            using var signer = new X509Certificate2(X509Certificate.CreateFromSignedFile(path));
+#pragma warning restore SYSLIB0057
+            return signer.Subject;
+        }
         catch (CryptographicException) { return null; }   // 无签名／非 PE：验签那层已给了 false，这里不重复报错
     }
 
