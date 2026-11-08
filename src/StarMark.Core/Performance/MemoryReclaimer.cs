@@ -87,8 +87,13 @@ public sealed class MemoryReclaimer
             LastReclaimAt = DateTimeOffset.Now;
             Reclaiming?.Invoke(mb);
 
-            // 1) 托管堆回收（最便宜、最常生效）
-            GC.Collect(2, GCCollectionMode.Forced, blocking: false);
+            // 1) 托管堆回收（最便宜、最常生效）。
+            // ⛔ blocking:false（后台并发 GC）在这里踩过真崩溃（2026-11-08・坑 #1161）：后台 GC 线程遍历
+            // WinRT/WinUI 外部引用追踪链表（coreclr!WalkExternalTrackerObjects）与 XAML UI 线程并发解绑/重建
+            // 竞态 ⇒ 访问违例整进程崩（try/catch 兜不住硬崩；dotnet/runtime#93059 同族）。改阻塞式：STW 期间
+            // XAML 线程也停，链表无人并发修改，窗口消除；代价是超预算的这一瞬 UI 卡一小段（可接受——
+            // 门禁本来就该在"内存真的压不住"时才走到这里）。
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
             GC.WaitForPendingFinalizers();
 
             // 2) 通知参与者各自丢弃最不常用的条目

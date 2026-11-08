@@ -1038,3 +1038,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 判据四条全钉：①同款标签恒等（ItemLine 一字不差・扇出复制）；②去重量如实上报（deduped 可空半句）；③零重复零差（每组一条・扇出恒等）；④批数/token 预估跟去重后行数（预估段同刀・wiring 钉守）。真机观感归用户统一测，翻牌随用户裁决。
 
 - 下一刀：用户放行连续开发——code review 本片或深度测试（候选：去重与 O2 规则先后次的再核・Estimate 与实际 token 的抽样对账）。⛔ push（桌面未推 41・扩展未推 2）。
+
+## 一百一十七、片236：用户真机首崩诊断＋止血（后台 GC 与 XAML 线程竞态・改阻塞式）
+
+- 接手第一步照旧现读编号轴：报告到六百二十二、交接到一百一十七、坑表到 #1161、账本到 P-297（P-296/P-297 均落地未翻牌）；计数器现读＝298/292/6（仓根跑 bin/WI37C/count_ledger.py 现跑・VERDICT OK・开放头行六颗：P-73/P-90/P-147/P-153/P-296/P-297）。
+
+- 崩溃取证链：事件日志 coreclr 0xc0000005 → dump 崩溃线程栈（MemoryReclaimer.OnTick → Trim → GC.Collect(2, Forced, blocking:false)）→ 崩溃偏移 0x371a84 符号解析＝WalkExternalTrackerObjects（trackerobjectmanager.cpp:249）→ dotnet/runtime#93059 同族（GC ↔ WinUI3 tracker 交互竞态）。根因＝后台 GC 扫 WinRT 追踪链表与 XAML 线程（改语言触发的解绑/重建大潮）并发竞态 ⇒ 访问违例硬崩；与片234/235 AI 改动无因果。
+
+- 止血一档：MemoryReclaimer.cs Trim 的 GC.Collect 改 blocking:true（坑 #1161）——STW 期间 XAML 线程同停・竞态窗口消除；样本=1 不深改。若复现：下一手候选＝升 .NET 9.0.x runtime patch 或去掉 Reclaimer 强推 GC（与用户对齐再动）。
+
+- 下一刀：Debug 构建重建后交用户继续真机测试（清单在案：P-296 去重半句/孪生标签、P-297 断网熔断/停止语义、P-153 三选一、P-73 看一眼、P-90 用后感受）；测完收裁决翻牌。⛔ push（桌面未推 42・扩展未推 2）。
