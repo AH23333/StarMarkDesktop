@@ -1151,3 +1151,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 本机没装 Chrome：书签同步每轮 DiscoverProfiles 都对不存在的 User Data EnumerateDirectories→DirectoryNotFoundException→WARN 同一句，全天 8 条全是装机差异被当故障的噪声。坑 **#1171**：「源缺席」与「源故障」是两类事实——可用性/提示/对账各有既定语义，谁也不需要这条 WARN；枚举外部目录先判 Directory.Exists，缺席走静默快路径。
 - 刀法：DiscoverProfiles 枚举前 if (!Directory.Exists(userData)) return list;——只交 Default、不枚举、不记日志；在场照旧枚举；真枚举失败仍 catch＋WARN；排序稳定不动。
 - 测试与账：新 BrowserProfileAbsenceGateTests 五格；定向 16/16；census 19 未涨；宽口径 **190/190**；UI 编译 0 警 0 错；新构建 pid 22832 交付（21:41:19 起・含 245＋246＋247）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测三刀（开设置两次验 245・开着设置切语言验 246・跑一轮书签同步看 chrome WARN 是否消失验 247）；②媒体会话 COMException 0x80070015（ERROR_NOT_READY・Music 轮询播放器刚关那一拍・双发要查双轮询根因）；③全量 6983 待用户测完再跑。⛔ push（桌面未推 2・扩展未推 0）。
+
+## 一百二十九、片248：播放器退出那一拍的瞬态不再两连发 ERROR——COMException 0x80070015 降级节流 INFO（坑 #1172）
+
+- Music 轮询 SMTC：播放器关闭/切换瞬间会话在拆（ERROR_NOT_READY），TryGetMediaPropertiesAsync 抛 COMException 0x80070015；拆除事件风暴置脏位补跑→每关一次两连发 ERROR＋堆栈（全天 7 条）。坑 **#1172**：「源刚消失那一拍」是生命周期瞬态不是读取故障——按 HRESULT 精确匹配降级节流 INFO（先例 0x800401D0），不许一律吞（别的 HRESULT 才是故障）；双发来源的脏位补跑刻意保留（「切歌不刷新」那课的修复）。
+- 刀法：ReadSnapshotAsync catch 对 0x80070015 → InfoThrottled（key=media.session.notready・首条留痕・窗口合并）＋快照保持；其余照旧 ERROR。
+- 测试与账：新 MediaSessionNotReadyGateTests 五格；定向 5/5；census 19 未涨；宽口径 **195/195**；UI 编译 OutDir 旁路 0 错误（1 警＝Integrations 存量 SYSLIB0057・EverythingDownloadTrust.cs:122・全量重编才显现・观察项另立）；新构建不交付（app 22832 在用・用户明示不开应用——下次构建带上）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①SYSLIB0057 存量警（X509CertificateLoader 迁移・小刀）；②用户实测（等 app 空闲换新构建后：开设置两次验 245・开着设置切语言验 246・书签同步验 247・开关播放器看 ERROR 换节流 INFO 验 248）；③全量 6983 待用户测完再跑。⛔ push（桌面未推 3・扩展未推 0）。

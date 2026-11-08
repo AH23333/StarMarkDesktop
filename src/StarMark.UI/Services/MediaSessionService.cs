@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using StarMark.Abstractions;
@@ -583,6 +584,18 @@ public sealed class MediaSessionService : IDisposable
         }
         catch (Exception ex)
         {
+            // 播放器退出/切换的那一拍：会话对象还在手上、底层已没了，
+            // TryGetMediaPropertiesAsync／GetPlaybackInfo 抛 COMException 0x80070015（ERROR_NOT_READY），
+            // 且会话拆除的 SMTC 事件风暴会置脏位立刻补跑一轮——此前每关一次播放器就两连发
+            // ERROR＋整段堆栈（实测全天 7 条）。这是生命周期瞬态不是故障：降级为节流 INFO
+            // （首条留痕、窗口内重复合并计数），快照保持上一次的，拆除完成后 ResolveSession
+            // 交回 null／null 会话路径自会清场（坑 #1172）。
+            if (ex is COMException && ex.HResult == unchecked((int)0x80070015))
+            {
+                StarLog.InfoThrottled("media.session.notready",
+                    "媒体会话暂不可读（播放器可能正在退出），本轮快照跳过");
+                return;
+            }
             StarLog.Error("读取媒体会话失败", ex);
         }
     }
