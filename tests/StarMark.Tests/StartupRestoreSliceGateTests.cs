@@ -20,6 +20,8 @@ namespace StarMark.Tests;
 /// ⑦ 每颗间隔睡完补一把「显示排空」刻度（StartupProfile.Elapsed，起表在派发侧）——
 ///    新装实测 QuickLaunch 窗显后 785 ms 才轮到下一颗构建、已知刻度只解释 ~80 ms，
 ///    那段无主空档全靠这行读数归因，删了它下一轮启动又只剩猜。
+///    片254 两条恢复路都得有＋恢复路自报一行：14:16 实测用户启动走回退路（无默认布局），
+///    片253 只插布局路＝一颗读数没出（坑 #1178），路都没认对，读数再多也归因不了。
 /// </para>
 /// </summary>
 public sealed class StartupRestoreSliceGateTests
@@ -100,14 +102,23 @@ public sealed class StartupRestoreSliceGateTests
         Assert.Contains("public const int RevealIntervalMs = 80;", policy);
     }
 
-    /// <summary>⑦ 排空刻度不许被顺手删（片253）：起表在派发侧、读数在 UI 回合里——785 ms 无主空档的归因全靠它。</summary>
+    /// <summary>⑦ 排空刻度与恢复路自报（片253 布局路・片254 回退路补齐）：两条恢复路都得有——
+    /// 14:16 实测用户启动走回退路，片253 只插布局路＝一颗读数没出。起表在派发侧、读数在 UI 回合里。</summary>
     [Fact]
     public void EveryRevealIsFollowedByADrainReading()
     {
+        var restore = SourceGate.Squash(SourceGate.MethodBody(
+            Lifecycle(), "public async Task RestoreOnStartupAsync(bool loadOnStartup = true)"));
+        Assert.Contains("[恢复路] 布局：启动时套用默认布局", restore);          // 路自报：哪条路走了，日志直说
+        Assert.Contains("[恢复路] 回退：无默认布局或套用失败，逐个显示", restore);
+        Assert.Contains(
+            "await OnUiAsync(() => StarMark.Abstractions.StartupProfile.Elapsed($\"组件显示排空 {inst.Kind}\", drainFrom));",
+            restore);                                                           // 回退路的排空刻度（片254）
+
         var sliced = SourceGate.Squash(SourceGate.MethodBody(
             Layout(), "private async Task ApplyLayoutSlicedAsync(WidgetStoreData data, WidgetLayout layout)"));
         Assert.Contains(
             "await OnUiAsync(() => StartupProfile.Elapsed($\"组件显示排空 {entry.Kind}\", drainFrom));",
-            sliced);
+            sliced);                                                            // 布局路的排空刻度（片253）
     }
 }

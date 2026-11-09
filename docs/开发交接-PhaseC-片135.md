@@ -1188,3 +1188,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 改动（纯观测）：StartupProfile 新 API Elapsed(label, fromTimestamp)（起表在派发侧・停表在回调被调度到・NoteCheckpoint 照推・[耗时] 唯一族）；ApplyLayoutSlicedAsync 每颗间隔睡完插「组件显示排空 {Kind}」刻度（「派发；延迟」钉子原样保住・回退路不插＝最小刀）；新 gate 两道：StartupRestoreSliceGate ⑦＋StartupProfileTests 的 Elapsed 契约。坑 **#1177**：PS 5.1 Select-String -Path 配 ** 不递归不报错只给空——差点误判「[耗时] 无直写厂」，换 Get-ChildItem -Recurse 翻盘。
 - 验证：六族定向 71/71・UI OutDir 探针 0 警 0 错（2m46s）・全量 **7055/7055**（19m05s）——**全量新基线 7055**（上轮 7053＋净 2）。计数器 298/295/3 VERDICT OK。⛔ push（桌面未推 0・扩展未推 0）。
 - 下一刀候选：①**收数**：换装重启（ship_latest.ps1 已 BOM・换装归用户空闲窗口）后读「组件显示排空」读数归因 785 ms——读数大＝首帧合成压队，读数小＝空档在别处（下一颗派发/主窗首渲染）；②揪着已拆元素不放（等 246 点名行证据）；③P-296/P-297 翻牌＝用户跑一轮 AI 分类；④TFM net10（长期）。
+
+## 一百三十五、片254：排空刻度补进恢复回退路＋[恢复路] 自报行——插桩先验路（坑 #1178）
+
+- 动机：片253 换装实测翻案——布局路刻度零出＋「组件显示排空」串在二进制里 ⇒ 用户走的是回退路（无默认布局），「走布局路」的推断错了；738 ms 空档（QuickLaunch 12.863→QuickNote 13.602）＝回退路下一颗派发的排队等待。
+- 改动：Lifecycle 两分支 [恢复路] 自报行＋回退循环排空刻度（StartupProfile.Elapsed 同款・起表在派发侧）；⑦ 扩两路断言；P-134 定位行 census 换号重指 120→121（一落零愈・自造自收・净±0・正本 bin/WI37C/diffcensus254.txt）；census 尺来历段补片254 段。坑 **#1178**：插桩先验路——负结果也是结果。
+- 验证：六族定向 71/71・UI 探针 0 警 0 错（57.64s）・全量首跑红 1（census 19→20）→ 复称尺定位一落 → 换号重指 → docgates 26/26 → 全量 **7055/7055**（21m14s）。计数器 298/295/3 VERDICT OK。⛔ push（桌面未推 1・扩展未推 0）。
+- 下一刀候选：①**收数**：ship_latest.ps1 换装（停 26716）后 dig 新启动段读「[恢复路]」自报行＋「组件显示排空」读数归因 738 ms——读数大＝首帧合成压队，读数小＝空档在别处；②揪着已拆元素不放（等 246 点名行证据）；③P-296/P-297 翻牌＝用户跑一轮 AI 分类；④TFM net10（长期）。

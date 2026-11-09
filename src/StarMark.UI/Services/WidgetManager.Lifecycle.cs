@@ -1,4 +1,5 @@
 #nullable enable
+using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Windows.Graphics;
 using StarMark.Abstractions;
@@ -120,6 +121,8 @@ public sealed partial class WidgetManager
         var applied = false;
         if (layout is not null)
         {
+            // 片254：恢复路自报——上一轮只能靠「排空刻度没出」反推走的是哪条路，先说清省一轮猜
+            StarLog.Info("[恢复路] 布局：启动时套用默认布局");
             try
             {
                 await ApplyLayoutSlicedAsync(data, layout);
@@ -134,6 +137,7 @@ public sealed partial class WidgetManager
         if (!applied)
         {
             // 无布局（逐个显示）与「应用默认布局失败回退」同走这条分帧路
+            StarLog.Info("[恢复路] 回退：无默认布局或套用失败，逐个显示");
             foreach (var inst in data.Instances)
             {
                 await OnUiAsync(() =>
@@ -144,6 +148,11 @@ public sealed partial class WidgetManager
                 // 片244：回合切开≠合成切开——12 颗首帧曾一批落地 1860 ms（UI 自耗 CPU 1657 ms）。
                 // 每颗 Reveal 后留真墙钟间隔，让首帧各自落进合成回合（间隔数字住 WidgetStartupPolicy）。
                 await Task.Delay(WidgetStartupPolicy.RevealIntervalMs);
+                // 片254 刻度：这颗窗「显示排空」回退路同款——14:16 实测（片253 换装）用户启动走的是
+                // 这条路（无默认布局），片253 只插了布局路＝一颗读数没出（坑 #1178）。738 ms 空档＝
+                // 下一颗派发的排队等待：起表在派发侧、停表在这颗回调被调度到，这把读数量它。
+                var drainFrom = Stopwatch.GetTimestamp();
+                await OnUiAsync(() => StarMark.Abstractions.StartupProfile.Elapsed($"组件显示排空 {inst.Kind}", drainFrom));
             }
         }
         // 这一段是启动里最重的一块（建窗口＋套材质），单独计时才有"改完有没有变快"的对照

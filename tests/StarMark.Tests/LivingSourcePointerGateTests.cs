@@ -256,6 +256,12 @@ public sealed class LivingSourcePointerGateTests
     /// （各指改后新区间）；② 另一串念 <c>DittoDatabaseReader.cs</c> 旧区间的号恰随改码落回正文＝自然愈合而非修，
     /// 本批没把它算成修复，只在 P-256 报一句 ⇒ 净账少一颗（21 现读 − 换号 2 ＝ 19）。
     /// 基线按闸门交回的那颗读数改小・⛔ 手打。</para>
+    /// <para><b>片254 再对一颗（一落零愈・19 ↔ 19・净±0＝自造自收）・来历＝恢复路插桩平移行号</b>：
+    /// 本批给 <c>RestoreOnStartupAsync</c> 两条分支补自报行与回退路排空刻度（P-134 后续）⇒ <c>WidgetManager.Lifecycle.cs</c>
+    /// 行号整体平移：✅P-134 定位行那颗念 <c>WidgetManager.Lifecycle.cs:120</c> 的号被压进空行＝真落空
+    /// （全量首跑现读 20↔基线 19）。差集由只读复称尺对 HEAD 与改后各跑一遍点到名
+    /// （正本 <c>bin/WI37C/diffcensus254.txt</c>・一落零愈），按口径<b>换号重指</b>
+    /// （<c>var applied = false;</c> 现读 121）⇒ 净颗数照旧 19。</para>
     private const int FallenPointerBaseline = 19;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。
