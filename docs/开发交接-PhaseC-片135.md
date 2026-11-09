@@ -1195,3 +1195,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 改动：Lifecycle 两分支 [恢复路] 自报行＋回退循环排空刻度（StartupProfile.Elapsed 同款・起表在派发侧）；⑦ 扩两路断言；P-134 定位行 census 换号重指 120→121（一落零愈・自造自收・净±0・正本 bin/WI37C/diffcensus254.txt）；census 尺来历段补片254 段。坑 **#1178**：插桩先验路——负结果也是结果。
 - 验证：六族定向 71/71・UI 探针 0 警 0 错（57.64s）・全量首跑红 1（census 19→20）→ 复称尺定位一落 → 换号重指 → docgates 26/26 → 全量 **7055/7055**（21m14s）。计数器 298/295/3 VERDICT OK。⛔ push（桌面未推 1・扩展未推 0）。
 - 下一刀候选：①**收数**：ship_latest.ps1 换装（停 26716）后 dig 新启动段读「[恢复路]」自报行＋「组件显示排空」读数归因 738 ms——读数大＝首帧合成压队，读数小＝空档在别处；②揪着已拆元素不放（等 246 点名行证据）；③P-296/P-297 翻牌＝用户跑一轮 AI 分类；④TFM net10（长期）。
+
+## 一百三十六、片255：GLM 真测全链路跑批——P-296 真测翻牌・P-298 新立（坑 #1179）・P-297 分型真形状补记
+
+- 动机：用户令「你用glm那个api自己跑一遍试试」并示「你自行继续」——AI 分类用 GLM 真 API 走 app 自己的管线跑一轮真库（P-296/P-297 的真机证据），随后收口落账。
+- 通道：bin/WI37C/AiProbe（一次性控制台工程引 app 五 DLL・Private=false・运行布局＝app bin 整拷＋原生库拍平＋删 deps.json・⛔ 进仓）→ AiClassifyService.OrganiseAsync(100)；settings 已配 GLM（glm-4.5-air・Key 加密落盘・Ollama 旧配置 qwen3:0.6b 可 UI 一键换回）。
+- 读数：候选 59→规则 46→去重 3→10 条 1 批（7.2 s）——out=400 恰满＝思考截断伪装拒绝（坑 #1179・P-298 四叉待裁：地板/公式・thinking 参数・finish_reason 分型・计量补口）；方案 54 条在盘待用户 Settings → AI 预览应用；ai_usage 首行 805 token；429 code 1113「余额不足」真命中 QuotaExhausted 收词（P-297 补记不翻・重试节奏未观测）。账面：P-296 真测翻牌・P-298 新立・计数器 299/296/3。
+- 验证：docgates 26/26（落账前后两遍）・全量 **7055/7055**（21m25s）。⛔ push（桌面未推 1＝片255・扩展未推 0）。
+- 下一刀候选：①P-298 裁决后的落地刀（探针正本与读数在 bin/WI37C/probe_glm_classify.py）；②738 ms 空档归因（片254 已埋桩：新装启动日志 dig「[恢复路]」自报行＋「组件显示排空」刻度・dig_startup_254.py 可复用）；③揪着已拆元素不放（等 246 点名行证据）；④TFM net10（长期）。
