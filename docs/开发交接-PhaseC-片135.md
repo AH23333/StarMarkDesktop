@@ -1175,3 +1175,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 立项证据：23:01:32（pid 22832）一次 1594ms UI 线程阻塞・自耗 47ms CPU——低 CPU・秒级卡＝在等盘不是在算（冷盘/SMB 经典签名）。坑 **#1175**：六处「磁盘事实」同步跑 UI 线程——LauncherEx 两问、OpenLocation/CopyUri、拖拽起手、预览三处、设置页失联重扫（2000 行）。
 - 刀法：六处全部 await Task.Run 纯线程切割（零行为变化）；await 续体回 UI 线程——Directory.Exists 判别也进 Task.Run 体内；拖拽改 deferral-first＋方法体内 local async function（gate 锚不动）；ShowArchive 改 async；Process.Start 留 UI 线程（保守）。**零 gate 改动**：钉子预先核对——StaleFileRowGate 的「DisplayPath(uri, ExistsOnDisk)).Render())」用整句包进 Task.Run 保住括号序列，LocalPathResolutionGate 七宿主锚全部原签名。
 - 测试与账：射域定向网 24 族 468/468；docgates 54/54（26＋16＋12）；census 19 持平（源档 860）；UI OutDir 旁路全量重编 0 警 0 错（**普通编译在 app 从主输出运行时必锁＝MSB3027，旁路是唯一口径；全量窗口要给足 >600s**）。计数器 **298/295/3 VERDICT OK**（本批加减＝0・开放 P-147/P-296/P-297）。下一刀候选：①用户实测（等 app 空闲跑 bin\WI37C\ship_latest.ps1 换新构建——注释已更新为含 245-251 七刀；开设置两次验 245・开着设置切语言验 246・书签同步验 247・开关播放器验 248・信任族静默验 249・射域三红复验 250・冷盘点文件卡顿验 251）；②全量 6983 待用户测完再跑；③揪着已拆元素不放的那处（等 246 点名行出证据后另立一案）。⛔ push（桌面未推 6・扩展未推 0）。
+
+## 一百三十三、片252：全量首跑三红＝棘轮漂移欠账，三 gate 跟手清账（坑 #1176）
+
+- 全量首跑 7050/7053・红 3（17m36s・总数 7053）——全是历片欠账：AiLayerGate 名册漏记片240 的 AiUndoRecordJson；WidgetGeometryPersistGate/WidgetStartupPolicy 钉着片243 分帧前的旧形状。坑 **#1176**：新刀加新 gate 不回头改钉旧形状的旧 gate＋三族不在定向射域＝红挂七片才暴露。
+- 修法（锚跟手・判据不动）：名册补项 14→15；geometry gate 三体齐看（单步＋两循环编排体不许碰盘・反空转钉「分帧版复用单步」）；startup gate 锚换 ApplyLayoutSlicedAsync。三族＋两邻居定向 47/47・**全量复跑 7053/7053**（12m50s）——**全量新基线 7053**。测试编 0 错・6 警＝未触碰档既有基线。
+- 课与账：全量间隔越长欠账越深——以后动 widget/AI/启动形状的刀，射域记得带上这三族；改钉形状时 grep 全测试目录新旧名对照。计数器 **298/295/3 VERDICT OK**（加减＝0・开放 P-147/P-296/P-297）。⛔ push（桌面未推 0・扩展未推 0）。下一刀候选：①揪着已拆元素不放的那处（等 246 点名行证据）；②片246 断线根因（等真机证据）；③TFM net10（长期）。

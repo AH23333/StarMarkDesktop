@@ -213,7 +213,9 @@ public sealed class WidgetStartupPolicyTests : IDisposable
 
     // ───────── 接线（形状闸门）─────────
 
-    /// <summary>启动路径必须<b>在建任何窗之前</b>判这颗开关——先建再判就等于没省（§二百零九：关掉退不回来）。</summary>
+    /// <summary>启动路径必须在<b>建任何窗之前</b>判这颗开关——先建再判就等于没省（§二百零九：关掉退不回来）。
+    /// <para>片243 起套布局走分帧版 <c>ApplyLayoutSlicedAsync</c>（同步版整轮已被 StartupRestoreSliceGate
+    /// 摁住）——锚跟新名，判据不变：开关那一支必须排在分帧套布局之前。</para></summary>
     [Fact]
     public void TheStartupGateRunsBeforeAnyWindowIsBuilt()
     {
@@ -222,10 +224,10 @@ public sealed class WidgetStartupPolicyTests : IDisposable
         var gate = body.IndexOf("if (!loadOnStartup)", StringComparison.Ordinal);
 
         Assert.True(gate >= 0, "启动路径里找不到\"开关关掉就直接返回\"这一支");
-        Assert.True(body.IndexOf("ApplyLayoutCore", StringComparison.Ordinal) > gate,
+        Assert.True(body.IndexOf("ApplyLayoutSlicedAsync", StringComparison.Ordinal) > gate,
             "不建那一支必须排在套布局／显示之前，否则窗口已经建完了");
         // 只钉"有这一支"是不够的：把 return 摘掉，代码照样记日志、照样建窗——那才是这一条要拦的事。
-        Assert.Contains("return;", SourceGate.Between(body, "if (!loadOnStartup)", "ApplyLayoutCore"),
+        Assert.Contains("return;", SourceGate.Between(body, "if (!loadOnStartup)", "ApplyLayoutSlicedAsync"),
             StringComparison.Ordinal);
         Assert.Contains("DescribeSkipped(", body, StringComparison.Ordinal);
         Assert.Contains("Mark(", body, StringComparison.Ordinal);   // 省没省都要有刻度可对

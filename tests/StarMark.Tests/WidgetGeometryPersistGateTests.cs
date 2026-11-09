@@ -160,6 +160,9 @@ public sealed class WidgetGeometryPersistGateTests
     /// 从前每建一颗就"先落盘再从盘上读回来"——<c>ApplyGeometryCore</c> 循环内 <c>_storage.Save</c>
     /// （写整档＋作废读缓存）＋<c>ShowNow</c> 再整档读：N 个新实例＝N 趟整档往返，而调用方收尾
     /// 本来就有一次落盘。现在待落盘的存档直接递进显示路径，新窗从<b>那份内存</b>建。
+    /// <para>片243 分帧把这循环拆成「每条目一拍」——单条目那步 <c>ApplyGeometryEntryCore</c>
+    /// 被同步 <c>ApplyGeometryCore</c> 与分帧 <c>ApplyLayoutSlicedAsync</c> 两个编排体共用，
+    /// 所以这条闸门<b>三个方法体一起看</b>：单步与两个循环体，谁都不许碰盘。</para>
     /// <para>另一头的保证：收尾那次落盘失败时窗口已上屏但盘上没有它——这与逐颗先落盘的旧形状
     /// （落盘失败＝那颗静默不上屏）在 P-16 的口径下同属"没写进磁盘要由调用方说实话"，不新增静默。</para>
     /// </summary>
@@ -167,12 +170,18 @@ public sealed class WidgetGeometryPersistGateTests
     public void LayoutApplyNeverTouchesTheDiskInsideTheLoop()
     {
         var manager = ReadRepoPartials(ManagerPath);
+        var step = MethodBody(manager, "private void ApplyGeometryEntryCore<T>(WidgetStoreData data, T entry,");
         var core = MethodBody(manager, "private List<(T entry, WidgetInstanceConfig inst)> ApplyGeometryCore<T>(");
+        var sliced = MethodBody(manager, "private async Task ApplyLayoutSlicedAsync(WidgetStoreData data, WidgetLayout layout)");
 
-        Assert.Equal(0, Count(core, "_storage.Save("));         // 循环里不许落盘（含隐藏的"建一颗存一颗"）
-        Assert.Equal(0, Count(core, "_storage.Load()"));        // 也不许整档读——几何全在手里那份 data 上
-        Assert.Contains("data.Instances.Add(inst);", core);     // 反空转：新建实例确实进那份待落盘存档
-        Assert.Contains("ShowInternal(inst.Id, data);", core);  // 显示拿的是待落盘那一份，不是从盘上重读
+        foreach (var body in new[] { step, core, sliced })
+        {
+            Assert.Equal(0, Count(body, "_storage.Save("));      // 循环里不许落盘（含隐藏的"建一颗存一颗"）
+            Assert.Equal(0, Count(body, "_storage.Load()"));     // 也不许整档读——几何全在手里那份 data 上
+        }
+        Assert.Contains("data.Instances.Add(inst);", step);      // 反空转：新建实例确实进那份待落盘存档
+        Assert.Contains("ShowInternal(inst.Id, data);", step);   // 显示拿的是待落盘那一份，不是从盘上重读
+        Assert.Contains("ApplyGeometryEntryCore(data, entry, mapping, used)", sliced);  // 分帧版确实复用那一步，不是第二套实现
 
         var show = MethodBody(manager, "private void ShowNow(string id, WidgetStoreData? pendingData");
         Assert.Contains("pendingData ?? _storage.Load()", show);   // 有待落盘存档就不读盘

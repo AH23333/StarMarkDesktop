@@ -174,13 +174,14 @@ public sealed class AiLayerGateTests
 
         // 钉**名册**而不是钉个数（#181）：加一格就得在这里点名它，红的时候也能说出是哪一格动了——
         // 只数个数会把"新加了一格该记的"与"某格被顺手改名/被别的域覆盖"报成同一条红。
-        // 名册＝开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位/预警线 + 规则覆盖 JSON + 分类模型 + 单批超时 + 即时分类开关。
+        // 名册＝开关/通道/模型/Key/两个地址 + 待应用方案 + 预算/熔断位/预警线 + 规则覆盖 JSON + 分类模型 + 单批超时 + 即时分类开关
+        // + 整批撤销记录（P-90：AiUndoRecordJson，片240 落地时漏记名册，全量首跑红出来才补）。
         Assert.Equal(
             new[]
             {
                 "AiApiKey", "AiBaseUrl", "AiBatchTimeoutSeconds", "AiBudgetPaused", "AiClassifyModel",
                 "AiClassifyRulesJson", "AiEnabled", "AiInstantClassify", "AiModel", "AiOllamaBaseUrl",
-                "AiPendingPlanJson", "AiProvider", "AiTokenBudget", "AiWarnRatio",
+                "AiPendingPlanJson", "AiProvider", "AiTokenBudget", "AiUndoRecordJson", "AiWarnRatio",
             },
             aiProps.OrderBy(name => name, StringComparer.Ordinal));
         Assert.All(aiProps, name => Assert.StartsWith("Ai", name)); // 同名覆盖那条事故的形状
