@@ -120,9 +120,10 @@ public static class EverythingDownloadTrust
     internal static string? TryGetSignerSubject(string path)
     {
         // SYSLIB0057 定向压制（坑 #1173）：X509Certificate.CreateFromSignedFile 在 .NET 9 已过时，
-        // 但接棒的 X509CertificateLoader.LoadCertificateFromSignedFile 要到 .NET 10 才落地
-        // （本机 targeting pack 实测 CS0117）——本仓 TFM＝net9.0-windows10.0.19041.0，此刻没有可迁的
-        // 替代 API。压制范围只裹这一行；TFM 升上 .NET 10 时换成 loader 并拆掉本压制（形状⑩钉着唯一出处）。
+        // 接棒的 X509CertificateLoader.LoadCertificateFromSignedFile 当时预约 .NET 10 落地——片258
+        // TFM 已升 net10.0（ref 包 10.0.14）实测成员仍缺席（CS0117 依旧・坑 #1181＝预约 API 以
+        // targeting pack 实测为准），过时工厂未删仍可用 ⇒ 压制保留；成员真落地时换 loader 并拆
+        // 本压制（形状⑩钉着唯一出处）。
         try
         {
 #pragma warning disable SYSLIB0057

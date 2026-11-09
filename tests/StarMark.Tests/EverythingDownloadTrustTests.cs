@@ -242,9 +242,10 @@ public sealed class EverythingDownloadTrustTests : IDisposable
         Assert.Contains("sdkReady && ownedRunning", body, StringComparison.Ordinal);
     }
 
-    /// <summary>形状⑩（坑 #1173）：全量重编唯一的警（SYSLIB0057）被定向压净——
-    /// 过时工厂全 src 仍恰一处出处（.NET 9 没有接棒 API：LoadCertificateFromSignedFile 要 .NET 10），
-    /// 压制也恰一处且 disable/restore 成对——<b>不许把压制铺成整档或整仓</b>，TFM 升 .NET 10 时
+    /// <summary>形状⑩（坑 #1173・片258 net10 实测补记）：全量重编唯一的警（SYSLIB0057）被定向压净——
+    /// 过时工厂全 src 仍恰一处出处（接棒的 <c>X509CertificateLoader.LoadCertificateFromSignedFile</c>
+    /// 预约 .NET 10 落地・net10.0.14 ref 包实测成员仍缺席＝坑 #1181，压制拆不得），
+    /// 压制也恰一处且 disable/restore 成对——<b>不许把压制铺成整档或整仓</b>，成员真落地时
     /// 换 loader 并拆压制。</summary>
     [Fact]
     public void TheSylib0057SuppressionIsScopedToTheSingleObsoleteCallSite()

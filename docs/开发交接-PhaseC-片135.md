@@ -1219,3 +1219,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - TFM net10 摸底（片258 迁移前清点）：本机 SDK 只有 9.0.310/9.0.317（无 .NET 10・默认 9.0.317・无 global.json・壳无提权）；9 个自有 csproj 全 net9.0-windows10.0.19041.0（Abstractions/Core/Data/Integrations/UI/Updater/Tests/SmokeTest/UpdateSigner）；UI 挂 Microsoft.WindowsAppSDK 2.4.0＋WindowsAppSDKSelfContained=true；ship_latest.ps1 硬编码 net9.0 输出路径（迁移后同步改）；MyDll.csproj（tools/InnoSetup6/Examples）系第三方示例不在迁移面。**阻塞＝.NET 10 SDK 未装**——winget 机装需管理员（壳无提权），备选 dotnet-install 用户目录装（命令带 DOTNET_ROOT/PATH 前缀）。
 - 验证：docgates 26/26（落账前后两遍）・计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）・全量基线 **7055/7055 维持**（零码・full_net_256 在案）。⛔ push（桌面未推 1＝片257・扩展未推 0）。
 - 下一刀候选：①TFM net10 迁移（装 .NET 10 SDK → 9 csproj net9.0-→net10.0- → restore/build 修断 → docgates＋全量 → ship_latest.ps1 改 net10 路径换装＋启动日志验 12 颗 → 落账）；②P-298 额度恢复后四叉裁决；③揪着已拆元素不放（等 246 点名行证据）。
+
+## 一百三十九、片258：TFM net9→net10 迁移——SDK10 用户目录装・9 csproj 换轨・全量 7055/7055・换装实测 .NET 10 运行时（坑 #1181/#1182）
+- 动机：片257 用户裁决「先开长期项」——TFM net10 迁移开工。
+- SDK：dotnet-install.ps1 免提权装用户目录 %LOCALAPPDATA%\Microsoft\dotnet（SDK 10.0.403・packs 10.0.14）；PATH 里的系统 dotnet 仍是 SDK 9.0.317——net10 命令一律 & "$env:LOCALAPPDATA\Microsoft\dotnet\dotnet.exe" 或 DOTNET_ROOT/PATH 前缀。
+- 迁移：9 csproj net9.0-→net10.0-（tfm_258.py 二进制替换保 BOM/行尾）；ship_latest.ps1 补丁（exe 路径＋DOTNET_ROOT/PATH 头）；坑 #1181 X509 loader 预约落空全回滚（net10.0.14 ref 包实测缺席・压制保留・注释改口径）；坑 #1182 全量 58 红＝C 盘 %TEMP% 满盘环境死（TEMP 改道 D 盘零代码复跑归零）。
+- 结果：五面编译 0 警 0 错（Tests 0 错 6 旧警）；全量 **7055/7055（13m51s・full_net_258b.trx）**；换装 pid 12720——12 实例恢复 ✅・会话零 ERROR/WARN・实测加载 .NET 10.0.14 运行时；用户级 DOTNET_ROOT 已落（框架依赖 exe 的 apphost 靠它找用户目录运行时——机器级装 .NET 10 后可撤）。
+- 验证：docgates 26/26（落账前后两遍）・计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）。
+- 下一刀候选：①P-298 额度恢复后四叉裁决（probe_glm_classify.py 留架・AiProbe 的 csproj 引 net9 DLL 路径——复活前先 net10 化）；②揪 246 点名行证据；③C 盘清理（余量 ~2-3GB 偏紧・NuGet 缓存 2.23GB 在 C）或 NUGET_PACKAGES 迁 D；④机器级 .NET 10 SDK/runtime 装机（提权）后撤用户级 DOTNET_ROOT；⑤X509 loader 等真落地 pack 版本再换（坑 #1181 顺延）。

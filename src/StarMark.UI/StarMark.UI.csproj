@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <!-- WinAppSDK 不支持 AnyCPU。第一行那种"归一化"在**平台被 VS/命令行当全局属性传进来时是失效的**
          （MSBuild 里项目体改不动全局属性），所以光有它，VS 选到 Any CPU 仍只会得到一句天书般的
