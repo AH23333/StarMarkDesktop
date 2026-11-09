@@ -352,6 +352,25 @@ public sealed class StartupProfileTests : IDisposable
         Assert.InRange(ms, 2, 60);
     }
 
+    /// <summary>
+    /// 片253 的「显示排空」刻度：起表时刻在调用方手里（派发那一侧）、停表在回调真正被调度到的瞬间——
+    /// <see cref="StartupProfile.Measure"/> 只能从回调内部起表，量不到回调开始之前的队列等待。
+    /// </summary>
+    [Fact]
+    public void ElapsedSpeaksOfTheTimeSinceTheCallersStartingTimestamp()
+    {
+        var from = System.Diagnostics.Stopwatch.GetTimestamp();
+        SpinSixMs();
+        StartupProfile.Elapsed("排空读数", from);
+
+        Assert.Single(_lines);                                                 // 高频刻度不带内存行
+        Assert.StartsWith("[耗时] 排空读数", _lines[0], StringComparison.Ordinal);
+        var reported = System.Text.RegularExpressions.Regex.Match(_lines[0], @"：(\d+) ms");
+        Assert.True(reported.Success, $"这一行没有可解析的毫秒数：{_lines[0]}");
+        Assert.InRange(int.Parse(reported.Groups[1].Value), 2, 60);            // 起表到停表确实隔着那 6 ms
+        Assert.Contains("排空读数", StartupProfile.LastCheckpoint);             // 刻度照样往前推：卡在队列里时看门狗要指得出最后排空的是谁
+    }
+
     /// <summary>整份计时只许有一个时钟，且那个时钟不许是 TickCount64（换回去就悄悄退回量化台阶）。</summary>
     [Fact]
     public void TheRulerHasExactlyOneClockAndItIsNotTickCount()

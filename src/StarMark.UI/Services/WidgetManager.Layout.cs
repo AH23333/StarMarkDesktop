@@ -1,4 +1,5 @@
 #nullable enable
+using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Windows.Graphics;
 using StarMark.Abstractions;
@@ -216,8 +217,14 @@ public sealed partial class WidgetManager
         {
             await OnUiAsync(() => ApplyGeometryEntryCore(data, entry, mapping, used));
             // 片244：一拍回合只切开了建窗，首帧合成仍一批落地（1860 ms／UI 自耗 1657 ms 实测）。
-            // 每颗 Reveal 后留真墙钟间隔，让首帧各自落进合成回合——启动恢复与「应用布局」同待遇。
+            // 每颗 Reveal 后留真墙钟间隔，让每帧各自落进合成回合——启动恢复与「应用布局」同待遇。
             await Task.Delay(WidgetStartupPolicy.RevealIntervalMs);
+            // 片253 刻度：这颗窗「显示排空」——起表在派发侧（间隔刚睡完那一刻），Normal 队里排在
+            // 它前面的建窗/布局/首帧活儿全跑完、这颗回调被调度到才停表。新装实测 QuickLaunch 窗显后
+            // 785 ms 才轮到下一颗构建，已知刻度只解释 ~80 ms——那段无主空档压在 UI 线程哪儿，
+            // 下一轮启动日志见分晓。零行为改动：不挪建窗、不挪间隔，只多一行读数。
+            var drainFrom = Stopwatch.GetTimestamp();
+            await OnUiAsync(() => StartupProfile.Elapsed($"组件显示排空 {entry.Kind}", drainFrom));
         }
 
         await OnUiAsync(() =>

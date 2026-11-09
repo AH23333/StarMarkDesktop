@@ -252,4 +252,17 @@ public static class StartupProfile
         NoteCheckpoint(label, ms);
         if (ms >= logWhenMs) Sink($"[耗时] {label}：{ms} ms");
     }
+
+    /// <summary>
+    /// 记一段「起表时刻已在调用方手里」的耗时（片253）：量的是<b>跨线程排空</b>——起表在派发那一侧、
+    /// 停表在这颗回调真正被调度到的瞬间，中间隔着的正是 UI 线程队列里排在它前面的活儿。
+    /// <see cref="Measure"/> 够不着这一段：它只能从回调内部起表，而队列等待恰恰发生在回调开始之前。
+    /// </summary>
+    /// <param name="fromTimestamp">起表刻度，必须取自 <c>Stopwatch.GetTimestamp()</c>——同一把尺才读得出毫秒。</param>
+    public static void Elapsed(string label, long fromTimestamp)
+    {
+        var ms = (long)Stopwatch.GetElapsedTime(fromTimestamp).TotalMilliseconds;
+        NoteCheckpoint(label, ms);
+        Sink($"[耗时] {label}：{ms} ms");
+    }
 }

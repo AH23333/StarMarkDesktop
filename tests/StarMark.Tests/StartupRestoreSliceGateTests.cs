@@ -9,7 +9,7 @@ namespace StarMark.Tests;
 /// 现场（starmark-20261108.log）：12 颗组件窗在同一 UI 回合里连建（布局路径 ApplyGeometryCore 一口气
 /// foreach 完），UIStallWatchdog 每轮启动报 1.7-2.1s 阻塞——用户感知就是「启动那两秒点不动」。
 /// 分帧＝一颗一拍 UI 回合。片243 守四半；片244 真机复盘发现<b>回合切开≠合成切开</b>
-/// （12 颗首帧仍一批 1860 ms、UI 自耗 CPU 1657 ms），补两半，共六半，缺一算没做：
+/// （12 颗首帧仍一批 1860 ms、UI 自耗 CPU 1657 ms），补两半；片253 补观测一半（零行为改动），缺一算没做：
 /// ① 启动恢复逐颗经 OnUiAsync 派发（含「无布局」与「布局失败回退」两条路）；
 /// ② 布局套用抽出单条目帮手（ApplyGeometryEntryCore），同步版与分帧版同源——⛔ 第二份匹配实现；
 /// ③ 设置页「应用布局」同走分帧版（点按钮不再整轮秒级卡死）；
@@ -17,6 +17,9 @@ namespace StarMark.Tests;
 /// ⑤ 每颗 Reveal 后接真墙钟间隔（Task.Delay＋WidgetStartupPolicy.RevealIntervalMs）——
 ///    让每颗首帧落进各自的合成回合，两条恢复路（回退与分帧布局）同款；
 /// ⑥ 间隔数字只住 WidgetStartupPolicy 一颗（同一事实一份实现，80 ms 实测档）。
+/// ⑦ 每颗间隔睡完补一把「显示排空」刻度（StartupProfile.Elapsed，起表在派发侧）——
+///    新装实测 QuickLaunch 窗显后 785 ms 才轮到下一颗构建、已知刻度只解释 ~80 ms，
+///    那段无主空档全靠这行读数归因，删了它下一轮启动又只剩猜。
 /// </para>
 /// </summary>
 public sealed class StartupRestoreSliceGateTests
@@ -95,5 +98,16 @@ public sealed class StartupRestoreSliceGateTests
     {
         var policy = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.Core/Widgets/WidgetStartupPolicy.cs"));
         Assert.Contains("public const int RevealIntervalMs = 80;", policy);
+    }
+
+    /// <summary>⑦ 排空刻度不许被顺手删（片253）：起表在派发侧、读数在 UI 回合里——785 ms 无主空档的归因全靠它。</summary>
+    [Fact]
+    public void EveryRevealIsFollowedByADrainReading()
+    {
+        var sliced = SourceGate.Squash(SourceGate.MethodBody(
+            Layout(), "private async Task ApplyLayoutSlicedAsync(WidgetStoreData data, WidgetLayout layout)"));
+        Assert.Contains(
+            "await OnUiAsync(() => StartupProfile.Elapsed($\"组件显示排空 {entry.Kind}\", drainFrom));",
+            sliced);
     }
 }

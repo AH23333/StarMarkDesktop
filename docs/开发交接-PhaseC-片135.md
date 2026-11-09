@@ -1181,3 +1181,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 全量首跑 7050/7053・红 3（17m36s・总数 7053）——全是历片欠账：AiLayerGate 名册漏记片240 的 AiUndoRecordJson；WidgetGeometryPersistGate/WidgetStartupPolicy 钉着片243 分帧前的旧形状。坑 **#1176**：新刀加新 gate 不回头改钉旧形状的旧 gate＋三族不在定向射域＝红挂七片才暴露。
 - 修法（锚跟手・判据不动）：名册补项 14→15；geometry gate 三体齐看（单步＋两循环编排体不许碰盘・反空转钉「分帧版复用单步」）；startup gate 锚换 ApplyLayoutSlicedAsync。三族＋两邻居定向 47/47・**全量复跑 7053/7053**（12m50s）——**全量新基线 7053**。测试编 0 错・6 警＝未触碰档既有基线。
 - 课与账：全量间隔越长欠账越深——以后动 widget/AI/启动形状的刀，射域记得带上这三族；改钉形状时 grep 全测试目录新旧名对照。计数器 **298/295/3 VERDICT OK**（加减＝0・开放 P-147/P-296/P-297）。⛔ push（桌面未推 0・扩展未推 0）。下一刀候选：①揪着已拆元素不放的那处（等 246 点名行证据）；②片246 断线根因（等真机证据）；③TFM net10（长期）。
+
+## 一百三十四、片253：启动「显示排空」刻度——785 ms 无主空档归因探针（观测・零行为改动）
+
+- 动机：新装启动必报 1500/1375 ms CPU 卡顿，QuickLaunch 窗显→QuickNote 构建之间 785 ms 空档、已知刻度只解释 ~80 ms——~700 ms 无主 CPU；Measure 型刻度只能从回调内部起表，**回调开始之前的队列等待量不到**。
+- 改动（纯观测）：StartupProfile 新 API Elapsed(label, fromTimestamp)（起表在派发侧・停表在回调被调度到・NoteCheckpoint 照推・[耗时] 唯一族）；ApplyLayoutSlicedAsync 每颗间隔睡完插「组件显示排空 {Kind}」刻度（「派发；延迟」钉子原样保住・回退路不插＝最小刀）；新 gate 两道：StartupRestoreSliceGate ⑦＋StartupProfileTests 的 Elapsed 契约。坑 **#1177**：PS 5.1 Select-String -Path 配 ** 不递归不报错只给空——差点误判「[耗时] 无直写厂」，换 Get-ChildItem -Recurse 翻盘。
+- 验证：六族定向 71/71・UI OutDir 探针 0 警 0 错（2m46s）・全量 **7055/7055**（19m05s）——**全量新基线 7055**（上轮 7053＋净 2）。计数器 298/295/3 VERDICT OK。⛔ push（桌面未推 0・扩展未推 0）。
+- 下一刀候选：①**收数**：换装重启（ship_latest.ps1 已 BOM・换装归用户空闲窗口）后读「组件显示排空」读数归因 785 ms——读数大＝首帧合成压队，读数小＝空档在别处（下一颗派发/主窗首渲染）；②揪着已拆元素不放（等 246 点名行证据）；③P-296/P-297 翻牌＝用户跑一轮 AI 分类；④TFM net10（长期）。
