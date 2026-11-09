@@ -1211,3 +1211,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 账面：P-299 新立（甲接受／乙减每窗 UI 活〔大工程〕／丙修探针〔小刀〕・待裁）；坑 #1180；报告 §642。零产品码：纯收数＋落账。
 - 验证：docgates 26/26（落账前后两遍）・计数器 300/296/4 VERDICT OK（开放 P-147/P-297/P-298/P-299）・全量 **7055/7055**（24m59s）。⛔ push（桌面未推 1＝片256・扩展未推 0）。
 - 下一刀候选：①P-298 裁决后的落地刀（思考型 token 地板・探针正本 bin/WI37C/probe_glm_classify.py）；②P-299 裁决（甲乙丙）；③揪着已拆元素不放（等 246 点名行证据）；④TFM net10（长期）。
+
+## 一百三十八、片257：P-299 走甲翻牌收口＋P-298 顺延补记——零码刀，长期项 TFM net10 开工摸底
+
+- 动机：用户裁决「api我暂时无法充值，等额度恢复再继续，p299先收口，先开长期项」。
+- P-299 收口（走甲）：翻牌即收——738ms 家族空档的账记到「每窗 ~280ms UI 活 ×12」，乙（减每窗 UI 活）不立项、丙（修探针）搁置（需真积压读数再按丙案另立）、80ms 节奏保留。P-298 顺延：四叉裁决、落地刀与真端点验证等 API 额度恢复，开放不弃（探针 bin/WI37C/probe_glm_classify.py 留架）。
+- TFM net10 摸底（片258 迁移前清点）：本机 SDK 只有 9.0.310/9.0.317（无 .NET 10・默认 9.0.317・无 global.json・壳无提权）；9 个自有 csproj 全 net9.0-windows10.0.19041.0（Abstractions/Core/Data/Integrations/UI/Updater/Tests/SmokeTest/UpdateSigner）；UI 挂 Microsoft.WindowsAppSDK 2.4.0＋WindowsAppSDKSelfContained=true；ship_latest.ps1 硬编码 net9.0 输出路径（迁移后同步改）；MyDll.csproj（tools/InnoSetup6/Examples）系第三方示例不在迁移面。**阻塞＝.NET 10 SDK 未装**——winget 机装需管理员（壳无提权），备选 dotnet-install 用户目录装（命令带 DOTNET_ROOT/PATH 前缀）。
+- 验证：docgates 26/26（落账前后两遍）・计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）・全量基线 **7055/7055 维持**（零码・full_net_256 在案）。⛔ push（桌面未推 1＝片257・扩展未推 0）。
+- 下一刀候选：①TFM net10 迁移（装 .NET 10 SDK → 9 csproj net9.0-→net10.0- → restore/build 修断 → docgates＋全量 → ship_latest.ps1 改 net10 路径换装＋启动日志验 12 颗 → 落账）；②P-298 额度恢复后四叉裁决；③揪着已拆元素不放（等 246 点名行证据）。
