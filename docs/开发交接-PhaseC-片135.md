@@ -1234,3 +1234,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 判据沉淀：横幅只升致命型（限流/超时瞬时态不挂）・横幅只显既有句子零新增词条・横幅会话内不持久化改配置即收・横幅与状态行同一批分型。
 - 结果：Tests 0 错 6 旧警・UI 0/0；全量 **7056/7056（25m1s・full_net_259b.trx）**；docgates 26/26 两遍；计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）。
 - 下一刀候选：①P-297 换装后用户实测翻牌（额度耗尽态可直接实测 QuotaExhausted 横幅）；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化・csproj 引 net9 DLL 路径）；③P-147 等用户离线备份私钥后降级留痕；④揪 246 点名行证据；⑤C 盘清理（余量 ~1GB 偏紧・NuGet 缓存 2.23GB 在 C）。
+
+## 一百四十一、片260：P-297 走甲翻牌收口（用户裁决「正常，翻牌」）——AI 链路韧性四臂全数落地验证・零码刀
+- 动机：片259 换装（pid 22068・net10）后用户实测两处 UI 修复（AI 卡问题横幅・趋势图柱底对齐）报「正常」——P-297 翻牌。
+- 收口链：片233 立账→片234 四臂落地→片255 GLM 真端点分型坐实→片259 横幅显著化＋趋势图对齐收尾；判据①-⑥ 全数在案（AiClassifyTests・AiLayerTests・AiLayerGateTests・AiChannelWordGateTests 钉）；额度耗尽态真机直读 QuotaExhausted 横幅；限流重试节奏真机未触发（测试已钉・异读另立不重开）。
+- 验证：docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7056/7056 维持（零码）。
+- 下一刀候选：①P-298 额度恢复后四叉裁决（探针正本 bin\WI37C\probe_glm_classify.py 留架・AiProbe 复活前先 net10 化）；②P-147 等用户离线备份私钥后降级留痕；③揪 246 点名行证据；④C 盘清理（余量 ~1GB・NuGet 缓存 2.23GB 在 C）。
