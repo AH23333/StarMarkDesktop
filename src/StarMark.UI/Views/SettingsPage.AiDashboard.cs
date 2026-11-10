@@ -75,7 +75,9 @@ public sealed partial class SettingsPage
             {
                 var height = day.TotalTokens <= 0 ? 0
                     : Math.Max(4.0, Math.Round(DashboardBarPeakHeight * day.TotalTokens / peak));
-                _aiTrendBars.Add(new AiTrendBar(day.Day, day.Calls, day.TotalTokens, height));
+                // 轨道高＝峰值条高那颗常数（片259）：条在固定高的轨道里贴底对齐，日号一律排在轨道脚下，
+                // 短条/空条不再把自己的日号顶到与高条齐平。XAML 里⛔ 写死 44——那会是第二份峰值。
+                _aiTrendBars.Add(new AiTrendBar(day.Day, day.Calls, day.TotalTokens, height, DashboardBarPeakHeight));
             }
 
             // 最近请求明细：仓储已按新→旧排好，这里照单铺
@@ -107,11 +109,14 @@ public sealed class AiTrendBar : INotifyPropertyChanged
 {
     private readonly LocMessage _tip;
 
-    public AiTrendBar(string day, int calls, long tokens, double barHeight)
+    public AiTrendBar(string day, int calls, long tokens, double barHeight, double trackHeight)
     {
         // 日号当标签（"07"），整颗日期进提示——图要的是一眼比高矮，精确到日是悬浮之后的事
         DayLabel = day.Length == 10 ? day.Substring(8, 2) : day;
         BarHeight = barHeight;
+        // 条躺的轨道高（片259）：值＝峰值条高那颗常数，由调用方交进来——行类不自己存 44，
+        // 视觉常数只活在 SettingsPage.AiDashboard 一处。
+        TrackHeight = trackHeight;
         _tip = LocMessage.Of("settings.ai.dashboard.barTip",
             LocMessage.Of("common.rawValue", day), NumberText.Grouped(tokens), calls);
     }
@@ -120,6 +125,9 @@ public sealed class AiTrendBar : INotifyPropertyChanged
 
     public string DayLabel { get; }
     public double BarHeight { get; }
+
+    /// <summary>这根条躺的固定高轨道（<c>{Binding}</c> 的落点）：条在轨道里贴底，日号一律排在轨道脚下。</summary>
+    public double TrackHeight { get; }
 
     /// <summary>条上的悬浮提示（<c>{Binding}</c> 的落点；⛔ 在这里存渲染结果＝换语言停在上一门）。</summary>
     public string TipText => _tip.Render();

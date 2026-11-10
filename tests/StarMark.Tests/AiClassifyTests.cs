@@ -383,6 +383,9 @@ public sealed class AiClassifyTests
         Assert.Equal(2, report.Batches[0].Attempts);
         Assert.Equal(1, report.Batches[1].Attempts);
         Assert.Equal(2, report.Proposals.Count);
+        // 全成＝没有"念给用户的那句失败"，分型保持占位（片259）：Unknown 在这里读作"无事可报"，
+        // 界面那道"致命型才上横幅"的闸不会因占位误亮。
+        Assert.Equal(AiFailureKind.Unknown, report.FirstFailure);
     }
 
     [Fact]
@@ -447,6 +450,8 @@ public sealed class AiClassifyTests
         Assert.NotNull(report.AbortReason);
         Assert.Contains("第 3 批", report.AbortReason!.Render());   // 熔断那半句要能对回"哪一批起没问"
         Assert.Contains("超时", report.AbortReason!.Render());
+        // 连败熔断那一支的分型＝撞闸那批的分型（片259）：两批全超时撞闸，FirstFailure 就是超时那一型。
+        Assert.Equal(AiFailureKind.TimedOut, report.FirstFailure);
         Assert.False(report.AnythingToApply);
     }
 
@@ -477,6 +482,9 @@ public sealed class AiClassifyTests
         Assert.Contains("第 2 批", report.AbortReason!.Render());
         Assert.Contains("充值", report.AbortReason!.Render());      // 那句话给的是下一步：掏钱，不是再点一次
         Assert.Contains("余额不足", report.AbortReason!.Render());
+        // 分型跟着"念给用户的那句"走（片259）：熔断那半句说的是额度，FirstFailure 就必须是额度那一型——
+        // 两处各取一批＝横幅说额度、状态行说超时的两张脸。
+        Assert.Equal(AiFailureKind.QuotaExhausted, report.FirstFailure);
     }
 
     /// <summary>退避是等待，不是占着不让停：按停止的那一刻要能立刻带着已整理的东西回来。</summary>

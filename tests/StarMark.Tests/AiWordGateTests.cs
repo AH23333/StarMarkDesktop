@@ -190,7 +190,10 @@ public sealed class AiWordGateTests : IDisposable
         Assert.Equal(0, Times(all, "AiResumeButton.Content = \""));
         Assert.Contains("private async Task ApplyAsync(ClassifyPlan plan, LocMessage label)", CodeOf(Ai));
         Assert.Contains("public (int Seconds, LocMessage? Reason) LoadAiBatchTimeout", CodeOf(Store));
-        Assert.Contains("    LocMessage? FirstError)", CodeOf(Service));
+        // 片259 改口一处：OrganiseOutcome 的收尾从 FirstError 换成 FirstFailure（致命型分型随同一批带出——
+        // 卡顶状态横幅靠它判"该不该上"，只有那句话没有分型时界面无从判起）。两行一起钉：收尾对、分型在。
+        Assert.Contains("    LocMessage? FirstError,", CodeOf(Service));
+        Assert.Contains("    AiFailureKind FirstFailure = AiFailureKind.Unknown)", CodeOf(Service));
         Assert.Contains("int limit, Action<LocMessage> onStatus,", CodeOf(Service));
         Assert.Contains("private static LocMessage Describe(OrganiseOutcome outcome)", CodeOf(Ai));
         Assert.Contains("private static LocMessage DescribeFixedBatchLimits()", CodeOf(Ai));

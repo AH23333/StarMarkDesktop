@@ -96,7 +96,37 @@ public sealed partial class SettingsPage
         var settings = ReadAiSettings();
         App.Services.GetRequiredService<SettingsStore>().SaveAiSettings(settings);
         ShowAiProblem(settings);
+        // 横幅念的是"对刚才那套配置的一次观察"：通道/模型/Key/地址任何一格一改，旧观察就不再描述
+        // 眼前这套配置（换通道之后还挂着旧通道的"额度用完"＝指着别人念旧账），就地收起，
+        // 下一次整理/自检撞出什么再亮什么。
+        HideAiChannelProblem();
     }
+
+    /// <summary>
+    /// 卡顶那道状态横幅的升/降（片259·用户点名：额度耗尽这类致命型失败从前只有状态行小字，
+    /// 用户在满屏说明里找不到一句"现在到底怎么了"）。<b>只在致命型失败上升起</b>——
+    /// 重试救不回的那堵墙（额度耗尽/Key 被拒/模型名不对/协议不认）才配常驻卡顶；
+    /// 限流/超时是"再试可能就过"的瞬时态，挂上去只会教人无视横幅。
+    /// </summary>
+    private void ShowAiChannelProblem(OrganiseOutcome outcome)
+    {
+        if (outcome.FirstFailure is AiFailureKind.ModelNotFound or AiFailureKind.Unauthorized
+                or AiFailureKind.QuotaExhausted or AiFailureKind.BadResponse
+            && outcome.FirstError is { } why)
+            ShowAiChannelProblem(why);
+        else
+            HideAiChannelProblem();
+    }
+
+    private void ShowAiChannelProblem(LocMessage why)
+    {
+        AiChannelProblemBanner.Visibility = Visibility.Visible;
+        // 走 SetMessage 交「键＋实参」：换语言那一刻由 LocText 拿存下的实参重贴（与状态行同一机制），
+        // 那句"请到服务商控制台充值"跟着界面语言走。
+        LocText.SetMessage(AiChannelProblemText, why);
+    }
+
+    private void HideAiChannelProblem() => AiChannelProblemBanner.Visibility = Visibility.Collapsed;
 
     /// <summary>未测试过就把"能不能用"的判据显示出来：<b>配置不成立时不该让用户去点「测试连接」才发现</b>。</summary>
     private void ShowAiProblem(AiSettings? settings = null)
@@ -144,6 +174,10 @@ public sealed partial class SettingsPage
         {
             var probe = await App.Services.GetRequiredService<AiGateway>().ProbeAsync(settings, cts.Token);
             LocText.SetMessage(AiStatusText, probe.Report);   // 报告那句由 Gateway 交键（✅片7），这里⛔ 再套一道数据门
+            // 自检也是一次对通道的观察（片259）：败了（含"通了但模型名不对"）横幅大字说，
+            // 通了就地收起——刚验过能用，横幅再挂就是旧话。
+            if (probe.Ok) HideAiChannelProblem();
+            else ShowAiChannelProblem(probe.Report);
 
             // "通了但模型名不对"要能一步修好：把服务侧的名字直接递过去，而不是让用户自己抄一遍
             _aiModels = probe.Models;
@@ -314,6 +348,7 @@ public sealed partial class SettingsPage
 
             ShowPlan(outcome.Plan);
             LocText.SetMessage(AiStatusText, Describe(outcome));
+            ShowAiChannelProblem(outcome);    // 致命型（额度耗尽/Key 拒…）另上卡顶横幅（片259），状态行照旧念全账
         }
         catch (OperationCanceledException)
         {

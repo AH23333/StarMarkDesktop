@@ -375,6 +375,23 @@
                             <StackPanel Spacing="8">
                                 <TextBlock i18n:LocText.Key="settings.ai.title" Style="{StaticResource SettingTitle}"/>
 
+                                <!--
+                                    AI 通道状态横幅（片259·用户点名）：上一轮整理/自检撞出的<b>致命型</b>失败
+                                    （额度耗尽/Key 被拒/模型名不对）在这里大字直说。从前它只埋在下面状态行
+                                    那句 0.72 透明度的小字里——满屏说明没有一句"现在到底怎么了"。
+                                    只在致命型现身：限流/超时是"再试可能就过"的瞬时态，横幅常挂只会教人无视它。
+                                    字由 code-behind 交键（这里不挂静态标记，换语言由 SetMessage 存的「键＋实参」重贴）；
+                                    改任何一栏配置就地收起——横幅念的是"对当时那套配置的一次观察"，换了配置旧观察就作废。
+                                -->
+                                <Border x:Name="AiChannelProblemBanner" Visibility="Collapsed"
+                                        Background="{ThemeResource SystemFillColorCautionBackgroundBrush}"
+                                        BorderBrush="{ThemeResource SystemFillColorCautionBrush}" BorderThickness="1"
+                                        CornerRadius="6" Padding="12,8">
+                                    <TextBlock x:Name="AiChannelProblemText" FontSize="14" FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               Foreground="{ThemeResource SystemFillColorCautionBrush}"/>
+                                </Border>
+
                                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                                     <TextBlock Grid.Column="0" i18n:LocText.Key="settings.ai.enable" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
                                     <ToggleSwitch Grid.Column="1" x:Name="AiEnabledToggle" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
@@ -534,8 +551,17 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
                                                     <StackPanel Spacing="2" ToolTipService.ToolTip="{Binding TipText}">
-                                                        <Border Width="14" Height="{Binding BarHeight}" VerticalAlignment="Bottom"
-                                                                Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2,2,0,0"/>
+                                                        <!--
+                                                            条躺在一格<b>固定高的轨道</b>里（片259·用户指认的渲染错位）：
+                                                            VerticalAlignment=Bottom 只在"容器比条高"时才有意义，
+                                                            从前条直接躺在 StackPanel 里，短条/空条的日号跟着条顶浮上去
+                                                            ——"底下的天数标号跑到和柱子一样高"就是它。轨道高从代码常数来
+                                                            （TrackHeight＝峰值条高），零日靠空轨道占位——"这天没花"照样看得见。
+                                                        -->
+                                                        <Grid Height="{Binding TrackHeight}">
+                                                            <Border Width="14" Height="{Binding BarHeight}" VerticalAlignment="Bottom"
+                                                                    Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="2,2,0,0"/>
+                                                        </Grid>
                                                         <TextBlock Text="{Binding DayLabel}" FontSize="9" Opacity="0.55" HorizontalAlignment="Center"/>
                                                     </StackPanel>
                                                 </DataTemplate>

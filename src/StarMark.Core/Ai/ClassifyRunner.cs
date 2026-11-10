@@ -45,6 +45,11 @@ public sealed record ClassifyBatchReport(
 /// 或连续两批重试后仍全败——线是真的断了，后面的批不再烧超时。<b>与 StoppedBatches 分开</b>：
 /// "我叫的停"与"线断了"是两件事，混在一个数里，"还剩几批没问"就永远对不上。</param>
 /// <param name="AbortReason">熔断那句话（「第 N 批起没有再问：原因」）；null＝没熔断。</param>
+/// <param name="FirstFailure">这轮<b>第一句要念给用户听的失败</b>败在哪一型上（片259·用户点名）：
+/// 与带出去的那句原因（<see cref="AbortReason"/>／第一个坏批的 Error）永远出自<b>同一批</b>
+/// （没熔断＝第一个坏批，熔断＝撞闸那一批）——两处各取一批就会出现"横幅说额度、状态行说超时"的两张脸。
+/// 全成＝<see cref="AiFailureKind.Unknown"/>。界面靠它判"这一轮的失败配不配上状态横幅"：
+/// 致命型（重试救不回的那堵墙）才配，限流/超时是瞬时态。</param>
 public sealed record ClassifyRunReport(
     IReadOnlyList<ClassifyBatchReport> Batches,
     IReadOnlyList<TagProposal> Proposals,
@@ -53,7 +58,8 @@ public sealed record ClassifyRunReport(
     int StoppedBatches,
     IReadOnlyList<string> NewTags,
     int SkippedBatches = 0,
-    LocMessage? AbortReason = null)
+    LocMessage? AbortReason = null,
+    AiFailureKind FirstFailure = AiFailureKind.Unknown)
 {
     public int AnsweredItems => Proposals.Count;
     public int BatchesTotal => Batches.Count + StoppedBatches + SkippedBatches;
@@ -121,6 +127,9 @@ public static class ClassifyRunner
         var skipped = 0;
         LocMessage? abortReason = null;
         var failedStreak = 0;
+        // 与 FirstError 同源的分型（片259）：没熔断时跟第一个坏批走、熔断时被撞闸那批顶上——
+        // 见 ClassifyRunReport 那位 param 的"同一批"约定。
+        var firstFailure = AiFailureKind.Unknown;
 
         for (var i = 0; i < batches.Count; i++)
         {
@@ -152,15 +161,26 @@ public static class ClassifyRunner
                 proposals.AddRange(report.Proposals);
                 newTags.AddRange(from proposal in report.Proposals from tag in proposal.Tags select tag);
             }
-            else if (batches.Count - i - 1 > 0)
+            else
             {
-                // 熔断的两种脸（P-297）：致命型（额度耗尽/Key 拒/协议不认——重试只是把同一堵墙再撞两遍）
-                // 第一批就停；可重试型连着两批三试全败——线是真的断了，别把一整轮全烧在超时上。
-                // 只在"后面还有批"时熔断：最后一批的失败照旧只记失败，不产生「未再尝试」那半句。
-                if (!AiFailures.IsRetryable(report.Failure)) skipped = batches.Count - i - 1;
-                else if (++failedStreak >= 2) skipped = batches.Count - i - 1;
-                if (skipped > 0)
-                    abortReason = LocMessage.Of("ai.run.aborted", i + 2, report.Error);
+                // 第一个坏批的分型先记下（没熔断时它就是这一轮的 FirstFailure）：
+                // Unknown 占位＝还没见过坏批，真有一轮全败在 Unknown 上也照样原样带出，不再造"没失败"的假象。
+                if (firstFailure == AiFailureKind.Unknown) firstFailure = report.Failure;
+                if (batches.Count - i - 1 > 0)
+                {
+                    // 熔断的两种脸（P-297）：致命型（额度耗尽/Key 拒/协议不认——重试只是把同一堵墙再撞两遍）
+                    // 第一批就停；可重试型连着两批三试全败——线是真的断了，别把一整轮全烧在超时上。
+                    // 只在"后面还有批"时熔断：最后一批的失败照旧只记失败，不产生「未再尝试」那半句。
+                    if (!AiFailures.IsRetryable(report.Failure)) skipped = batches.Count - i - 1;
+                    else if (++failedStreak >= 2) skipped = batches.Count - i - 1;
+                    if (skipped > 0)
+                    {
+                        abortReason = LocMessage.Of("ai.run.aborted", i + 2, report.Error);
+                        // 熔断那半句念的是撞闸那批的原因，分型跟着换到同一批（"同一批"约定）：
+                        // 第 1 批超时、第 2 批额度耗尽撞闸时，用户看到的两种读数说的必须是同一件事。
+                        firstFailure = report.Failure;
+                    }
+                }
             }
 
             // 检查点必须在下一批之前落定：否则进程中途被杀时，界面显示的进度会比真实进度新，
@@ -177,7 +197,8 @@ public static class ClassifyRunner
             stopped,
             newTags.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             skipped,
-            abortReason);
+            abortReason,
+            firstFailure);
     }
 
     /// <summary>单批＋重试：可重试型失败最多再发 <see cref="MaxAttemptsPerBatch"/> 减一次，

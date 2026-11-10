@@ -21,6 +21,9 @@ namespace StarMark.UI.Services;
 /// <param name="FirstError">这一轮<b>为什么没跑成</b>。两种脸：跑起来之后＝第一个坏批的原因（<b>只报第一个</b>：
 /// 六个批各自超时，用户要处理的是同一件事），一发都没出去时＝那道闸自己的话（预算／通道／没候选）。
 /// 两种都要上屏，出口只有一处＝<c>SettingsPage.Ai.cs</c> 的 <c>Describe</c>（✅WI-63·P-195）。</param>
+/// <param name="FirstFailure"><see cref="FirstError"/> 败在哪一型上（片259·用户点名）：与那句话出自同一批，
+/// 闸自己拦下（预算／通道／没候选）＝<see cref="AiFailureKind.Unknown"/>——那是"没发出去"而不是"发了没成"，
+/// 配不上"通道撞了哪堵墙"的分型。界面靠它决定致命型失败要不要上卡顶状态横幅。</param>
 public sealed record OrganiseOutcome(
     ClassifyPlan Plan,
     int AskedItems,
@@ -31,7 +34,8 @@ public sealed record OrganiseOutcome(
     int UnknownOrdinals,
     int DroppedTags,
     int DroppedItems,
-    LocMessage? FirstError)
+    LocMessage? FirstError,
+    AiFailureKind FirstFailure = AiFailureKind.Unknown)
 {
     public bool NothingOrganised => Plan.IsEmpty && FailedBatches > 0;
 }
@@ -247,7 +251,8 @@ public sealed class AiClassifyService
             report.AbortReason
             ?? (report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
                 ? firstBad.Error
-                : null));
+                : null),
+            report.FirstFailure);
     }
 
     /// <summary>把一批的结果并进"目前为止"。<b>同一条目再出现时以新的那份为准而不是合并标签</b>：

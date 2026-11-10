@@ -1227,3 +1227,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 结果：五面编译 0 警 0 错（Tests 0 错 6 旧警）；全量 **7055/7055（13m51s・full_net_258b.trx）**；换装 pid 12720——12 实例恢复 ✅・会话零 ERROR/WARN・实测加载 .NET 10.0.14 运行时；用户级 DOTNET_ROOT 已落（框架依赖 exe 的 apphost 靠它找用户目录运行时——机器级装 .NET 10 后可撤）。
 - 验证：docgates 26/26（落账前后两遍）・计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）。
 - 下一刀候选：①P-298 额度恢复后四叉裁决（probe_glm_classify.py 留架・AiProbe 的 csproj 引 net9 DLL 路径——复活前先 net10 化）；②揪 246 点名行证据；③C 盘清理（余量 ~2-3GB 偏紧・NuGet 缓存 2.23GB 在 C）或 NUGET_PACKAGES 迁 D；④机器级 .NET 10 SDK/runtime 装机（提权）后撤用户级 DOTNET_ROOT；⑤X509 loader 等真落地 pack 版本再换（坑 #1181 顺延）。
+
+## 一百四十、片259：P-297 两处 UI 修复——AI 通道问题横幅（FirstFailure 分型）＋仪表盘趋势图柱底对齐・活档两指针重锚（坑 #1183）・全量 7056/7056
+- 动机：用户实测 P-297 报两处——①AI 区文字说明过多、额度状态全是小字无显著提示 ②仪表盘「按天趋势」柱状图天数标号与柱子齐平（渲染错位）。
+- 刀面：横幅三件套（AiChannelProblemBanner/ShowAiChannelProblem×2/HideAiChannelProblem＋三接线＝Organise 后 Show・Probe 后 Ok?Hide:Show・PersistAiAndShow 尾 Hide）＋FirstFailure 分型透传（ClassifyRunReport 第 10 位→OrganiseOutcome 第 11 位→UI・熔断时与念出那句同批）＋趋势图 TrackHeight 底对齐（AiTrendBar ctor 第 5 参＝DashboardBarPeakHeight 44 单源）；测试＋1 Fact＋3 断言＋门③改口；活档两颗指针按点名语义重锚（坑 #1183：87/117/131→125/162/198・465-467→599-602・census 21→19・fallen_259.py 留 bin\WI37C）。
+- 判据沉淀：横幅只升致命型（限流/超时瞬时态不挂）・横幅只显既有句子零新增词条・横幅会话内不持久化改配置即收・横幅与状态行同一批分型。
+- 结果：Tests 0 错 6 旧警・UI 0/0；全量 **7056/7056（25m1s・full_net_259b.trx）**；docgates 26/26 两遍；计数器 300/297/3 VERDICT OK（开放 P-147/P-297/P-298）。
+- 下一刀候选：①P-297 换装后用户实测翻牌（额度耗尽态可直接实测 QuotaExhausted 横幅）；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化・csproj 引 net9 DLL 路径）；③P-147 等用户离线备份私钥后降级留痕；④揪 246 点名行证据；⑤C 盘清理（余量 ~1GB 偏紧・NuGet 缓存 2.23GB 在 C）。

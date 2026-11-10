@@ -91,6 +91,30 @@ public sealed class AiLayerGateTests
         Assert.Contains("public ClassifyPlan LoadPending()", service);        // 种子与读档必须走同一个口子
     }
 
+    /// <summary>片259·用户点名（P-297 实测反馈）：额度耗尽这类<b>致命型</b>失败必须在卡顶横幅大字直说——
+    /// 从前只有状态行一句 0.72 透明度的小字，"额度用完了"埋在满屏说明里，用户找不到一句"现在到底怎么了"。
+    /// 钉三处：<b>横幅存在且是警示色的框</b>（不是又一行小字）、<b>致命型分型从编排层一路透传到界面</b>
+    /// （片259 之前 FirstError 只有那句话、没有分型，界面想判"该不该上横幅"也无从判起——这就是根因断点）、
+    /// <b>改配置就地收起</b>（横幅念的是"对当时那套配置的一次观察"，换了配置旧观察就不再描述眼前这套）。</summary>
+    [Fact]
+    public void FatalChannelFailuresSurfaceInTheBannerNotOnlyTheSmallStatusLine()
+    {
+        var xaml = Read(Xaml);
+        Assert.Contains("x:Name=\"AiChannelProblemBanner\"", xaml);
+        Assert.Contains("SystemFillColorCautionBackgroundBrush", xaml);   // 警示底色：横幅≠又一行小字
+        Assert.Contains("SystemFillColorCautionBrush", xaml);
+
+        var page = Read(Page);
+        Assert.Contains("ShowAiChannelProblem(outcome)", page);           // 整理撞出致命型 → 横幅
+        Assert.Contains("probe.Ok) HideAiChannelProblem()", page);        // 自检通了 → 收起；败了照上（同一拍那次观察）
+        Assert.Contains("HideAiChannelProblem();", page);                 // 改任何一栏配置 → 旧观察作废
+
+        // 分型链路三节：编排层带出 → 整理结果透传 → 界面才判得出"致不致命"，断一节横幅就永远升不起来
+        Assert.Contains("AiFailureKind FirstFailure = AiFailureKind.Unknown",
+            Read("src/StarMark.Core/Ai/ClassifyRunner.cs"));
+        Assert.Contains("report.FirstFailure)", Read("src/StarMark.UI/Services/AiClassifyService.cs"));
+    }
+
     [Fact]
     public void EveryAiFieldPersistsImmediately()
     {
