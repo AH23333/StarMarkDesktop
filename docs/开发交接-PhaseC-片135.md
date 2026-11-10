@@ -1247,3 +1247,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 收口：根因案**不立**——新会话无死元素（原现场是攒出来的），WARN 文案自带立案指引，真出现时按名单现立案，无观察损失；热键 Ctrl+Alt+P 1409 每启稳定复现＝本机他程序占用（画布画笔热键本机失效・app 优雅降级），占用者待查非码病。
 - 验证：docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7056/7056 维持（零码）。
 - 下一刀候选：①P-298 额度恢复后四叉裁决（AiProbe 留架・复活前先 net10 化）；②P-147 等用户离线备份私钥后降级留痕；③热键 Ctrl+Alt+P 占用者定位（环境小事）；④C 盘清理跟进（用户清理中・现读 C 3.55GB/D 14.32GB）。
+
+## 一百四十三、片262：发版 v1.0.5——422 提交一版发齐（net10 换轨・AI 韧性・语言重贴）・发版脚本 DPAPI 解封一坑当场修
+- 动机：用户指示「先发一版 release」＋「还有 push」——v1.0.4 以来 422 提交攒成 v1.0.5 一版发齐。
+- 做了什么：版本号 1.0.5＋发布说明（commit 1cbcebe・发布说明主角 net10 换轨〔.NET 10 运行时前置警告〕・AI 韧性・语言重贴）；四颗产物全链（zip 82,309,650/manifest 551 颗/sig/setup 58,720,984・私钥签名）；tag v1.0.5＋main＋tag 已推；GitHub Release 已公开（四颗 sha256 对账）：https://github.com/AH23333/StarMarkDesktop/releases/tag/v1.0.5
+- 一坑当场修（#1184）：publish-release.ps1 首跑 401＝DPAPI 密文当 Bearer（片211 换封装没数全读方）——脚本加解封段（dpapi1: 哨兵→Unprotect・明文回落・解不开拒发）＋凭据闸两钉（dpapi1: 在场・Unprotect 真调用）；**发版环境起法**：脚本内裸 dotnet＝SDK 9，须子壳前置 DOTNET_ROOT/PATH=%LOCALAPPDATA%\Microsoft\dotnet 再跑 release-package.ps1。
+- 验证：发版闸门 37/37・docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・产品码零改动全量基线 7056/7056 维持（a17c45f 起产品码一致）。
+- 下一刀候选：①真机装着的 v1.0.4 走一次「立即更新」升 v1.0.5 实路验证（先装 .NET 10 运行时再更新那条路只有真机能点）；②P-298 额度恢复后四叉裁决（AiProbe 留架・复活前先 net10 化）；③P-147 等用户离线备份私钥后降级留痕（**v1.0.5 清单已用私钥签过——备份更迫切但不阻塞**）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。

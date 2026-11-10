@@ -237,6 +237,10 @@ public sealed class ReleasePackagingGateTests
         Assert.DoesNotMatch(@"\$token[^\n]*(Out-File|Add-Content|Tee-Object)", code);   // 不许被写进文件
         Assert.DoesNotContain("github_pat_", code, StringComparison.Ordinal);   // 也不许被贴进脚本本身
         Assert.DoesNotContain("ghp_", code, StringComparison.Ordinal);
+        // 片211（P-30/P-89）起这一格落盘是 DPAPI 密文（哨兵前缀 dpapi1:）：发版脚本必须认出并解封（#1184）——
+        // 把密文当 Bearer 发出去是一个 401，而报错文案会把人指去 GitHub 权限设置页，方向全错。
+        Assert.Contains("dpapi1:", code, StringComparison.Ordinal);
+        Assert.Contains("ProtectedData]::Unprotect", code, StringComparison.Ordinal);   // 不只认前缀，真解封
     }
 
     [Fact]

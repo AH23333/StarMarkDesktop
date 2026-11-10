@@ -79,6 +79,20 @@ $cfgPath = Join-Path $env:APPDATA "StarMark\github.json"
 if (-not (Test-Path $cfgPath)) { throw "读不到应用的凭据：$cfgPath" }
 $token = (Get-Content -Raw $cfgPath | ConvertFrom-Json).Token
 if ([string]::IsNullOrWhiteSpace($token)) { throw "应用存的那把 Token 是空的" }
+# 应用从 P-30/P-89 起把这一格按 DPAPI（CurrentUser）落盘，密文带 "dpapi1:" 前缀（口径见 StarMark.Abstractions.SecretProtector）。
+# 这里按同一口径解开：密文→明文；明文原样走（旧档回落）；**解不开就拒绝发**——
+# ⛔ 把密文当 Bearer 发出去：那会得到一个 401，把「换账号／换机器／档坏了」错报成「凭据没权限」，指错排查方向。
+if ($token.StartsWith("dpapi1:", [System.StringComparison]::Ordinal)) {
+    Add-Type -AssemblyName System.Security
+    try {
+        $token = [System.Text.Encoding]::UTF8.GetString([System.Security.Cryptography.ProtectedData]::Unprotect(
+            [System.Convert]::FromBase64String($token.Substring(7)), $null,
+            [System.Security.Cryptography.DataProtectionScope]::CurrentUser))
+    } catch {
+        throw "github.json 的 Token 是密文但本机解不开（换账号／换机器／档损坏）：去应用的 GitHub 那一栏重填一次凭据再跑"
+    }
+    if ([string]::IsNullOrWhiteSpace($token)) { throw "解出来的 Token 是空的" }
+}
 $headers = @{ Authorization = "Bearer $token"; Accept = "application/vnd.github+json"; "X-GitHub-Api-Version" = "2022-11-28" }
 $api = "https://api.github.com/repos/$Repository"
 
