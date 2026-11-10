@@ -1240,3 +1240,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 收口链：片233 立账→片234 四臂落地→片255 GLM 真端点分型坐实→片259 横幅显著化＋趋势图对齐收尾；判据①-⑥ 全数在案（AiClassifyTests・AiLayerTests・AiLayerGateTests・AiChannelWordGateTests 钉）；额度耗尽态真机直读 QuotaExhausted 横幅；限流重试节奏真机未触发（测试已钉・异读另立不重开）。
 - 验证：docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7056/7056 维持（零码）。
 - 下一刀候选：①P-298 额度恢复后四叉裁决（探针正本 bin\WI37C\probe_glm_classify.py 留架・AiProbe 复活前先 net10 化）；②P-147 等用户离线备份私钥后降级留痕；③揪 246 点名行证据；④C 盘清理（余量 ~1GB・NuGet 缓存 2.23GB 在 C）。
+
+## 一百四十二、片261：片246 尾巴真机验证收口（用户裁决「就这样翻牌」）——5 切语言零异常零点名 WARN・根因案不立等自然复现・零码刀
+- 动机：片246 留的尾巴「揪着已拆元素的那处按点名行另立一案」等真机证据——用户裁决测完翻牌。
+- 验证：pid 14808 新会话连切语言（zh→en→ja→跟随系统→zh・5 次写入取证 4 次真切）——零异常・零 COMException・零点名 WARN（TrySet=False 一次＝有效 locale 未变・良性）；片246 验收口径「COMException 应消失或换成一行点名」达成。
+- 收口：根因案**不立**——新会话无死元素（原现场是攒出来的），WARN 文案自带立案指引，真出现时按名单现立案，无观察损失；热键 Ctrl+Alt+P 1409 每启稳定复现＝本机他程序占用（画布画笔热键本机失效・app 优雅降级），占用者待查非码病。
+- 验证：docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7056/7056 维持（零码）。
+- 下一刀候选：①P-298 额度恢复后四叉裁决（AiProbe 留架・复活前先 net10 化）；②P-147 等用户离线备份私钥后降级留痕；③热键 Ctrl+Alt+P 占用者定位（环境小事）；④C 盘清理跟进（用户清理中・现读 C 3.55GB/D 14.32GB）。
