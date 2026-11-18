@@ -1,36 +1,65 @@
-# StarMark
+<p align="center">
+  <img src="docs/images/icon-256.png" width="160" alt="StarMark" />
+</p>
 
-> 桌面端统一搜索 + 收藏中心 + 常驻工具台：把 GitHub Stars、浏览器书签、本地文件、剪贴板历史、RSS、热榜这些"分散在十几个地方的有用东西"汇聚到一个搜索框里，
-> 并在桌面上常驻一组可拖拽、可吸附、可缩放的组件与一套截图 / 贴图 / 屏幕画布工具。
->
-> 本地优先：数据全在本机 SQLite（FTS5 全文索引），不需要账号，不依赖云同步。
+<h1 align="center">StarMark</h1>
 
-[![.NET](https://img.shields.io/badge/.NET-9.0-blue.svg)](https://dotnet.microsoft.com/)
-[![Windows App SDK](https://img.shields.io/badge/Windows%20App%20SDK-2.4-blue.svg)](https://learn.microsoft.com/windows/apps/windows-app-sdk/)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%2019041%2B-lightgrey.svg)](https://learn.microsoft.com/windows/)
-[![Version](https://img.shields.io/badge/version-1.0.1-green.svg)](https://github.com/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+<p align="center">
+  <strong>桌面端统一搜索 · 收藏中心 · 常驻工具台</strong><br/>
+  把 GitHub Stars、浏览器书签、本地文件、剪贴板历史、RSS、热榜这些「分散在十几个地方的有用东西」<br/>
+  汇聚到一个搜索框里，并在桌面常驻一组可拖拽、可吸附、可缩放的组件与一套截图 / 贴图 / 屏幕画布工具。<br/><br/>
+  本地优先：数据全在本机 SQLite（FTS5 全文索引），不需要账号，不依赖云同步。
+</p>
+
+<p align="center">
+  <a href="https://github.com/AH23333/StarMarkDesktop/releases"><img src="https://img.shields.io/github/v/release/AH23333/StarMarkDesktop?style=flat-square" alt="release"></a>
+  <a href="https://github.com/AH23333/StarMarkDesktop/releases"><img src="https://img.shields.io/github/downloads/AH23333/StarMarkDesktop/total?style=flat-square" alt="downloads"></a>
+  <img src="https://img.shields.io/badge/.NET-10-blue?style=flat-square&logo=dotnet" alt=".NET 10">
+  <img src="https://img.shields.io/badge/platform-Windows%2010%2019041%2B%20%7C%2011-lightgrey?style=flat-square&logo=windows" alt="platform">
+  <img src="https://img.shields.io/badge/architecture-x64-lightgrey?style=flat-square" alt="x64">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/AH23333/StarMarkDesktop?style=flat-square" alt="MIT"></a>
+</p>
 
 ---
 
 ## 目录
 
+- [下载安装](#下载安装)
 - [为什么做](#为什么做)
 - [核心功能](#核心功能)
 - [桌面组件](#桌面组件)
-- [屏幕工具](#屏幕工具截图--贴图--画布)
+- [屏幕工具（截图 / 贴图 / 画布）](#屏幕工具截图--贴图--画布)
 - [架构总览](#架构总览)
 - [集成源](#集成源)
-- [快速开始](#快速开始)
+- [从源码构建](#从源码构建)
 - [配置](#配置)
 - [项目结构](#项目结构)
-- [构建 · 测试 · 发布](#构建--测试--发布)
 - [自动更新链](#自动更新链)
+- [参与贡献](#参与贡献)
+- [致谢](#致谢)
 - [文档](#文档)
 - [明确不做的事](#明确不做的事)
+- [Star History](#star-history)
 - [License](#license)
 
 ---
+
+## 下载安装
+
+### 系统要求
+
+- Windows 10 19041+ 或 Windows 11，**x64**
+- **.NET 10 Desktop Runtime**（产物是框架依赖发布，运行时须装在机器上；Windows App SDK 运行时随包携带）
+
+### 安装
+
+从 [**Releases**](https://github.com/AH23333/StarMarkDesktop/releases) 下载最新版 `setup.exe` 双击安装即可。安装包包含主程序与独立更新器，装完自动创建开始菜单 / 桌面快捷方式。
+
+### 升级
+
+- **已装用户**：设置页 →「关于与更新」→「立即更新」。更新走内置签名校验更新链（见[自动更新链](#自动更新链)），不需要重新下载安装包。
+  跨大版本升级（如 v1.0.4 → v1.0.5）请**先装好新版要求的 .NET Desktop Runtime 再点「立即更新」**——运行时没装就更新，新版会起不来；装上即起，不用重更。
+- 检测与替换是两件事：关掉自动检测不会有任何东西被改动，只有点「立即更新」才真的下载并替换。
 
 ## 为什么做
 
@@ -124,25 +153,25 @@
 │        热榜 / RSS / 设置）· 17 种组件窗 · 截图贴图画布 · 托盘  │
 └───────────────┬──────────────────────────────────────────────┘
                 │ 判据能测的尽量下沉，UI 侧只留源码形状闸门
-   ┌────────────┴──────────────────────────────────────────────┐
+   ┌────────────┴────────────────────────────────────────────┐
    │  StarMark.Core（纯逻辑，可单测）                            │
    │  SearchService · SyncCoordinator · 备份 · 洞察             │
    │  Widgets/（描述符注册表 · 存储 · 吸附 · 快照 · 各组件判据） │
    │  AlarmPolicy · CountdownPolicy · FocusTimer · WeatherCode  │
    │  Ocr/ · Capture/ · Trending/ · Feed/ · Ai/                │
-   └────────────┬──────────────────────────────────────────────┘
-   ┌────────────┴──────────────────────────────────────────────┐
+   └────────────┬────────────────────────────────────────────┘
+   ┌────────────┴────────────────────────────────────────────┐
    │  StarMark.Integrations（IItemSource 实现 + 原生探测）      │
    │  GitHubSource · Chrome/EdgeBookmarksSource · DittoSource   │
    │  EverythingSource（IPC + 查询队列）· SystemMetricsProbe    │
-   └────────────┬──────────────────────────────────────────────┘
-   ┌────────────┴──────────────────────────────────────────────┐
+   └────────────┬────────────────────────────────────────────┘
+   ┌────────────┴────────────────────────────────────────────┐
    │  StarMark.Data（SQLite + FTS5）                            │
    │  items · items_fts · tags · item_tags · notes · sync_state │
    │  两阶段查询（FTS5 命中 → JOIN 主表做数值过滤）· 迁移        │
-   └────────────┬──────────────────────────────────────────────┘
+   └────────────┬────────────────────────────────────────────┘
                 │ 所有层共享
-   ┌────────────┴──────────────────────────────────────────────┐
+   ┌────────────┴────────────────────────────────────────────┐
    │  StarMark.Abstractions（无依赖，不碰磁盘 / 不碰网络）      │
    │  Item 模型 · IItemSource · LocalFileIdentity · UriNormalizer│
    │  DateTimeText · NumberText · TextTrim · ItemCardPolicy     │
@@ -158,7 +187,7 @@
 - **统一 Item 模型** — 所有源映射到同一张 `items`，按 `(source, source_id)` 唯一索引保证幂等；`ItemType` 与 `WidgetChromeMode` 的持久化序号**钉值**，加类型不会挪老数据。
 - **两阶段查询** — FTS5 MATCH 走倒排（毫秒级）→ JOIN 主表做数值过滤；谓词下进 CTE，非默认排序档不再被相关度截断。
 - **实时 + 持久化混排** — FTS5 命中与实时源（Everything）结果合并去重，兼顾速度与新鲜度。
-- **判据下沉** — 能在纯函数上判的事一律放 Abstractions/Core 并配单测；UI 层因为不被测试工程引用，靠**源码形状闸门**守（见[构建 · 测试 · 发布](#构建--测试--发布)）。
+- **判据下沉** — 能在纯函数上判的事一律放 Abstractions/Core 并配单测；UI 层因为不被测试工程引用，靠**源码形状闸门**守（见[从源码构建](#从源码构建)）。
 - **一条链只许一个主人** — 显示哪一格路径只有 `LocalFileIdentity` 一颗，磁盘事实唯一出处是 `LauncherEx.ExistsOnDisk`（刻意留在 UI：判据本体不许碰磁盘），
   打开失败的坏消息只有一条出口 `ItemCardActions.OpenUriAndReport`。
 - **失败必须说得出原因** — 设置写盘失败不再静默，"请稍后重试"换成就地按钮，打不开一行就写一行日志（种类 + id + 那句话）。
@@ -178,20 +207,19 @@
 | **规则引擎** | ❌ 未实现 | — | 只有 `IRuleAction` 接口，没有任何实现与接线 |
 | **Shell 右键菜单** | ❌ 未实现 | — | 目录占位，未进解决方案 |
 
-## 快速开始
+## 从源码构建
 
 ### 前置要求
 
-- Windows 10 19041+ 或 Windows 11，**x64**
-- **.NET 9 Desktop Runtime**（产物是框架依赖：`.NET` 要装在机器上，Windows App SDK 运行时随包带）
-- .NET 9 SDK（自行构建时）
-- （可选）GitHub Personal Access Token — 只读 starred 列表与发 Release / 检查更新用
+- **.NET 10 SDK**（自行构建时；运行产物只需 .NET 10 Desktop Runtime）
+- Windows 10 19041+ / Windows 11，**x64**
+- （可选）GitHub Personal Access Token — 只读 starred 列表用
 - （可选）Ditto — 装了才复用它的剪贴板历史
 
-### 1. 克隆并构建
+### 构建与运行
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/AH23333/StarMarkDesktop.git
 cd StarMarkDesktop
 
 # 必须显式指定 Platform=x64：Windows App SDK Self-Contained 要求显式架构，
@@ -199,7 +227,20 @@ cd StarMarkDesktop
 dotnet build StarMark.sln -c Debug -p:Platform=x64
 ```
 
-### 2. 配置 GitHub Token（可选）
+```bash
+# 方式一（推荐）：Visual Studio 打开 StarMark.sln，以 StarMark.UI 为启动项目按 F5
+# 方式二：命令行
+dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
+```
+
+首次启动会创建 `%APPDATA%\StarMark\starmark.db`，并只在桌面预置一个时钟组件。
+
+> **单实例**：命名互斥体 `Local\StarMark.Desktop.SingleInstance` 保证只跑一个实例；再次启动会把已在运行的主窗口唤到前台后退出。
+> 所以调试前请先从托盘菜单「退出」旧实例，否则 F5 只是把旧窗口顶到前面。
+>
+> **托盘图标**：Windows 11 上首次运行可能落进任务栏右下角溢出区，可拖到常驻区。
+
+### 配置 GitHub Token（可选）
 
 设置页里 Token 那格是 **PasswordBox**（不回显、不落日志、不进备份）。也可以手工创建 `%APPDATA%\StarMark\github.json`：
 
@@ -220,20 +261,31 @@ $env:STARMARK_GITHUB_USERNAME = "your-name"
 
 > ⚠ `github.json` 存的是凭据，**不要提交、不要打包、不要贴进日志**。
 
-### 3. 运行
+### 测试
 
 ```bash
-# 方式一（推荐）：Visual Studio 打开 StarMark.sln，以 StarMark.UI 为启动项目按 F5
-# 方式二：命令行
-dotnet run --project src\StarMark.UI\StarMark.UI.csproj -p:Platform=x64
+dotnet test tests\StarMark.Tests\StarMark.Tests.csproj -c Debug -p:Platform=x64
 ```
 
-首次启动会创建 `%APPDATA%\StarMark\starmark.db`，并只在桌面预置一个时钟组件。
+当前基线：**7,057 项全绿**（含源码形状闸门）。
 
-> **单实例**：命名互斥体 `Local\StarMark.Desktop.SingleInstance` 保证只跑一个实例；再次启动会把已在运行的主窗口唤到前台后退出。
-> 所以调试前请先从托盘菜单「退出」旧实例，否则 F5 只是把旧窗口顶到前面。
->
-> **托盘图标**：Windows 11 上首次运行可能落进任务栏右下角溢出区，可拖到常驻区。
+- **测试工程不引用 `StarMark.UI`** ⇒ UI 侧的行为无法直接断言，这一半靠**源码形状闸门**守：
+  测试从磁盘读源文件、抹掉注释后检查形状（某颗判据是否只有一处、某个已删的出口有没有回来、某段文字是否只在一个出处）。
+  代价是**改了被闸门读的那份文件就得重编重量**，收益是"同一个事实写两遍"这类退化会被当场拦下。
+- 每批收口都登记基线：`-t:Rebuild` 的警告数 + 全量测试通过数。
+
+### 发布
+
+发布（按顺序；四颗产物缺一颗就少一件事，其中少 zip／清单／签名会直接少掉更新链上的一步）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\publish-tree.ps1 -OutDir <绝对路径>
+powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1          # → dist\ 四颗
+powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.5
+```
+
+本机自测产物用 `publish.ps1`（它复用同一棵树的产出逻辑，避免"本机那份带更新器、发出去的那份没带"）。
+签名私钥在 `%USERPROFILE%\.starmark\update-signing.pk8.pem`，**不入仓、不打印、不打包**。
 
 ## 配置
 
@@ -264,6 +316,7 @@ StarMark/
 │   ├── make-installer.ps1             # 用 Inno Setup 把同一棵树编成 setup.exe（首装入口）
 │   ├── installer/StarMark.iss         # 那颗安装包的定义（卸载登记、快捷方式、运行时检测）
 │   ├── publish-release.ps1            # 把四颗挂成 GitHub Release（先对账再公开）
+│   ├── make-app-icon.mjs              # 应用图标唯一出处（PNG-in-ICO，node 直跑零依赖）
 │   ├── mem-probe.ps1                  # 内存取证
 │   └── gc-ab-probe.ps1                # ServerGC A/B 取证
 ├── src/
@@ -281,31 +334,6 @@ StarMark/
 └── StarMark.sln
 ```
 
-## 构建 · 测试 · 发布
-
-```bash
-# 全量构建（必须 x64）
-dotnet build StarMark.sln -c Debug -p:Platform=x64
-
-# 全量测试
-dotnet test tests\StarMark.Tests\StarMark.Tests.csproj -c Debug -p:Platform=x64
-```
-
-- **测试工程不引用 `StarMark.UI`** ⇒ UI 侧的行为无法直接断言，这一半靠**源码形状闸门**守：
-  测试从磁盘读源文件、抹掉注释后检查形状（某颗判据是否只有一处、某个已删的出口有没有回来、某段文字是否只在一个出处）。
-  代价是**改了被闸门读的那份文件就得重编重量**，收益是"同一个事实写两遍"这类退化会被当场拦下。
-- 每批收口都登记基线：`-t:Rebuild` 的警告数 + 全量测试通过数。
-- 发布（按顺序；四颗产物缺一颗就少一件事，其中少 zip／清单／签名会直接少掉更新链上的一步）：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\publish-tree.ps1 -OutDir <绝对路径>
-powershell -ExecutionPolicy Bypass -File scripts\release-package.ps1          # → dist\ 四颗
-powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.2
-```
-
-  本机自测产物用 `publish.ps1`（它复用同一棵树的产出逻辑，避免"本机那份带更新器、发出去的那份没带"）。
-  签名私钥在 `%USERPROFILE%\.starmark\update-signing.pk8.pem`，**不入仓、不打印、不打包**。
-
 ## 自动更新链
 
 装好之后更新不需要重装：设置页「关于与更新」里点「立即更新」即可。
@@ -316,6 +344,24 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.2
 3. **替换** — 由独立更新器进程做**同盘两次改名**的事务替换：换不成要么退回原来那一版，要么压根没动过安装目录——
    **两种都会把原来那一版重新起来**（程序已交出去，屏幕上就不该什么都不剩），失败的原因写进日志与那句提示里。
 4. 检测与替换是两件事：关掉自动检测不会有任何东西被改动，只有点「立即更新」才真的下载并替换。
+
+## 参与贡献
+
+欢迎 Issue 与 Pull Request。提 PR 前请：
+
+1. 全量测试保持全绿（`dotnet test tests\StarMark.Tests\StarMark.Tests.csproj -c Debug -p:Platform=x64`）；
+2. 这个仓有**源码形状闸门**与**账本文化**——改到被闸门读的文件时闸门会告诉你哪里不能有两个出处；新踩的坑按 `docs/踩坑记录.md` 的格式记一条；
+3. 遵循现有风格：判据尽量下沉到 Abstractions/Core 配单测，一个事实只许一个出处，失败路径必须说得出原因。
+
+## 致谢
+
+- [Everything](https://www.voidtools.com/) — 本地文件名索引（SDK IPC）
+- [Ditto](https://ditto-cp.sourceforge.io/) — 剪贴板历史（装了即复用）
+- [Open-Meteo](https://open-meteo.com/) — 天气数据（免 Key）
+- [Ollama](https://ollama.com/) — 本机 AI 整理通道
+- [SQLite FTS5](https://www.sqlite.org/fts5.html) — 全文索引
+- [Inno Setup](https://jrsoftware.org/isinfo.php) — 安装包
+- [Windows App SDK / WinUI 3](https://learn.microsoft.com/windows/apps/windows-app-sdk/) — UI 框架
 
 ## 文档
 
@@ -341,6 +387,10 @@ powershell -ExecutionPolicy Bypass -File scripts\publish-release.ps1 -Tag v1.0.2
 - **给剪贴板明文存储接 DPAPI** — 已定案不接（P-61）。
 - **汇率换算** — 计算器只带内置静态换算表，断网可用。
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=AH23333/StarMarkDesktop&type=Date)](https://star-history.com/#AH23333/StarMarkDesktop&Date)
+
 ## License
 
-MIT
+[MIT](LICENSE)
