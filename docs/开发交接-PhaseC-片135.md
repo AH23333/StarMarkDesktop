@@ -1254,3 +1254,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 一坑当场修（#1184）：publish-release.ps1 首跑 401＝DPAPI 密文当 Bearer（片211 换封装没数全读方）——脚本加解封段（dpapi1: 哨兵→Unprotect・明文回落・解不开拒发）＋凭据闸两钉（dpapi1: 在场・Unprotect 真调用）；**发版环境起法**：脚本内裸 dotnet＝SDK 9，须子壳前置 DOTNET_ROOT/PATH=%LOCALAPPDATA%\Microsoft\dotnet 再跑 release-package.ps1。
 - 验证：发版闸门 37/37・docgates 26/26 两遍・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・产品码零改动全量基线 7056/7056 维持（a17c45f 起产品码一致）。
 - 下一刀候选：①真机装着的 v1.0.4 走一次「立即更新」升 v1.0.5 实路验证（先装 .NET 10 运行时再更新那条路只有真机能点）；②P-298 额度恢复后四叉裁决（AiProbe 留架・复活前先 net10 化）；③P-147 等用户离线备份私钥后降级留痕（**v1.0.5 清单已用私钥签过——备份更迫切但不阻塞**）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十四、片263：应用图标重绘定稿「星群」——一颗孤星换一群星，闸门从形状钉升级为语义钉
+- 动机：用户裁决「当前 icon 太丑，还是一颗五角星太俗套，配不上功能这么丰富的项目」——第一轮纯渲染升级不够，换设计本身。
+- 做了什么：三方向打样（icon_variants.mjs：A 星标书签/B 星群/C 流星）用户定稿 **B 星群**；scripts/make-app-icon.mjs 全重写烤入（通用 polySDF・布局常量一处・小档简化「主星＋SAT1」＋粗细补偿・托盘纯金剪影）；StarMark.ico 58.1KB・StarMarkTray.ico 12.5KB 重生成；AppIconGateTests 重钉 7→8（主星几何改读生成器常量・新增星群成员在场钉〔SAT1/SAT2/DOT1/DOT2 正心精确金・连线七成处金压蓝・*_SMALL 在场〕・小档贴画谷免测只限被星芒盘盖住那一条・probedValleys≥4 兜底）。
+- 一坑当场修（#1185）：打样脚本把场景工厂当场景传——NaN 进 Buffer.from 截零，产出「alpha 全对 RGB 全零」的黑图；修＝render(size, make(size))；探针工具分通道打印是揪出它的关键（bin/WI37C/probe_px.py）。
+- 自检工具：icon_selfcheck.py 探针更新为星群读数（主星心/双星芒心/双星点心精确金・连线段 R>B・16px SAT1 在场・金覆盖率）；新增 ascii_png.py（任意 PNG→ASCII）・probe_px.py（任意 PNG 四通道探针）・icon_variants.mjs（打样器，留作下次换稿用）。
+- 验证：图标闸门 8/8・全量 **7057/7057** 新基线（38m45s）・换装真机 pid 25948；预览在 assets/app/preview/（tile/tray×16/32/256）。
+- 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。

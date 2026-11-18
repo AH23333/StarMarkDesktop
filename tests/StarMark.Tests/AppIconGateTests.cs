@@ -50,6 +50,52 @@ public sealed class AppIconGateTests
         return m.Groups[1].Value.Split(',').Select(s => int.Parse(s.Trim())).ToArray();
     }
 
+    /// <summary>主星布局（比例坐标）。片263 重绘为「星群」后主星仍是那颗五角尖朝上的星，但中心/外径从生成器读，不抄。</summary>
+    private static (double Cx, double Cy, double Outer, double Inner, double Rounding) GeneratorMainStar(bool smallTier)
+    {
+        var src = ReadRepoFile(Generator);
+        var main = Regex.Match(src, @"const MAIN = \{ cx: ([\d.]+), cy: ([\d.]+), outer: ([\d.]+), inner: ([\d.]+), rounding: ([\d.]+) \}");
+        Assert.True(main.Success, "生成器里没找到 MAIN 那一行（星群主星的几何出处搬了家）");
+        if (!smallTier)
+        {
+            return (Parse(main.Groups[1].Value), Parse(main.Groups[2].Value), Parse(main.Groups[3].Value), Parse(main.Groups[4].Value), Parse(main.Groups[5].Value));
+        }
+        var small = Regex.Match(src, @"const MAIN_SMALL = \{ cy: ([\d.]+), outer: ([\d.]+), inner: ([\d.]+), rounding: ([\d.]+) \}");
+        Assert.True(small.Success, "生成器里没找到 MAIN_SMALL 那一行（小档粗细补偿的出处搬了家）");
+        return (Parse(main.Groups[1].Value), Parse(small.Groups[1].Value), Parse(small.Groups[2].Value), Parse(small.Groups[3].Value), Parse(small.Groups[4].Value));
+    }
+
+    /// <summary>SAT1 的外径（小档读 SAT1_SMALL，大档读 SAT1）。</summary>
+    private static double GeneratorSat1Outer(bool smallTier)
+    {
+        var src = ReadRepoFile(Generator);
+        var m = smallTier
+            ? Regex.Match(src, @"const SAT1_SMALL = \{ outer: ([\d.]+) \}")
+            : Regex.Match(src, @"const SAT1 = \{ cx: [\d.]+, cy: [\d.]+, outer: ([\d.]+), inner: [\d.]+ \}");
+        Assert.True(m.Success, smallTier
+            ? "生成器里没找到 SAT1_SMALL 那一行（小档星芒的出处搬了家）"
+            : "生成器里没找到 SAT1 那一行（星群右上星芒的出处搬了家）");
+        return Parse(m.Groups[1].Value);
+    }
+
+    /// <summary>小档阈值（≤SMALL 走简化档：只留主星＋SAT1）。从生成器读，不抄。</summary>
+    private static int GeneratorSmallThreshold()
+    {
+        var m = Regex.Match(ReadRepoFile(Generator), @"const SMALL = (\d+);");
+        Assert.True(m.Success, "生成器里没找到 SMALL 阈值那一行");
+        return int.Parse(m.Groups[1].Value);
+    }
+
+    /// <summary>一颗星芒（或星点）的布局。参数名对应生成器里的字面。</summary>
+    private static (double Cx, double Cy, double R) GeneratorPoint(string constName)
+    {
+        var m = Regex.Match(ReadRepoFile(Generator), $@"const {constName} = \{{ cx: ([\d.]+), cy: ([\d.]+), (?:outer|r): ([\d.]+)");
+        Assert.True(m.Success, $"生成器里没找到 {constName} 那一行（星群的成员少了谁，语义就塌回一颗孤星）");
+        return (Parse(m.Groups[1].Value), Parse(m.Groups[2].Value), Parse(m.Groups[3].Value));
+    }
+
+    private static double Parse(string s) => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+
     // ===== 只读这点像素：ICO 容器 ＋ 里面那份 PNG =====
 
     private readonly record struct IcoEntry(int Size, byte WidthByte, byte HeightByte, int Planes, int BitCount, bool IsPng, byte[] Blob);
@@ -203,42 +249,108 @@ public sealed class AppIconGateTests
     }
 
     /// <summary>
-    /// 星是<b>五角、尖朝上</b>，谷真的收进去；两份资产、两档尺寸（最小档与最大档）各验一次。
-    /// <para>三条判据各自咬住我这次真犯过的一个错：尖朝上（<c>+π/2</c> 会把尖翻到下面）、
+    /// <b>主星</b>是五角、尖朝上，谷真的收进去；两份资产、两档尺寸（最小档与最大档）各验一次。
+    /// <para>片263 重绘为「星群」后画面上不止主星，所以中心与外径<b>从生成器读</b>而不是取全画面质心——
+    /// 星芒连线会把质心拽偏。三条判据各自咬住我这次真犯过的一个错：尖朝上（<c>+π/2</c> 会把尖翻到下面）、
     /// 每 72° 一只尖（<c>%(π/5)</c> 画出的是十芒）、谷真的深（极坐标线性插值把边画鼓，谷就不深了）。
-    /// 判据一律写成<b>比较</b>（谷半径 ≤ 尖半径的七成半；现场读数：五角时每档最差 0.61，十芒会顶到 1.0），
-    /// 不钉像素计数——采样密度一调计数就变，
+    /// 判据一律写成<b>比较</b>（谷半径 ≤ 尖半径的七成半），不钉像素计数——采样密度一调计数就变，
     /// 那是等价改写，不是事故（记忆 ⑤ 讲的"过钉"）。</para>
     /// </summary>
     [Fact]
-    public void TheMarkIsAFivePointedStarWithItsTipUpInEveryFrameProbed()
+    public void TheMainStarIsFivePointedWithItsTipUpInEveryFrameProbed()
     {
         foreach (var asset in new[] { TileAsset, TrayAsset })
         {
             foreach (var size in new[] { 16, 256 })
             {
+                var smallTier = size <= GeneratorSmallThreshold();
+                var (rcx, rcy, router, rinner, _) = GeneratorMainStar(smallTier);
                 var (w, h, rgba) = DecodeRgba(ReadIco(asset).Single(e => e.Size == size).Blob);
                 Assert.Equal(size, w);
                 Assert.Equal(size, h);
                 var px = Frame(w, h, rgba);
-                var (cx, cy) = StarCentroid(px, size);
-                Assert.True(Math.Abs(cx - size / 2.0) < size * 0.05,
-                    $"{asset}@{size}：左右不对称（质心 x={cx:F1}），星歪了");
+                var cx = rcx * size;
+                var cy = rcy * size;
+
+                // 全画面金质心仍须落在主星中心附近：星群的配角都很小，拽不动主星；
+                // 星整体画歪（比如坐标算错一格）时质心会漂出这个窗。
+                var (scx, scy) = StarCentroid(px, size);
+                Assert.True(Math.Abs(scx - cx) <= size * 0.06 && Math.Abs(scy - cy) <= size * 0.06,
+                    $"{asset}@{size}：金质心（{scx:F1},{scy:F1}）离主星中心（{cx:F1},{cy:F1}）太远——星群整体歪了，或有别的大块金混了进来");
 
                 var tips = Enumerable.Range(0, 5).Select(k => ProbeRadius(px, cx, cy, -90 + 72 * k, size / 2.0)).ToArray();
-                var valleys = Enumerable.Range(0, 5).Select(k => ProbeRadius(px, cx, cy, -54 + 72 * k, size / 2.0)).ToArray();
 
-                Assert.All(tips, t => Assert.True(t >= size * 0.30, $"{asset}@{size}：有一只尖没撑开（半径 {t:F1}）——尖朝下时正上方读到的是谷，红在这一条"));
+                // 小档上 SAT1 是"贴着主星画"的（画得出＝认得出）：星芒盘盖住哪条谷的射线，哪条谷在这一档
+                // 物理上就测不出缝——那一对只在 256 档测。大档（SAT1 与主星分离）一旦也贴上，
+                // 这里的谷判据必须红：那是"星芒挪进主星"的设计回归，不是测量噪声。
+                var (s1x, s1y, _) = GeneratorPoint("SAT1");
+                var satDir = Math.Atan2(s1y - rcy, s1x - rcx) * 180.0 / Math.PI;
+                var satDistPx = Math.Sqrt((s1x - rcx) * (s1x - rcx) + (s1y - rcy) * (s1y - rcy)) * size;
+                var satAngular = Math.Atan2(GeneratorSat1Outer(smallTier) * size, satDistPx) * 180.0 / Math.PI;
+                var probedValleys = 0;
                 for (var k = 0; k < 5; k++)
                 {
+                    var valleyAngle = -54 + 72 * k;
+                    var delta = ((valleyAngle - satDir + 540.0) % 360.0) - 180.0;
+                    if (smallTier && Math.Abs(delta) <= satAngular + 1.0) continue;   // 被星芒盘盖住的谷：只在 256 档测
+                    probedValleys++;
                     // 尖必须是尖、谷必须是谷：十芒会在"谷"的方向上也顶出去（现场读数：五角时谷/尖最差 0.61，十芒≈1.0）。
-                    Assert.True(valleys[k] <= tips[k] * 0.75,
-                        $"{asset}@{size}：第 {k} 对尖谷分不开（尖 {tips[k]:F1}／谷 {valleys[k]:F1}）——十芒或把边画鼓都会红在这里");
+                    Assert.True(ProbeRadius(px, cx, cy, valleyAngle, size / 2.0) <= tips[k] * 0.75,
+                        $"{asset}@{size}：第 {k} 对尖谷分不开（尖 {tips[k]:F1}／谷 {ProbeRadius(px, cx, cy, valleyAngle, size / 2.0):F1}）——十芒或把边画鼓都会红在这里");
                 }
+                Assert.True(probedValleys >= 4,
+                    $"{asset}@{size}：被 SAT1 盖住而免测的谷超过一条——星芒大到把主星吞了，或布局常量被改坏");
+
+                Assert.All(tips, t => Assert.True(t >= router * size * 0.80,
+                    $"{asset}@{size}：有一只尖没撑开（半径 {t:F1}，外径读到 {router * size:F1}）——尖朝下时正上方读到的是谷，红在这一条"));
                 Assert.True(tips.Max() - tips.Min() <= tips.Max() * 0.25,
                     $"{asset}@{size}：五只尖长短不一（{string.Join("/", tips.Select(t => t.ToString("F1")))}）");
             }
         }
+    }
+
+    /// <summary>
+    /// 星群的<b>配角必须在场</b>：两颗星芒、两粒星点、主星到星芒的连线——少任何一样，
+    /// 画面就塌回「一颗孤星」，而用户在片263 的裁决恰恰是"一颗星太俗套，配不上功能这么丰富的项目"。
+    /// <para>星芒/星点探它们的<b>正心</b>（满覆盖处必须是精确品牌金）；连线探主星心到星芒心七成位置的那一格
+    /// （那里既不在主星内也不在星芒内，只有连线能把它染金）。小档简化是设计的一部分：
+    /// ≤SMALL 的档位只留主星＋SAT1，这一条也从生成器源码钉住（阈值与三个 *_SMALL 常量缺一不可）。</para>
+    /// </summary>
+    [Fact]
+    public void TheConstellationKeepsItsSatellitesLinesAndDotsSoItIsNotABareStarAnymore()
+    {
+        var (sr, sg, sb) = GeneratorStarRgb();
+        var (mcx, mcy, _, _, _) = GeneratorMainStar(smallTier: false);
+        foreach (var asset in new[] { TileAsset, TrayAsset })
+        {
+            var (w, _, rgba) = DecodeRgba(ReadIco(asset).Single(e => e.Size == 256).Blob);
+            var px = Frame(w, w, rgba);
+            foreach (var name in new[] { "SAT1", "SAT2", "DOT1", "DOT2" })
+            {
+                var (ncx, ncy, _) = GeneratorPoint(name);
+                var p = px((int)Math.Round(ncx * w), (int)Math.Round(ncy * w));
+                Assert.True(p.A == 255 && p.R == sr && p.G == sg && p.B == sb,
+                    $"{asset}@256：{name}（{ncx},{ncy}）那一格读到的不是精确品牌金（{p.R},{p.G},{p.B},{p.A}）——星群少了一名成员，塌回孤星");
+            }
+            // 连线：主星心→SAT1 心的七成处。那里只有连线（七成不透明度），带底那份混色后仍须金压过蓝且不透明，
+            // 托盘那份 alpha 全住在覆盖率里。连线一断（或忘了画），两颗星芒就成了"贴上去的两片"而不是"连起来的群"。
+            var (s1x, s1y, _) = GeneratorPoint("SAT1");
+            var lx = (mcx + (s1x - mcx) * 0.70) * w;
+            var ly = (mcy + (s1y - mcy) * 0.70) * w;
+            var linePx = px((int)Math.Round(lx), (int)Math.Round(ly));
+            Assert.True(IsStar(linePx),
+                $"{asset}@256：主星到 SAT1 的连线断了（{lx:F0},{ly:F0} 读到 ({linePx.R},{linePx.G},{linePx.B},{linePx.A})）——星群散架成三块孤岛");
+        }
+        // 小档简化那条设计也在场：SAT1 在 16px 仍然画（星群语义的最小可读集＝主星＋一颗星芒）。
+        var (t16w, _, t16rgba) = DecodeRgba(ReadIco(TileAsset).Single(e => e.Size == 16).Blob);
+        var t16 = Frame(t16w, t16w, t16rgba);
+        var (scx, scy, _) = GeneratorPoint("SAT1");
+        var sp = t16((int)Math.Round(scx * t16w), (int)Math.Round(scy * t16w));
+        Assert.True(IsStar(sp),
+            $"StarMark.ico@16：小档简化把 SAT1 也丢了（读到 ({sp.R},{sp.G},{sp.B},{sp.A})）——16px 上星群的最小可读集是主星＋SAT1");
+        var generatorSrc = ReadRepoFile(Generator);
+        Assert.Contains("const MAIN_SMALL = {", generatorSrc, StringComparison.Ordinal);
+        Assert.Contains("const SAT1_SMALL = {", generatorSrc, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -269,12 +381,13 @@ public sealed class AppIconGateTests
     }
 
     /// <summary>
-    /// 金色就是生成器声明的那一组；两份资产的分工是<b>带底</b>与<b>透明底只留星</b>。
+    /// 金色就是生成器声明的那一组；两份资产的分工是<b>带底</b>与<b>透明底只留星群</b>。
     /// <para>托盘为什么不能带底：16px 上一整块蓝紫只会糊成一团，认不出标记。这一条同时钉住
-    /// "别把两份生成成同一颗"：带底那份在圆角外什么都不画，不带底那份<b>不透明的地方每一格都是那组金</b>。</para>
+    /// "别把两份生成成同一颗"：带底那份在圆角外什么都不画，不带底那份<b>不透明的地方每一格都是那组金</b>
+    /// （主星、星芒、连线、星点一律同金——星群不是多色拼贴）。</para>
     /// </summary>
     [Fact]
-    public void TheTiledMarkCarriesTheGradientBaseAndTheTrayMarkIsTheStarAlone()
+    public void TheTiledMarkCarriesTheGradientBaseAndTheTrayMarkIsTheConstellationAlone()
     {
         var (sr, sg, sb) = GeneratorStarRgb();
         var tile = DecodeRgba(ReadIco(TileAsset).Single(e => e.Size == 256).Blob);
@@ -282,9 +395,10 @@ public sealed class AppIconGateTests
         var tilePx = Frame(tile.Width, tile.Height, tile.Rgba);
         var trayPx = Frame(tray.Width, tray.Height, tray.Rgba);
 
-        // 星的正中那一格必须是原色（不是混出来的近似值）：金色被改、中心被别的东西盖住，都红在这里。
-        var (cx, cy) = StarCentroid(tilePx, tile.Width);
-        var center = tilePx((int)Math.Round(cx), (int)Math.Round(cy));
+        // 主星的中心那一格必须是原色（不是混出来的近似值）：金色被改、中心被别的东西盖住，都红在这里。
+        // 片263 起中心从生成器读（星群画面上质心会被配角拽偏，不能再当主星心用）。
+        var (rcx, rcy, _, _, _) = GeneratorMainStar(smallTier: false);
+        var center = tilePx((int)Math.Round(rcx * tile.Width), (int)Math.Round(rcy * tile.Height));
         Assert.Equal((sr, sg, sb, 255), (center.R, center.G, center.B, center.A));
 
         // 带底那份：画面正中靠左那一条是渐变蓝（B 压过 R、且不透明），而圆角外什么都不画。
@@ -294,7 +408,7 @@ public sealed class AppIconGateTests
         Assert.True(corner.A == 0 && corner.R == 0 && corner.G == 0 && corner.B == 0,
             $"圆角外不该有东西，读到 ({corner.R},{corner.G},{corner.B},{corner.A})");
 
-        // 透明底那份：凡不透明的地方每一格都是那组金；星之外一律全透明。
+        // 透明底那份：凡不透明的地方每一格都是那组金；星群之外一律全透明。
         var opaque = 0;
         for (var i = 0; i < tray.Width * tray.Height; i++)
         {
@@ -305,7 +419,7 @@ public sealed class AppIconGateTests
                 $"托盘那份第 {i} 格不透明却不是金色本体（读到 ({p.R},{p.G},{p.B})）——托盘里混进了底");
         }
         Assert.True(opaque > 0, "托盘那份整幅透明＝什么图标都没有");
-        Assert.True(trayPx(0, tray.Height / 2).A == 0, "托盘那份在星之外还有不透明的东西（\"透明底只留一颗星\"这条分工不能丢）");
+        Assert.True(trayPx(0, tray.Height / 2).A == 0, "托盘那份在星群之外还有不透明的东西（\"透明底只留星群\"这条分工不能丢）");
     }
 
     // ===== 接线：各处读的必须是同一份 =====

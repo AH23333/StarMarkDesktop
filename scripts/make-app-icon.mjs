@@ -1,13 +1,24 @@
-// StarMark 应用图标生成器（批次 VC-2）。
+// StarMark 应用图标生成器（批次 VC-2 立骨，片263 重绘为「星群」）。
 //
 // 为什么要有这颗脚本，而不是让谁手工画一张：这颗标记的**几何只有这里一份出处**。
 // 仓里原本有两处各自的"星"——托盘在 TrayHost.cs 里逐像素画一颗 #FCB630 的五角星，
 // 浏览器扩展那边是 gen-icons.mjs 画的蓝紫渐变＋黄菱形。两处各画各的，迟早分岔（#123 那一族）。
-// 这一批把它们合成一颗：**蓝紫渐变圆角方块 ＋ 金色五角星**，色值与星形比例都从现有两处取，
-// 生成两份资产：
-//   StarMark.ico      —— 带底的完整标记（窗口/任务栏/开始菜单/安装包/卸载面板/exe）
-//   StarMarkTray.ico  —— 透明底只留星（托盘：16px 下带底会糊成一团）
-// 运行时不再自己画像素：TrayHost 改成从这颗 .ico 里按系统小图标尺寸取一档。
+// 运行时不再自己画像素：TrayHost 从这颗 .ico 里按系统小图标尺寸取一档。
+//
+// 片263 重绘（用户裁决「还是一颗五角星太俗套，配不上功能这么丰富的项目」）：
+// 三方向打样（A 星标书签 / B 星群 / C 流星）用户选定 **B 星群**。语义：
+// 你收进 StarMark 的每条东西都是一颗星，这个应用把它们**连成星群**——
+// 一颗孤星压不住一个功能套件，一群星可以。品牌语言不动：
+// 金色 STAR_RGB 沿用、主星仍是五角尖朝上、蓝紫三档对角渐变底。
+// 画面构成（比例坐标，全在本文件一处）：
+//   主星      —— 五角尖朝上，光学居中略下沉（重心偏下），SDF 圆角星尖；
+//   SAT1/SAT2 —— 右上／左下两颗四芒星芒（一大一小，呼应"群"）；
+//   连线      —— 主星心→两颗星芒心的细线，七成不透明度，若隐若现；
+//   星点      —— 左上／右下两粒小圆点，把"天空"铺开；
+//   小档简化  —— ≤24px 只留主星＋SAT1（连线星点在这个尺寸只是噪点），
+//                主星放大收胖（画得出＝认得出，批次 WT 那一招沿用）。
+// 渲染：逐样本 SDF＋smoothstep 抗锯齿；星后柔光把底往淡紫提亮一圈；
+// 托盘那份任何档都不带底（16px 上带底只会糊成一团），纯金剪影住在 alpha 里。
 //
 // 用法（开发期一次性，构建不依赖它，也不需要装任何东西——只用 node 自带的 zlib）：
 //   node scripts/make-app-icon.mjs
@@ -19,40 +30,83 @@ import { fileURLToPath } from 'node:url';
 const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'app');
 const PREVIEW_DIR = join(OUT_DIR, 'preview');
 
-// ===== 品牌读数（两处现存的合成，不是新发明）=====
-const TILE_TOP_LEFT = [0x18, 0x18, 0x78];       // 扩展那颗的渐变起点
-const TILE_BOTTOM_RIGHT = [0x36, 0x7c, 0xdc];   // 扩展那颗的渐变终点
-const STAR_RGB = [0xfc, 0xb6, 0x30];            // 托盘那颗的金色（TrayHost.CreateStarIcon 里同一组字节）
+// ===== 品牌读数（金星沿用批次 VC-2；底色三档对角渐变，全档 B>R——IsStar 分型靠它）=====
+const STAR_RGB = [0xfc, 0xb6, 0x30];            // 托盘那颗的金色（TrayHost 里曾是同一组字节，片263 起唯一出处在这里）
+const GRADIENT_STOPS = [                        // 对角渐变三档：t=0（左上）→0.5→1（右下）
+  [0x20, 0x1a, 0x52],                           // 深靛
+  [0x3e, 0x28, 0x9e],                           // 亮紫蓝
+  [0x6e, 0x3f, 0xe0],                           // 亮紫罗兰
+];
+const GLOW_RGB = [0xb9, 0xa8, 0xff];            // 柔光往淡紫提亮（B=255>R=185，压不过金也压不过底的分型）
 const CORNER_RATIO = 0.22;       // 圆角方块半径 / 画边长（Windows 磁贴那一档观感）
 const SS = 8;                    // 每格线性采样次数（8×8＝64 点）
 const SIZES = [16, 20, 24, 32, 40, 48, 64, 128, 256];
 
-// 小档的粗细补偿：16px 上"标准五角星"的角会糊成一坨（第一版实测就是 4×4 一个点），
-// 所以小尺寸把外接半径放大一点、内径收得胖一点。与"序号圆点半径给下限"（批次 WT）同一招：
-// **画得出＝认得出**，几何仍在这里一处算，不是两套形状。
-const SMALL = 24;
-const outerRatioOf = size => (size <= SMALL ? 0.42 : 0.38);
-const innerRatioOf = size => (size <= SMALL ? 0.50 : 0.382);   // 0.382＝正五角星那一档
+// ===== 星群布局（片263 用户三选一裁决 B；比例坐标，闸门从这几行读，不抄第二份）=====
+const SMALL = 24;                // ≤SMALL 走小档简化：只留主星＋SAT1
+const MAIN = { cx: 0.50, cy: 0.535, outer: 0.30, inner: 0.46, rounding: 0.024 };   // 主星：五角・尖朝上・光学居中略下沉
+const SAT1 = { cx: 0.76, cy: 0.27, outer: 0.105, inner: 0.28 };  // 右上四芒星芒（小档也保留——星群语义的最小可读集）
+const SAT2 = { cx: 0.26, cy: 0.74, outer: 0.068, inner: 0.28 };  // 左下四芒星芒（只在大档出现）
+const DOT1 = { cx: 0.17, cy: 0.24, r: 0.016 };                   // 左上星点（只在大档出现）
+const DOT2 = { cx: 0.84, cy: 0.66, r: 0.012 };                   // 右下星点（只在大档出现）
+const LINE_W = 0.012;            // 连线半宽（主星心→星芒心；边缘 smoothstep 收软）
+const LINE_ALPHA = 0.72;         // 连线不透明度（若隐若现，压住"连线太硬"）
+const GLOW_K = 0.14;             // 柔光峰值提亮比例
+const GLOW_SIGMA = 0.42;         // 柔光径向衰减 σ（/size）
 
-// 五角星用**十个顶点的多边形**判内外，不用极坐标线性插值。
-// 后者会把每条边画成向外鼓的弧（第一版就是这样，看着像六瓣花而不是星）——直边才是星。
+// 小档粗细补偿：16px 上标准比例的星群会糊成一坨，主星放大收胖、SAT1 放大、圆角收小。
+// 与"序号圆点半径给下限"（批次 WT）同一招：**画得出＝认得出**，几何仍在这里一处算。
+const MAIN_SMALL = { cy: 0.52, outer: 0.42, inner: 0.52, rounding: 0.03 };
+const SAT1_SMALL = { outer: 0.14 };
+
+// 通用多边形 SDF：到各边最近距离，符号由奇偶环绕（射线法）定。
+// 星、四芒星芒都是多边形，一个距离场管所有形状：减 rounding＝圆角、smoothstep＝软边。
+function polySDF(px, py, verts) {
+  let d = Infinity;
+  let inside = false;
+  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
+    const [xi, yi] = verts[i], [xj, yj] = verts[j];
+    const dx = xj - xi, dy = yj - yi;
+    const len2 = dx * dx + dy * dy;
+    let t = len2 > 0 ? ((px - xi) * dx + (py - yi) * dy) / len2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const ex = xi + t * dx - px, ey = yi + t * dy - py;
+    const e = Math.sqrt(ex * ex + ey * ey);
+    if (e < d) d = e;
+    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside ? -d : d;
+}
+
+// 五角星十个顶点。k 偶＝尖、k 奇＝谷；第一个尖朝上（+π/2 是尖朝下，+π/5 会画出十芒——都红过）。
 function starVertices(cx, cy, outer, inner) {
   const v = [];
   for (let k = 0; k < 10; k++) {
-    const angle = -Math.PI / 2 + (k * Math.PI) / 5;   // k 偶＝尖、k 奇＝谷；第一个尖朝上
+    const angle = -Math.PI / 2 + (k * Math.PI) / 5;
     const r = k % 2 === 0 ? outer : inner;
     v.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
   }
   return v;
 }
 
-function pointInPolygon(x, y, verts) {
-  let inside = false;
-  for (let i = 0, j = verts.length - 1; i < verts.length; j = i++) {
-    const [xi, yi] = verts[i], [xj, yj] = verts[j];
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+// 四芒星芒八个顶点（k 偶＝尖、k 奇＝谷）：比五角星轻，做"群"里的配角而不是抢主星。
+function sparkleVertices(cx, cy, outer, inner) {
+  const v = [];
+  for (let k = 0; k < 8; k++) {
+    const angle = -Math.PI / 2 + (k * Math.PI) / 4;
+    const r = k % 2 === 0 ? outer : inner;
+    v.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)]);
   }
-  return inside;
+  return v;
+}
+
+// 点到线段距离（连线的距离场）。
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 0 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.sqrt((ax + t * dx - px) ** 2 + (ay + t * dy - py) ** 2);
 }
 
 function inRoundedRect(x, y, size, radius) {
@@ -64,43 +118,87 @@ function inRoundedRect(x, y, size, radius) {
   return Math.hypot(x - cx, y - cy) <= radius;
 }
 
+// 逐样本覆盖度（0..1）：d<0 全在，d>1 出去，半像素软边。
+// 与「超采样二值命中」的差别在边缘：64 个二值样本只有 65 级台阶，smoothstep 是连续的，
+// 大档圆角与斜边不再有灰阶断层。
+const coverOf = d => (d <= -0.5 ? 1 : d >= 0.5 ? 0 : 0.5 - d);
+const clamp01 = x => (x < 0 ? 0 : x > 1 ? 1 : x);
+const smoothstep = (e0, e1, x) => { const t = clamp01((x - e0) / (e1 - e0)); return t * t * (3 - 2 * t); };
+
+function baseGradient(x, y, size) {
+  const t = Math.min(1, Math.max(0, (x + y) / (2 * Math.max(size - 1, 1))));
+  const a = t < 0.5 ? GRADIENT_STOPS[0] : GRADIENT_STOPS[1];
+  const b = t < 0.5 ? GRADIENT_STOPS[1] : GRADIENT_STOPS[2];
+  const k = t < 0.5 ? t * 2 : (t - 0.5) * 2;
+  return [0, 1, 2].map(c => a[c] + (b[c] - a[c]) * k);
+}
+
+// 星群在某一档的覆盖场：给定像素，返回 0..1 的"金色覆盖度"。
+// 连线压在星体下面（星体覆盖大处自然盖过线），星点星芒一律与主星同一组金。
+function makeCoverField(size) {
+  const u = v => v * size;
+  const small = size <= SMALL;
+  const main = small
+    ? { cx: MAIN.cx, cy: MAIN_SMALL.cy, outer: MAIN_SMALL.outer, inner: MAIN_SMALL.inner, rounding: MAIN_SMALL.rounding }
+    : MAIN;
+  const mainVerts = starVertices(u(main.cx), u(main.cy), u(main.outer), u(main.outer * main.inner));
+  const sat1Outer = u(small ? SAT1_SMALL.outer : SAT1.outer);
+  const sat1Verts = sparkleVertices(u(SAT1.cx), u(SAT1.cy), sat1Outer, sat1Outer * SAT1.inner);
+  const sat2Outer = u(SAT2.outer);
+  const sat2Verts = sparkleVertices(u(SAT2.cx), u(SAT2.cy), sat2Outer, sat2Outer * SAT2.inner);
+  const lines = small ? [] : [
+    [MAIN.cx, MAIN.cy, SAT1.cx, SAT1.cy],
+    [MAIN.cx, MAIN.cy, SAT2.cx, SAT2.cy],
+  ];
+  const lw = u(LINE_W);
+  return (px, py) => {
+    let g = coverOf(polySDF(px, py, mainVerts) - u(main.rounding));
+    g = Math.max(g, coverOf(polySDF(px, py, sat1Verts)));
+    if (!small) {
+      g = Math.max(g, coverOf(polySDF(px, py, sat2Verts)));
+      g = Math.max(g, coverOf(Math.hypot(px - u(DOT1.cx), py - u(DOT1.cy)) - u(DOT1.r)));
+      g = Math.max(g, coverOf(Math.hypot(px - u(DOT2.cx), py - u(DOT2.cy)) - u(DOT2.r)));
+      for (const [ax, ay, bx, by] of lines) {
+        const d = segDist(px, py, u(ax), u(ay), u(bx), u(by));
+        g = Math.max(g, (1 - smoothstep(lw * 0.7, lw * 1.6, d)) * LINE_ALPHA);
+      }
+    }
+    return g;
+  };
+}
+
 function makePng(size, withTile) {
-  const outer = size * outerRatioOf(size);
-  const inner = outer * innerRatioOf(size);
   const corner = size * CORNER_RATIO;
+  const coverField = makeCoverField(size);
   const cx = size / 2;
-  // 光学居中：尖朝上的五角星重心偏下（下面两条腿），所以整颗往下挪一点点，
-  // 否则在磁贴里看着"吊在上面"。0.06 是肉眼调出来的，不是算出来的。
-  const cy = size / 2 + outer * 0.06;
-  const star = starVertices(cx, cy, outer, inner);
+  const glowSigma = size * GLOW_SIGMA;
   const ss = size >= 48 ? 4 : SS;   // 大档不需要那么密的采样（小档才是抗锯齿吃紧的地方）
   const rows = [];
   for (let y = 0; y < size; y++) {
     const row = [0];
     for (let x = 0; x < size; x++) {
-      let tileHits = 0, starHits = 0;
+      let tileHits = 0, goldSum = 0;
       for (let j = 0; j < ss; j++) {
         for (let i = 0; i < ss; i++) {
           const px = x + (i + 0.5) / ss;
           const py = y + (j + 0.5) / ss;
-          const inTile = !withTile || inRoundedRect(px, py, size, corner);
-          if (!inTile) continue;
+          if (withTile && !inRoundedRect(px, py, size, corner)) continue;
           tileHits++;
-          if (pointInPolygon(px, py, star)) starHits++;
+          goldSum += coverField(px, py);
         }
       }
       const samples = ss * ss;
       const tileFrac = tileHits / samples;
-      const starFrac = starHits / samples;
+      const goldFrac = goldSum / samples;
       if (tileFrac === 0) { row.push(0, 0, 0, 0); continue; }
-      const t = (x + y) / (2 * Math.max(size - 1, 1));
-      const bg = [0, 1, 2].map(k => TILE_TOP_LEFT[k] + (TILE_BOTTOM_RIGHT[k] - TILE_TOP_LEFT[k]) * t);
-      // 预乘平均：星覆盖的那部分用金色，其余用底；alpha 由覆盖率决定（带底＝底覆盖率，托盘＝星覆盖率）
-      const cover = withTile ? tileFrac : starFrac;
-      const rgb = [0, 1, 2].map(k => {
-        if (!withTile) return STAR_RGB[k];
-        const onlyBg = bg[k] * (tileFrac - starFrac) + STAR_RGB[k] * starFrac;
-        return Math.round(onlyBg / tileFrac);
+      const cover = withTile ? tileFrac : goldFrac;
+      const rgb = [0, 1, 2].map(c => {
+        if (!withTile) return STAR_RGB[c];                       // 托盘：纯金剪影，形状全住在 alpha 里
+        let bg = baseGradient(x + 0.5, y + 0.5, size)[c];
+        const dx = x + 0.5 - cx, dy = y + 0.5 - cx;              // 柔光以画面中心为心（星群的"天穹"感）
+        const glow = Math.exp(-(dx * dx + dy * dy) / (2 * glowSigma * glowSigma)) * GLOW_K;
+        bg = bg + (GLOW_RGB[c] - bg) * glow;
+        return Math.round((bg * (tileFrac - goldFrac) + STAR_RGB[c] * goldFrac) / tileFrac);
       });
       row.push(rgb[0], rgb[1], rgb[2], Math.round(255 * cover));
     }
