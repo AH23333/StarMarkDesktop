@@ -1269,3 +1269,13 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 事实核对（防 README 变第二出处说假话）：互斥体名 Local\StarMark.Desktop.SingleInstance（App.xaml.cs:32）・STARMARK_DB_PATH/SETTINGS_PATH（UserDataPaths.cs:26/29）・docs/发布说明/ 在案・16 条文档链接全部真实存在；README 无闸门钉（测试内 "README" 命中 8 文件全是巧合样本：readme.md 测试数据/?tab=readme URL），可放手改。
 - 验证：纯 docs 零产品码——全量基线 7057/7057 维持不重跑（片262 零码先例）；docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）。
 - 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十六、片265：关掉本地磁盘搜索/退出时收走自带 Everything——无托盘隐藏进程不再白留内存（形状⑬新钉・7058/7058 新基线）
+- 用户报的缺陷：关掉「本地磁盘搜索」开关后 Everything 进程还在；并要求排查其他功能同类泄漏（工具型软件低内存）。根因两处：开关关臂只翻 Enabled 不收进程；退出链（ExitApp）也不收。
+- 修法：EverythingSource.StopOwnedEverything()（public static・EverythingQueryQueue.cs 用户管理面）——只按主模块路径匹配 OwnedExePath 收自带那只（用户自装不碰・跨 IL 读不到主模块跳过＝宁漏勿误）、Kill＋WaitForExit(2000)、收完 ForgetRunning 清 IsRunning 粘性、日志报已停/未停。接线三处：开关关臂 Task.Run 收（离 UI 线程）；ExitApp 停采集后摘托盘前收；EnableAsync／EnsureReadyAsync 各加 if (!_options.Enabled) StopOwnedEverything() 竞态闸（准备途中被关就地收）。
+- 顺手修：PrepareLocalDiskSearch 续写闸 if (!LocalDiskSearchEnabled) return（防关臂文案被 in-flight 准备覆写）；退出收尾日志链句补「停自带搜索」。
+- 防回退：形状⑬ TheOwnedEngineIsCollectedOnToggleOffAndOnExit（EverythingDownloadTrustTests）——钉体＋三处接线＋竞态闸计数==2（数整档・EnsureReadyAsync 表达式体体抽取数不了）。
+- 摸排结论：全仓唯一功能自有常驻后台进程＝自带 Everything，其余 Process.Start 全是用户点发/交接型；ClipboardWatcher 开关链对称——无同类需修。
+- 活档行号指针预防：MainWindow.xaml.cs 被活档念的行号三处全在插入点之前（另两处本就超界已坠落）——零坠落零新立，FallenPointerBaseline=19 不动。
+- 验证：docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量 7058/7058 新基线（21 分钟）。
+- 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
