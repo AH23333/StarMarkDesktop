@@ -1262,3 +1262,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 自检工具：icon_selfcheck.py 探针更新为星群读数（主星心/双星芒心/双星点心精确金・连线段 R>B・16px SAT1 在场・金覆盖率）；新增 ascii_png.py（任意 PNG→ASCII）・probe_px.py（任意 PNG 四通道探针）・icon_variants.mjs（打样器，留作下次换稿用）。
 - 验证：图标闸门 8/8・全量 **7057/7057** 新基线（38m45s）・换装真机 pid 25948；预览在 assets/app/preview/（tile/tray×16/32/256）。
 - 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十五、片264：README 重写为正规项目风格——过期事实全刷新・门面四段新立（下载安装/贡献/致谢/Star History）
+- 动机：用户裁决「更新readme，要有正规项目的风格」——旧 README 是 v1.0.2 时代的事实（badges .NET 9.0/静态 version-1.0.1・前置 .NET 9・publish 示例 v1.0.2），发完 v1.0.5 该对齐了。
+- 做了什么：hero 段（居中 docs/images/icon-256.png 头图〔新跟踪・拷自 assets/app/preview/tile-256.png〕＋tagline＋动态 badges〔release/downloads/.NET 10/平台/架构/MIT〕）；新立四段：下载安装（.NET 10 Desktop Runtime 前置・setup.exe・升级两段式）・参与贡献（全量绿+闸门+账本文化三要求）・致谢（Everything/Ditto/Open-Meteo/Ollama/SQLite FTS5/Inno Setup/WinUI 3）・Star History；「快速开始」与「构建·测试·发布」合并为「从源码构建」四小节；目录锚点全重排。
+- 事实核对（防 README 变第二出处说假话）：互斥体名 Local\StarMark.Desktop.SingleInstance（App.xaml.cs:32）・STARMARK_DB_PATH/SETTINGS_PATH（UserDataPaths.cs:26/29）・docs/发布说明/ 在案・16 条文档链接全部真实存在；README 无闸门钉（测试内 "README" 命中 8 文件全是巧合样本：readme.md 测试数据/?tab=readme URL），可放手改。
+- 验证：纯 docs 零产品码——全量基线 7057/7057 维持不重跑（片262 零码先例）；docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）。
+- 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
