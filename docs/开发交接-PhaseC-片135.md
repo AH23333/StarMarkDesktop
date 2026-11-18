@@ -1279,3 +1279,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 活档行号指针预防：MainWindow.xaml.cs 被活档念的行号三处全在插入点之前（另两处本就超界已坠落）——零坠落零新立，FallenPointerBaseline=19 不动。
 - 验证：docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量 7058/7058 新基线（21 分钟）。
 - 下一刀候选：①真机 v1.0.4→v1.0.5「立即更新」实路验证；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.5 清单已用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十七、片266：发版 v1.0.6（星群图标＋Everything 收走）＋本机更新——四颗全链・基线 7058/7058 维持
+- v1.0.6 已公开：https://github.com/AH23333/StarMarkDesktop/releases/tag/v1.0.6 ——zip 82,445,701／manifest 551 颗／sig 71／setup 58,886,580（sha256 8dcb9296…），tag→db595d4；版本号唯一出处 Directory.Build.props，发布说明单出处 docs\发布说明\v1.0.6.md。
+- 发版命令链（SDK10 环境前缀＋TEMP 改道 D）：commit 版本行→push→tag v1.0.6→push→release-package.ps1（一颗脚本全链产四颗）→publish-release.ps1 -Tag v1.0.6（草稿→传→对账→公开）。
+- 发版闸门口径：ReleasePackagingGateTests＋InstallerGateTests 两族 37 颗（片262 同）；把 InstallerI18nGateTests 也滤进来是 43——数字对不上先查滤面再疑代码。
+- 本机已更新：ship_latest 换装 pid 22756・1.0.6+db595d4・12 组件恢复零异常；app 上一次会话（pid 25948・旧构建）20:08 正常退出。
+- 环境判明一条（不立项）：Everything pid 5128 是用户自装 Everything 的服务实例（Session 0・D:\Everything搜索工具）——StopOwnedEverything 按 OwnedExePath 路径匹配天然不碰它；查 Everything 归属先看 Session（Session 0＝服务）再看路径可读性（提权读不到≠自带）。
+- 验证：发版闸门 37/37・docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7058/7058 维持（产品码零改动不重跑）。
+- 下一刀候选：①真机「立即更新」实路验证（本机现跑 1.0.6 Debug——下一版发布时可让装着 setup 的机器走真更新链）；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.6 清单已再次用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
