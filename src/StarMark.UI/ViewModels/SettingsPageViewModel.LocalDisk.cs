@@ -160,13 +160,17 @@ public partial class SettingsPageViewModel
         if (_suppressLocalDiskApply) return;
         var options = App.Services.GetRequiredService<StarMark.Integrations.Everything.FileIndexOptions>();
 
-        // 关闭：即时翻位单例（IsAvailable 实读），统一搜索立刻剔除本地文件源；已装的 Everything / 服务不动。
+        // 关闭：即时翻位单例（IsAvailable 实读），统一搜索立刻剔除本地文件源；并把开关开着期间为这一
+        // 功能拉起的那只自带 Everything 收走——它是无托盘的隐藏后台进程，整套全盘索引的内存都记在它头上，
+        // 开关关了还留着就是泄漏。用户自装的那只不在此列（按主模块路径精确匹配）；枚举/结束进程是
+        // 阻塞系统调用，离 UI 线程跑。
         if (!value)
         {
             options.Enabled = false;
             _settings.SaveLocalDiskSearchEnabled(false);
             CanRetryLocalDiskPrepare = false;
             LocalDiskSearchStatus = LocMessage.Of("settings.extend.diskOffStopped");
+            _ = Task.Run(() => StarMark.Integrations.Everything.EverythingSource.StopOwnedEverything());
             return;
         }
 
@@ -222,6 +226,7 @@ public partial class SettingsPageViewModel
             }
             App.MainWindow?.DispatcherQueue?.TryEnqueue(() =>
             {
+                if (!LocalDiskSearchEnabled) return;   // 准备途中开关被关：文案留在关臂那一份，重试按钮也不摆
                 LocalDiskSearchStatus = status;
                 CanRetryLocalDiskPrepare = needRetry;
             });

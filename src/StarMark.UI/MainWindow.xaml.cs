@@ -220,7 +220,7 @@ public sealed partial class MainWindow : Window
         // ✅P-80：退出收尾的第一步——此后关贴图窗不删记录（下次启动要回来）。更新交棒走同一条路。
         PinManager.EnterShutdown();
         _allowExit = true;
-        StarLog.Info("退出：开始收尾（画板 → 停同步 → 关组件 → 停采集 → 摘托盘 → 结束进程）");
+        StarLog.Info("退出：开始收尾（画板 → 停同步 → 关组件 → 停采集 → 停自带搜索 → 摘托盘 → 结束进程）");
         // 硬退出保险：收尾里任何一步卡住（22 个组件窗口的关闭，只要有一个不返回就够）都会让进程留在
         // "托盘图标已经没了、StarMark.UI.exe 还在锁着 dll" 这个状态。这条后台线程不参与任何业务，
         // 正常路径会自己走到最后那句 Environment.Exit，它只在 5 秒后替用户把话说完。
@@ -241,6 +241,11 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
         try { App.ApplyClipboardHistory(false); }
         catch (Exception ex) { StarLog.Error("停止剪贴板采集失败", ex); }
+        // 本地磁盘搜索开着时，StarMark 拉起的那只自带 Everything 是无托盘的隐藏后台进程：退出不带它走
+        // ＝整套全盘索引的内存白留在机器上（用户以为程序关了）。只收自带的（按主模块路径精确匹配），
+        // 用户自装的不碰；下次开启由就绪流程重新拉起，索引库在盘上、重启很快。
+        try { StarMark.Integrations.Everything.EverythingSource.StopOwnedEverything(); }
+        catch (Exception ex) { StarLog.Error("停止自带 Everything 失败（不影响结束进程）", ex); }
         DisposeTray();
         WidgetAppearance.ReleaseBackdrop(this);   // 释放主窗口的材质控制器（原生合成资源）
         try { Application.Current.Exit(); }

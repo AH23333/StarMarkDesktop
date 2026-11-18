@@ -261,6 +261,8 @@ public sealed class EverythingSource : IItemSource
     {
         var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);
         var ownedRunning = await EnsureOwnedRunningAsync(CancellationToken.None).ConfigureAwait(false);
+        // 竞态闸（片265）：这条不带取消令牌（启动路径），准备途中开关被关就就地收走刚拉起的自带实例。
+        if (!_options.Enabled) StopOwnedEverything();
 
         // 诊断：一次打全启动时 Everything 可用性，便于定位"开了仍搜不到"——①自带实例没起②SDK DLL 未加载③IPC 通但查询空。
         StarLog.Info(
@@ -344,6 +346,9 @@ public sealed class EverythingSource : IItemSource
             // 丢弃那一臂的 bool 是静默半瘫，比抛异常更难查。
             var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);
             var ownedRunning = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);
+            // 竞态闸（片265）：下载/拉起都要好几秒，准备途中开关可能被关掉——不补这一道，
+            // 刚拉起的自带 Everything 会活过后一次收走，成为没人认领的常驻后台进程。
+            if (!_options.Enabled) StopOwnedEverything();
             if (!(sdkReady && ownedRunning))
                 StarLog.Warn($"本地磁盘搜索开启未就绪：SDK就绪={sdkReady} · 自带实例接管={ownedRunning}");
             return sdkReady && ownedRunning
@@ -631,6 +636,37 @@ public sealed class EverythingSource : IItemSource
             { FileName = DataRootPath, UseShellExecute = true });
         }
         catch (Exception ex) { StarLog.Error("打开本地搜索引擎目录失败", ex); }
+    }
+
+    /// <summary>收走 StarMark 自带的 Everything 进程（本地磁盘搜索开关关掉／应用退出时调用）。
+    /// 只按主模块路径精确匹配 <see cref="OwnedExePath"/>：用户自装的 Everything 一概不碰；
+    /// 跨完整性级别读不到主模块的进程无法自证是自带那只，跳过不杀（宁漏勿误）。
+    /// 收完作废 <c>IsRunning</c> 的粘性——关掉的正是它探的那颗 IPC 窗口，不清的话状态探询
+    /// 短时间内仍报「引擎在跑」。幂等：自带实例不在跑就只作废粘性。</summary>
+    public static void StopOwnedEverything()
+    {
+        var stopped = 0;
+        var missed = 0;
+        try
+        {
+            foreach (var p in System.Diagnostics.Process.GetProcessesByName("Everything"))
+            {
+                try
+                {
+                    string? path = null;
+                    try { path = p.MainModule?.FileName; } catch { }
+                    if (path is null || !string.Equals(path, OwnedExePath, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    try { p.Kill(); }
+                    catch (Exception ex) { StarLog.Error("结束自带 Everything 进程失败（可能无权限）", ex); missed++; continue; }
+                    if (p.WaitForExit(2000)) stopped++; else missed++;
+                }
+                finally { p.Dispose(); }
+            }
+        }
+        catch (Exception ex) { StarLog.Error("枚举 Everything 进程失败", ex); }
+        EverythingInterop.ForgetRunning();
+        StarLog.Info($"收走自带 Everything：已停={stopped} · 未停={missed}");
     }
 
     /// <summary>删除本地搜索引擎（everything\ + sdk\）：先结束所有 Everything 进程、再卸载进程内映射的 SDK，

@@ -26,6 +26,8 @@ public sealed class EverythingDownloadTrustTests : IDisposable
 {
     private const string QueuePath = "src/StarMark.Integrations/Everything/EverythingQueryQueue.cs";
     private const string TrustPath = "src/StarMark.Integrations/Everything/EverythingDownloadTrust.cs";
+    private const string LocalDiskPath = "src/StarMark.UI/ViewModels/SettingsPageViewModel.LocalDisk.cs";
+    private const string MainWindowPath = "src/StarMark.UI/MainWindow.xaml.cs";
 
     private static readonly Regex Hex64 = new("^[0-9a-fA-F]{64}$", RegexOptions.Compiled);
 
@@ -240,6 +242,28 @@ public sealed class EverythingDownloadTrustTests : IDisposable
         Assert.Contains("var sdkReady = await EnsureSdkReadyAsync().ConfigureAwait(false);", body, StringComparison.Ordinal);
         Assert.Contains("var ownedRunning = await EnsureOwnedRunningAsync(ct).ConfigureAwait(false);", body, StringComparison.Ordinal);
         Assert.Contains("sdkReady && ownedRunning", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>形状⑬（片265）：开关关掉/应用退出必须收走自带的 Everything——它是无托盘的隐藏后台进程，
+    /// 不收＝整套全盘索引的内存白留在机器上（用户以为程序关了）；用户自装的那只一概不碰（按主模块路径
+    /// 精确匹配）。准备途中被关的竞态由两道闸兜住：两条准备流程跑完时开关已翻关 ⇒ 就地收走刚拉起的实例。</summary>
+    [Fact]
+    public void TheOwnedEngineIsCollectedOnToggleOffAndOnExit()
+    {
+        var stop = MethodBody(ReadRepoFile(QueuePath), "public static void StopOwnedEverything()");
+        Assert.Contains("OwnedExePath, StringComparison.OrdinalIgnoreCase", stop, StringComparison.Ordinal);   // 只认自带那只
+        Assert.Contains("EverythingInterop.ForgetRunning();", stop, StringComparison.Ordinal);                 // 收完清 IsRunning 粘性
+        Assert.Contains("p.WaitForExit(2000)", stop, StringComparison.Ordinal);
+
+        var toggle = MethodBody(ReadRepoFile(LocalDiskPath),
+            "partial void OnLocalDiskSearchEnabledChanged(bool value)");
+        Assert.Contains("StopOwnedEverything()", toggle, StringComparison.Ordinal);   // 开关关臂收走自带进程（离 UI 线程）
+
+        var exit = MethodBody(ReadRepoFile(MainWindowPath), "private async void ExitApp()");
+        Assert.Contains("StopOwnedEverything()", exit, StringComparison.Ordinal);     // 退出带走自带引擎
+
+        // 两道竞态闸各就各位（数整档：EnsureReadyAsync 是表达式体，别用体抽取数它）。
+        Assert.Equal(2, Count(ReadRepoFile(QueuePath), "if (!_options.Enabled) StopOwnedEverything();"));
     }
 
     /// <summary>形状⑩（坑 #1173・片258 net10 实测补记）：全量重编唯一的警（SYSLIB0057）被定向压净——
