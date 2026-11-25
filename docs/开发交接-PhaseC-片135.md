@@ -1288,3 +1288,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 环境判明一条（不立项）：Everything pid 5128 是用户自装 Everything 的服务实例（Session 0・D:\Everything搜索工具）——StopOwnedEverything 按 OwnedExePath 路径匹配天然不碰它；查 Everything 归属先看 Session（Session 0＝服务）再看路径可读性（提权读不到≠自带）。
 - 验证：发版闸门 37/37・docgates 26/26（落账前后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7058/7058 维持（产品码零改动不重跑）。
 - 下一刀候选：①真机「立即更新」实路验证（本机现跑 1.0.6 Debug——下一版发布时可让装着 setup 的机器走真更新链）；②P-298 额度恢复后四叉裁决（AiProbe 复活前先 net10 化）；③P-147 等用户离线备份私钥（v1.0.6 清单已再次用私钥签过——更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十八、片267：Bailu 备胎接入＋P-298 真端点读数——bailu-2.7-free 实为隐藏思考模型・丙臂第二家坐实
+- Bailu 备胎用法（GLM 额度尽时）：`AiProbe --bailu`（环境变量 `BAILU_API_KEY`・模型 bailu-2.7-free・基址 bailucode.com/openapi/v1・GLM 路原样）；python 探针 `probe_bailu_classify.py` 必须带浏览器 UA（平台在 Cloudflare 后・Python-urllib 被 403 error 1010 拦・坑 #1187）；Key 纪律：只进环境变量与 SecretProtector・不落日志/提交・凭据备忘在仓外。
+- AiProbe net10 化已复活（不再需要「复活前先 net10 化」前置）：TFM/HintPath net10・`GenerateDependencyFile=false`（坑 #1186：Private=false 引用不进 deps.json/TPA・有 deps.json 时默认 ALC 不探 app 目录——摘 deps.json 走 app-dir 全量回退）・`runtimes\win-x64\native` 原生库平根一次・运行布局 robocopy 从 app net10 bin 铺（清理后重铺过・~310MB）。
+- 核心读数：**bailu-2.7-free 是隐藏思考模型**——三档忠实探针（10@400／24@672／56@1568）全档 finish_reason=length・completion 与 reasoning_tokens 双恰满・content 零字；app 实跑批被误分型 BadResponse「choices 里没有正文」（真因截断）；思考消耗只在 usage 计量可见・reasoning_content 不暴露。
+- P-298 四叉现况（裁决归用户）：甲地板单独不成立（1568 照样零正文）・丙证据最厚（两家可见＋误分型有案）・丁盲区复现（失败批 Bailu 侧烧 400 token 不入账）・乙 Bailu 未测。
+- 现场状态：settings.json AI 段已被 AiProbe 改指 Bailu（原 glm-4.5-air 覆盖・GLM 额度尽）——用户 in-app 真测可直用；AiProbe 实跑落了一颗 54 条规则方案在盘（未应用・预览后自行应用）。
+- 验证：docgates 26/26（落账后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7058/7058 维持（零产品码不重跑）。
+- 下一刀候选：①P-298 四叉裁决＋落地刀（丙 finish_reason=length 透传分型证据最厚・可与甲/丁合批）；②真机「立即更新」实路验证；③P-147 等用户离线备份私钥（更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
