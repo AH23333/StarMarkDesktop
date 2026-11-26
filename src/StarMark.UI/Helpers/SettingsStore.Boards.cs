@@ -1,4 +1,5 @@
 #nullable enable
+using System;
 
 namespace StarMark.UI.Helpers;
 
@@ -21,6 +22,24 @@ public sealed partial class SettingsStore
     {
         var d = Load() ?? new SettingsData();
         d.BoardsEnabled = enabled;
+        Save(d);
+    }
+
+    /// <summary>
+    /// 画板自己的主题偏好（片273 起与主窗主题分家）：与主窗那颗 <c>ThemePreference</c> 同一枚枚举、另存一格——
+    /// 换主窗主题⛔ 再连带换板内深浅（两族画面的用色习惯不同，谁也不许覆盖谁）。
+    /// null／脏值（旧档没这一格、或被手改坏）都回 <see cref="ThemePreference.Default"/>（跟随系统）。
+    /// </summary>
+    public ThemePreference LoadBoardTheme()
+        => Load() is { } d && d.BoardTheme is { } raw
+            && Enum.IsDefined(typeof(ThemePreference), raw)
+            ? (ThemePreference)raw
+            : ThemePreference.Default;
+
+    public void SaveBoardTheme(ThemePreference pref)
+    {
+        var d = Load() ?? new SettingsData();
+        d.BoardTheme = (int)pref;
         Save(d);
     }
 }

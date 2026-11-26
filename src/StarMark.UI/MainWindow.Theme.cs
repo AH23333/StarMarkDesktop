@@ -79,9 +79,9 @@ public sealed partial class MainWindow
             SetStatusDot(_statusKind);
             // 独立弹窗不会继承主窗口主题，需显式同步主题偏好。
             CenteredDialog.ApplyThemeToOpenDialogs(_themePref);
-            // 画板那几扇同理（片147）：引擎那颗 theme prop 只有宿主递得进去，
-            // 而它⛔ 在主窗的 RequestedTheme 底下——不推一次＝换主题时画板停在旧的那一档。
-            StarMark.UI.Boards.BoardsWindows.ReapplyAppearance();
+            // 画板那几扇不再由这一拍推（片273 起画板主题与主窗主题分家）：板内深浅读画板自己那颗
+            // 设置档（LoadBoardTheme），换主窗主题⛔ 再连带换板——那一拍搬到设置页「画板主题」那一格
+            // （SettingsPageViewModel.Boards 的 OnBoardThemeIndexChanged 自己经名册推）。
         }
         catch (Exception ex)
         {

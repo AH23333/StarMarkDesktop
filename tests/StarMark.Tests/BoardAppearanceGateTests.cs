@@ -11,8 +11,10 @@ namespace StarMark.Tests;
 /// 画板那两颗"设置同步"的 outbound（Phase C 片147＝集成矩阵「设置同步（主题／语言）」那一格的后半）。
 /// <para>这一格坏的方式很安静：改前宿主发的是两颗硬编码占位值（浅色＋<c>zh-CN</c>），
 /// 于是深色主题／英文／日文用户打开画板看到的仍是浅色中文，而那扇窗⛔ 报错、⛔ 变样——
-/// 屏幕上"一切正常"，只有语言与主题不对。所以这里钉的不是"发没发"（那一半早就绿），
+/// 屏幕"一切正常"，只有语言与主题不对。所以这里钉的不是"发没发"（那一半早就绿），
 /// 而是<b>发出去的那两颗值⛔ 是写死的</b>、以及<b>该叫到它的三拍都真叫到了</b>。</para>
+/// <para>片273 起主题那一拍换了主人：画板主题与主窗主题分家，板内深浅读画板自己那颗设置档
+/// （<c>LoadBoardTheme</c>），推送点从主窗 <c>RefreshAppearance</c> 搬到设置页「画板主题」那一格。</para>
 /// </summary>
 public sealed class BoardAppearanceGateTests
 {
@@ -20,6 +22,7 @@ public sealed class BoardAppearanceGateTests
     private const string RosterPath = "src/StarMark.UI/Boards/BoardsWindows.cs";
     private const string BridgeJsPath = "tools/boards/board-bridge.js";
     private const string ThemePath = "src/StarMark.UI/MainWindow.Theme.cs";
+    private const string VmBoardsPath = "src/StarMark.UI/ViewModels/SettingsPageViewModel.Boards.cs";
     private const string PolicyPath = "src/StarMark.Core/Boards/BoardPolicy.cs";
 
     // ─────────────── ① 两颗值的判据本身 ───────────────
@@ -97,21 +100,45 @@ public sealed class BoardAppearanceGateTests
             "那道闸门如果排在发送之后，它今天就⛔ 拦任何东西（存在⛔ 等于生效）");
     }
 
+    /// <summary>片273 起画板主题与主窗主题分家：换主窗主题那一拍（<c>RefreshAppearance</c>）不再推板，
+    /// 板内深浅的唯一推送点搬到设置页「画板主题」那一格。旧链（片147：主窗那一拍顺带推板）回来＝分家倒退，
+    /// 深浅又变回「两族画面一颗开关」——设置页那格怎么换，板都停在主窗那一档。</summary>
     [Fact]
     public void TheThemeBeatReachesEveryOpenWindow_AndOneStuckWindowCannotTakeTheRestDown()
     {
         var theme = SourceGate.Code(SourceGate.ReadRepoFile(ThemePath));
         // 与那颗 ApplyThemeToOpenDialogs 同一拍、同一副理由（独立窗⛔ 继承主窗主题）
         Assert.Contains("CenteredDialog.ApplyThemeToOpenDialogs(_themePref);", theme, StringComparison.Ordinal);
-        Assert.Contains("BoardsWindows.ReapplyAppearance();", theme, StringComparison.Ordinal);
-        Assert.True(theme.IndexOf("CenteredDialog.ApplyThemeToOpenDialogs", StringComparison.Ordinal)
-                    < theme.IndexOf("BoardsWindows.ReapplyAppearance", StringComparison.Ordinal));
+        // 片273：主窗那一拍⛔ 再连带推板——那一行回来＝换主窗主题顺手换了板内深浅（分家名存实亡）
+        Assert.DoesNotContain("BoardsWindows.ReapplyAppearance", theme, StringComparison.Ordinal);
+
+        // 那一拍的新家：设置页换画板主题那一格（守卫在前、先落盘、再当帧经名册推）
+        var vm = SourceGate.Code(SourceGate.ReadRepoFile(VmBoardsPath));
+        var onChanged = SourceGate.MethodBody(vm, "partial void OnBoardThemeIndexChanged(int value)");
+        Assert.Contains("if (_suppressBoardThemeApply) return;", onChanged, StringComparison.Ordinal);
+        Assert.Contains("_settings.SaveBoardTheme(", onChanged, StringComparison.Ordinal);
+        Assert.Contains("BoardsWindows.ReapplyAppearance();", onChanged, StringComparison.Ordinal);
+        Assert.True(onChanged.IndexOf("_settings.SaveBoardTheme(", StringComparison.Ordinal)
+                    < onChanged.IndexOf("BoardsWindows.ReapplyAppearance();", StringComparison.Ordinal),
+            "先推后存＝推出去那一发读的还是旧档");
 
         var roster = SourceGate.Code(SourceGate.ReadRepoFile(RosterPath));
         var push = SourceGate.MethodBody(roster, "public static void ReapplyAppearance()");
         Assert.Contains("lock (_open) windows = _open.ToArray();", push, StringComparison.Ordinal);
         Assert.Contains("w.ReapplyAppearance();", push, StringComparison.Ordinal);
         Assert.Contains("catch", push, StringComparison.Ordinal);   // 逐扇兜异常：一扇桥没通⛔ 配带走其余几扇
+    }
+
+    /// <summary>片273：板内深浅的主人换成画板自己那颗设置档——<c>ReapplyAppearance</c> 读
+    /// <c>LoadBoardTheme</c> 而⛔ 再读主窗那颗 <c>LoadTheme</c>（读回来＝分家名存实亡：
+    /// 设置页那格怎么换，板都停在主窗那一档）。</summary>
+    [Fact]
+    public void ThePushReadsTheBoardsOwnThemeStore_NotTheMainWindowOne()
+    {
+        var push = SourceGate.MethodBody(SourceGate.Code(SourceGate.ReadRepoFile(WindowPath)),
+            "public void ReapplyAppearance()");
+        Assert.Contains("LoadBoardTheme()", push, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadTheme()", push, StringComparison.Ordinal);
     }
 
     /// <summary>那颗名册的读法⛔ 许漏掉"画板"这一族——它管四件事：退出、起窗、重贴外观、收窗（片204 起）。

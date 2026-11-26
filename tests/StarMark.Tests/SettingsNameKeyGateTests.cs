@@ -24,13 +24,15 @@ namespace StarMark.Tests;
 /// 只靠 Header 得来的 UIA Name 会<b>停在第一次贴的那一门</b>（zh 起、切 en／ja 后抬头改口成
 /// "What's in this release"／「この版の更新内容」，而那颗 peer 的 Name 仍是「这一版的更新说明」＝P-269 量到的），
 /// 走 AutomationProperties.Name 那一族则三语各念各的（✅P-268 那 33 颗 Expander 就是这么验的）。</para>
+/// <para>片273 再补<b>第二十颗</b>：「画板主题」那颗下拉（画板主题与主窗主题分家批）。同一行标题键
+/// <c>settings.extend.boardsThemeTitle</c> 同批新立，名键照旧借它（借名而⛔ 起名，与上面每一颗同一口径）。</para>
 /// </summary>
 public sealed class SettingsNameKeyGateTests
 {
     private const string SettingsXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
     /// <summary>
-    /// 每一颗＝<b>(标记里的元素种类, 认出那一颗的锚, 该行标题已经在用的键)</b>，共十九颗。
+    /// 每一颗＝<b>(标记里的元素种类, 认出那一颗的锚, 该行标题已经在用的键)</b>，共二十颗。
     /// <para>锚⛔ 用 <c>x:Name</c> 之外的形状？能命名就命名：六颗下拉与那颗 Expander 有名字、三颗没有，
     /// 没有名字的那几颗只能按<b>它自己那一行绑的读数</b>认（<c>EyeRestIntervalOptions</c> 那一族），
     /// 这是现场唯一不重复的出处。锚写宽一点（不带 <c>Mode=TwoWay</c>）就会被注释或邻居答题，
@@ -61,6 +63,8 @@ public sealed class SettingsNameKeyGateTests
         // 两颗并存是刻意的——真机量到只靠 Header 得来的 UIA Name 会停在第一次贴的那一门，
         // 而抬头本身换了语言（P-269 的读数）。
         ("Expander", "x:Name=\"UpdateNotesExpander\"", "settings.general.releaseNotes"),
+        // 片273 补的第二十颗：「画板主题」下拉（画板主题与主窗主题分家批）。行标题键同批新立，名键借它。
+        ("ComboBox", "x:Name=\"BoardThemeSelect\"", "settings.extend.boardsThemeTitle"),
     };
 
     /// <summary>抹掉 XML 注释、但把行数留在原地（#228 那一族：注释里写着一模一样的标记，闸门照样绿）。</summary>

@@ -8,7 +8,7 @@ namespace StarMark.Tests;
 
 /// <summary>
 /// 画板开关接线那面闸门（Phase C 片20）：设置键默认关、VM 两颗出口、设置卡绑定、托盘入口受开关收、
-/// 表五键三列。判据读仓库源文本（与 BoardWindowBridgeGateTests 同一族）。
+/// 表六键三列（片273 加「画板主题」那一格）。判据读仓库源文本（与 BoardWindowBridgeGateTests 同一族）。
 /// </summary>
 public sealed class BoardsSettingsGateTests
 {
@@ -35,6 +35,7 @@ public sealed class BoardsSettingsGateTests
     [
         "settings.extend.boardsTitle",
         "settings.extend.boardsNote",
+        "settings.extend.boardsThemeTitle",
         "tray.boards",
         "tray.boardsNew",
         "boards.openFailedTitle",
@@ -113,6 +114,31 @@ public sealed class BoardsSettingsGateTests
         Assert.Equal(1, Count(x, "settings.extend.boardsNote"));
         Assert.Equal(1, Count(x, "ViewModel.BoardsEnabled"));
         Assert.Contains("Mode=TwoWay", x, StringComparison.Ordinal);
+    }
+
+    /// <summary>画板主题那一格（片273 分家）：设置档另开一格（<c>BoardTheme</c>）、VM 那颗下拉
+    /// 先落盘再当帧推送、设置卡绑主窗那张三档清单（跟随系统/浅色/深色，⛔ 另写一张同义清单——坑表 #290）。
+    /// 回灌走 <c>LoadFromStore</c> 且抑制推送（进设置页⛔ 把开着的板平白推一遍）。</summary>
+    [Fact]
+    public void BoardThemeComboWiresStoreBackfillPushAndCard()
+    {
+        var main = ReadRepo(StoreMain);
+        Assert.Contains("public int? BoardTheme { get; set; }", main, StringComparison.Ordinal);
+        var boards = ReadRepo(StoreBoards);
+        Assert.Contains("public ThemePreference LoadBoardTheme()", boards, StringComparison.Ordinal);
+        Assert.Contains("d.BoardTheme = (int)pref;", boards, StringComparison.Ordinal);
+        var vmBoards = ReadRepo(VmBoards);
+        Assert.Contains("[ObservableProperty] private int _boardThemeIndex;", vmBoards, StringComparison.Ordinal);
+        var vmMain = ReadRepo(VmMain);
+        // 回灌读画板自己那颗出口（⛔ 主窗 LoadTheme），枚举序号＝下拉档位，抑制守卫成对
+        Assert.Contains("BoardThemeIndex = (int)Safe(_settings.LoadBoardTheme, ThemePreference.Default, \"画板主题\");", vmMain, StringComparison.Ordinal);
+        Assert.Contains("_suppressBoardThemeApply = true;", vmMain, StringComparison.Ordinal);
+        Assert.Contains("_suppressBoardThemeApply = false;", vmMain, StringComparison.Ordinal);
+        var x = ReadRepo(Xaml);
+        Assert.Equal(1, Count(x, "i18n:LocText.Key=\"settings.extend.boardsThemeTitle\""));
+        Assert.Equal(1, Count(x, "ViewModel.BoardThemeIndex"));
+        // 清单复用主窗那张（三档序＝ThemePreference 枚举序），⛔ 在这卡里另写一张
+        Assert.Contains("ItemsSource=\"{x:Bind ThemeOptions, Mode=OneTime}\"", x, StringComparison.Ordinal);
     }
 
     [Fact]

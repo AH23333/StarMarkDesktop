@@ -1,7 +1,7 @@
 # DeskBox 桌面组件 · 借鉴与优化意见
 
-**文档版本：** v3
-**调研对象：** `DeskBox-ref/`（参考实现，v1.5.2 时代文档）
+**文档版本：** v4
+**调研对象：** `DeskBox-ref/`（参考实现；v3 基线＝v1.5.2 源码，v4 增补＝v1.6.2 源码，2026-11-26 重新 clone）
 **面向对象：** StarMarkDesktop 第八轮迭代后的桌面组件体系（Widgets 2.0）
 **配套文档：** [项目功能可行性分析.md](./项目功能可行性分析.md) · [项目开发技术文档.md](./项目开发技术文档.md) · [架构健壮性分析与演进.md](./架构健壮性分析与演进.md) · [开发进度报告.md](./开发进度报告.md)
 
@@ -32,6 +32,37 @@ v3 对应一次**直接拉取 DeskBox 源码复用**的实作，而非再次评�
 | 4 | 窗口宿主与内容创建解耦 | `Services/WidgetContentFactory.cs` 的 provider 分层 | `WidgetWindow` 不再持有组件类型分支 |
 
 **重要认知修正：** v2 认为「当前持久 TopMost 会造出永远压屏的 bug」——实测 `WidgetConfig.Topmost` 默认为 `false`，是用户显式开关，该风险不成立。真正的缺口是**完全没有挂载桌面层**，组件只是普通窗口（点击桌面 / Win+D 会被挤走），这才是本次补齐的核心。
+
+## v4 修订说明（1.6.2 上游拉取，2026-11-26）
+
+v4 对应一次**上游更新拉取与学习**：`github.com/Tianyu199509/DeskBox` 已从 v3 时的 v1.5.2（2026-09-15）演进到 **v1.6.2**（2026-11-25，`e7d35931`），中间 429 个提交、10 个版本（1.5.3…1.6.2）。最新源码已重新 clone 到 `D:\Visual Studio Code\Something\DeskBox-ref`（旧参考树已不在本机）。
+
+### ⚠️ 授权红线（v4 最重要的新增事实，需用户拍板）
+
+- DeskBox **v1.0.0（2026-06-11）是 MIT；v1.2.0（2026-07-02）起改 GPL-3.0**；1.6.0 起正式双轨「GPL-3.0-only + 商业授权」（`LICENSING.md`，明确独立 `.dbxwidget` 免传染豁免）。
+- StarMarkDesktop 是 **MIT**。而 v3 那次「直接拉取 DeskBox 源码复用」发生在 **v1.5.2 时代 ⇒ 搬的是 GPL-3.0 码进 MIT 仓**。
+- 按代码内自述，**派生面（移植/照搬级）至少 11 处**：`WidgetSnapCalculator`（完整移植＋82 测试，自述「行为与其保持一致」）、`WidgetZOrderPolicy`（移植 IdleWidgetZOrderPolicy）、`WidgetLayerService`（移植三个核心动作）、`WidgetContentFactory`（移植分层）、`HotkeyService`（移植并简化自 GlobalHotkeyService）、`WidgetDescriptor`/`WidgetRegistry`（移植 WidgetContentDescriptor / WidgetRegistry）、`WidgetChromeMode`（移植）、`GlanceCalendar`（农历/清明算法照搬）、`WeatherCode`（WMO 映射照搬）、`MusicPlaybackMode`（三态循环照搬）、`WidgetBackdropKind.Solid`（照搬）。注释级「同款思路/对标」的引用不构成派生，不在清单内。
+- **出路四选一（挂待决策）：** ① 向 DeskBox 作者（Tianyu199509）取商业授权；② **净室重写**上述派生文件（以现 GPL 版为行为规格、由未读源码者按规格重写，成本集中在 SnapCalculator＋测试，其余多为薄封装）；③ StarMark 整体改 GPL-3.0；④ 维持现状（不合规，不建议）。
+- **v4 起的纪律：学思路、不搬码。** 上游现读是 GPL-3.0-only，任何 1.6.x 的代码级借鉴同样被传染；本节以下条目全部是思路级。
+
+### 1.5.2 → 1.6.2 值得学的（思路级，按对 StarMark 的相关度排序）
+
+| # | 上游做法 | 对 StarMark 的启示 |
+|---|---------|------------------|
+| 1 | **QuickJS 脚本沙箱＋声明式自定义组件**（`manifest.json` 声明式 UI＋`logic.js`，指令数/墙钟/内存三配额，按组件能力门禁：公网/局域网/剪贴板/本地文件/终端命令；ECDSA P-256 签名远程目录；零 WebView 常驻开销） | StarMark 画板（WebView2＋桥＋CSP 那套）的对照组：零 WebView 的沙箱路线已被上游量产验证。将来若做「自定义组件/看板」，这是现成的架构参照 |
+| 2 | **伴侣进程隔离**：设置中心与组件工坊跑在短生命周期伴侣进程（当前用户鉴权命名管道），关闭即回收内存；选目录/选文件迁入独立原生代理进程，慢速网络盘与 Shell 扩展不再卡死主界面 | P2-2「进程外隔离」的触发条件与做法已被上游实证到规模。StarMark 现无第三方 native 依赖，维持暂缓判断不变，但触发时照此形态做 |
+| 3 | **内存修剪节律**（1.5.9→1.6.2 多轮调优的成熟读数：隐藏后修剪宽限 3s→30s、同时段后续修剪退为 5 分钟兜底、跳过小额修剪、唤起首帧零闪） | P1-3 性能门禁可直接引用的参数基线；StarMark 的 `MemoryReclaimer` 同款思路，节律参数可对照校准 |
+| 4 | **更新器 UX**：墙钟锚点每日一查（睡眠不漂移）、失败退避 2 小时、计费网络跳过后台下载、更新完成自动弹更新日志 | StarMark 更新链刚走完 v1.0.6→1.0.7 真机实路验证（24h 检查＋手动「立即更新」）；上游这套是现成的下一档参照 |
+| 5 | **1.6.2 桌面搜索组件回归**：自适应四档布局；输入前缀语义 `+ ` 建待办、`; ` 记随记、`> ` 执行指令、直接输算式求值；指针离开自动模糊的隐私遮罩 | 与 StarMark Quick Capture 同族交互；前缀语义与隐私遮罩是可直接借鉴的交互语汇 |
+| 6 | **Z 序加固系列**（胶囊层级不掉、批量隐藏零残留、桌面底层重排风暴、Win10 跨 Compositor 闪退根治） | 与风险清单 R6b（Explorer 重启重挂载）同族；做 R6b 时把上游 1.6.1/1.6.2 的修复条目当检查单过一遍 |
+
+### 依旧不跟的（延续 §七）
+
+组件工坊/自定义组件平台本身（超 StarMark 范围且 GPL）、文件整理/桌面组织工作台（非差异化）、剪贴板历史＋离线 OCR（StarMark 有自己的 clipboard 源与路线）、Native AOT＋Rust sidecar（§7.3 判断不变）。
+
+### 结构变化注记
+
+上游 `src/DeskBox` 已重组出 `Features/`（17 个特性目录）＋`Platform/`；仓库根新增 `native/`（Rust QuickJS 模块，产出静态链接的 `deskbox_qjs.dll`）与 `catalog/`。附录文档索引中 `docs/architecture/` 路径在 1.6.x 有过重组，按需检索时以现树为准。
 
 ---
 

@@ -305,6 +305,12 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         public string? ScreenOcrLanguage { get; set; }
         /// <summary>画板（excalidraw）总开关的存储位（默认关＝null/false；v1 §21 总闸）。</summary>
         public bool? BoardsEnabled { get; set; }
+        /// <summary>
+        /// 画板自己的深浅色偏好（片273 起与主窗主题分家）：存 <see cref="ThemePreference"/> 序号，另开一格。
+        /// null＝跟随系统（默认）。⚠ 默认≠改前观感：改前板读主窗那颗 <c>Theme</c>（主窗显式选深/浅而系统相反的
+        /// 用户，板会从「跟主窗」变「跟系统」）——分家后板内深浅的第一颗主人是这一格，主窗那颗管不到板。
+        /// </summary>
+        public int? BoardTheme { get; set; }
 
         // ===== 检测版本更新（批次 UE）=====
         // 这一格只管"开不开自动检查"，另三格是<b>上次问到的结果</b>：设置页打开时要当场说得出

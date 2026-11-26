@@ -551,6 +551,7 @@ public static class UiStrings
         new Entry("settings.extend.captureTitle", "截屏（截图 / 贴图 / 识字）", "Screen capture (snip / pin / OCR)", "スクリーンショット（切り取り / 貼り画像 / 文字認識）"),
         new Entry("settings.extend.boardsTitle", "画板（实验）", "Board (experimental)", "ボード（実験）"),
         new Entry("settings.extend.boardsNote", "打开后，托盘里出现「画板」入口", "Once on, a Board entry appears in the tray", "オンにするとトレイにボードの入口が出ます"),
+        new Entry("settings.extend.boardsThemeTitle", "画板主题", "Board theme", "ボードテーマ"),
         new Entry("settings.extend.captureNote", "关后三条热键交还系统；已钉的贴图不受影响", "Off returns the three hotkeys; pins already on the desktop are unaffected", "切ると3つのキーを返します。既に貼った画像はそのまま"),
                     new Entry("settings.extend.canvasTitle", "屏幕画布", "Screen canvas", "画面キャンバス"),
         new Entry("settings.extend.canvasNote", "进去是穿透态：点下层应用不受影响", "It starts click-through — the windows below still work", "開始時は透過状態。下のウィンドウも操作できます"),

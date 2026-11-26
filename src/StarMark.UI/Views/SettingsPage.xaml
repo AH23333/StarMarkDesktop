@@ -984,6 +984,16 @@
                                     <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.BoardsEnabled, Mode=TwoWay}"/>
                                 </Grid>
+                                <!-- 画板主题（片273 起与主窗主题分家）：下拉与主窗那颗共用同一张三档清单
+                                     （跟随系统/浅色/深色），但各记各的档——换主窗主题⛔ 再连带换板内深浅。 -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0" Style="{StaticResource SettingRowText}" VerticalAlignment="Center" TextWrapping="Wrap"
+                                               i18n:LocText.Key="settings.extend.boardsThemeTitle"/>
+                                    <ComboBox Grid.Column="1" x:Name="BoardThemeSelect" MinWidth="180" i18n:LocText.NameKey="settings.extend.boardsThemeTitle"
+                                              SelectedIndex="{x:Bind ViewModel.BoardThemeIndex, Mode=TwoWay}"
+                                              ItemsSource="{x:Bind ThemeOptions, Mode=OneTime}"
+                                              ItemTemplate="{StaticResource LocOptionTemplate}"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
 

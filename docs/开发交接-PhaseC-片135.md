@@ -1325,3 +1325,18 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 翻牌：P-300——实弹四判据在案（片270：升帽 16:29:42・救回整轮 Ok・并账 ai_usage in=3280/out=2742/est=0・真报）＋判例全量 7075/7075（片269）＋P-297 分界同日活体无回归（16:04:12）。待决策事项 301 颗全数 ✅・**开放清零**。
 - 验证：docgates 26/26（落账后）・计数器 **301/301/0 VERDICT OK（开放清零）**・零产品码全量基线 7075/7075 维持不重跑。
 - 下一刀候选：①真机「立即更新」实路验证；②发版 v1.0.7（带 P-297/P-298/P-300 修复发装 setup 机）；③热键 Ctrl+Alt+P 占用者定位（环境小事）；④Verify*/UG*/UH*/UL* 老拷贝山清理（9-10 月・另立刀・待用户）。
+
+## 一百五十三、片272：发版 v1.0.7（AI 稳健性链三连修复发装）＋真机「立即更新」实路＋热键 Ctrl+Alt+P 结案＋老拷贝山清理＋DeskBox v1.6.2 学习——授权红线发现・P-301 新立（用户裁决全仓 MIT→GPL-3.0）
+- 发版链：v1.0.6→v1.0.7（Directory.Build.props・commit 34a23a2・积 7 提交）——zip 82,451,762／update-manifest.json 102,812（551 颗）／sig 71／setup 58,867,382（sha256 ac88e3d52dddab26e257cd6c8f5ecd4d3dd2a497765f5e98b36a0d4c97f4a945）；Release 公开 github.com/AH23333/StarMarkDesktop/releases/tag/v1.0.7；发布说明单出处 docs\发布说明\v1.0.7.md（主角＝AI 分类稳健性三连 P-297/P-298/P-300）。
+- 真机「立即更新」实路（首条真网络整链）：17:25:13 NewerAvailable v1.0.7→17:26:38 审包通过（清单是今天签的）→17:26:39 交给更新器→17:26:40 换装成功（旧树挪 StarMark_old・已清）・结局 Success・新版本自己起来→17:27:01 UpToDate；换装后 ProductVersion 1.0.7+34a23a26（PID 1416）。
+- 热键 Ctrl+Alt+P 结案：占用者＝自家画布荧光笔热键（CanvasPen＝Ctrl+Alt+P・HotkeyBindings 默认表）——同机两份 StarMark 并跑时后起那份注册不上自家键；非外部程序，零码结案。
+- 老拷贝山：Verify*/UG*/UH*/UL*（9-10 月・bin 直下）886 删・40.46 GB（bin\WI37C\cleanup_mountain_272.ps1・前缀匹配＋30 天新鲜度守卫）；别前缀（GcA/GcB/SY*/SZ*/TB*/TC*/UF*/UI3/UJ*/UK2/UM*/UN*/VO1 等）未清＝下刀候选。
+- DeskBox v1.6.2＋借鉴文档 v4：上游 v1.6.2（2026-11-25・e7d35931・429 提交 10 版本）重新 clone 重学；授权红线＝v3 借鉴（v1.5.2 时代）搬 GPL-3.0 码进 MIT 仓・派生面（移植/照搬级）至少 11 处（清单与时间线正本＝docs\DeskBox桌面组件借鉴与优化意见.md v4「授权红线」节）；用户裁决（四选一之③）＝StarMark 整体改 GPL-3.0 ⇒ P-301 新立保持开放（执行刀：LICENSE 换轨＋README/发版链对齐＋11 派生面署名）；v4 纪律：学思路、不搬码。
+- 验证：四产物对账＋publish-release API 对账＋真机整链换装在案；发版时点零产品码——全量基线 7075/7075 维持（片269）；docgates 26/26（落账后）・计数器 **302/301/1 VERDICT OK（开放 P-301）**。本刀新坑 #1191。
+
+## 一百五十四、片273：画板主题设置落地（跟随系统/浅色/深色・与主窗分家）——存储/回灌/推送全链八档＋三钉重锚・全量基线 7077/7077
+- 分家口径：板的主题自己存自己读——SettingsData.BoardTheme（int?・null=跟随系统）＋LoadBoardTheme/SaveBoardTheme；推送点唯一＝SettingsPageViewModel.Boards 的 OnBoardThemeIndexChanged（先落盘再 BoardsWindows.ReapplyAppearance 当帧叫醒已开的板・_suppressBoardThemeApply 守卫回灌）；MainWindow.RefreshAppearance 不再推板；BoardWindow.ReapplyAppearance 读自家存储；下拉复用 ThemeOptions・新键 settings.extend.boardsThemeTitle 三语。
+- 三钉重锚（射程兑现型红）：LocOptionTemplate 跨档计数 17→18（第 18 处＝画板主题下拉・先例链 15→16→17→18）・LogOnly 名册 71→72＋Safe 档 37→38（72 行实体＝「画板主题」Safe 兜底标签・先例链 WI-81→片20→片273）・NameKey 普查名单第 20 颗（BoardThemeSelect・借行标题键・首轮红 20≠19 修名单不修总数）。
+- 活档指针回写：bump_pointers_273.py 9 组换号（SettingsPage.xaml +10・SettingsPageViewModel.cs +5・UiStrings.cs +1・落空基线 19 一颗不动）＋bump_bare_273.py 账本 6622 行同句两颗裸号重指（1280→1290・1319→1329）。
+- 验证：UI 编译 0 警 0 错（Debug x64）・定向滤 1794/1794・全量 **7077/7077 新基线**（7075＋2 判例・9m47s）・docgates 26/26（落账后）・计数器 **302/301/1 VERDICT OK（开放 P-301）**。
+- 下一刀候选：①P-301 执行刀（LICENSE→GPL-3.0＋README/发版链对齐＋11 派生面署名）；②画板主题真机观感（设置页三档・已开板当帧换肤・随用户）；③拷贝山别前缀旧目录清理（GcA/GcB/SY*/SZ*/TB*/TC*/UF*/UI3/UJ*/UK2/UM*/UN*/VO1 等・另立刀・待用户）；④DeskBox 1.6.x 思路级候选（更新器 UX・内存修剪节律・P2-2 进程外隔离触发参照）。

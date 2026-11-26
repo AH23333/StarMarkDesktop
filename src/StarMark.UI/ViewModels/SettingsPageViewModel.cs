@@ -466,6 +466,11 @@ public partial class SettingsPageViewModel : ObservableObject
         _suppressBoardsApply = true;
         BoardsEnabled = Safe(_settings.LoadBoardsEnabled, false, "画板");
         _suppressBoardsApply = false;
+        // 画板主题（片273 起与主窗主题分家）：另回灌各的，枚举序号＝下拉档位（0 跟随系统/1 浅/2 深），
+        // 推送（写盘＋叫醒已开的板）抑制照抄——进一趟设置页⛔ 把开着的板平白推一遍。
+        _suppressBoardThemeApply = true;
+        BoardThemeIndex = (int)Safe(_settings.LoadBoardTheme, ThemePreference.Default, "画板主题");
+        _suppressBoardThemeApply = false;
 
         // 两张状态行 + 那份只读键位一览都从当前绑定现生成（回灌也要生成一次，否则第一次进设置页会看到空表）
         RefreshCanvasHotkeySheet();

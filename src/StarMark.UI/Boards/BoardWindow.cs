@@ -1594,18 +1594,19 @@ public sealed class BoardWindow : Window
     /// 深色主题／英文／日文用户打开画板，引擎仍按浅色中文渲染，而屏幕上那扇窗看起来"一切正常"——
     /// 与本仓定性过的"全绿而功能坏"同族，差别只在那一族有人配证人、这一格没人配。</para>
     /// <para>三个调用点：桥起来那一拍（<see cref="OnBridgeReady"/>——页面那位 prop 主人这一刻才存在）、
-    /// 换语言那一刻（<see cref="OnLocaleChanged"/>）、换主题那一刻（由主窗 <c>RefreshAppearance</c>
-    /// 经 <see cref="BoardsWindows.ReapplyAppearance"/> 名册叫到，与 <c>CenteredDialog.ApplyThemeToOpenDialogs</c>
-    /// 同一副规矩：独立窗不继承主窗主题，得有人显式推一次）。</para>
-    /// <para>两颗值的<b>主人都不在这一格</b>："偏好落成浅还是深"归 <c>ThemeManager.ResolveEffectiveTheme</c>
-    /// （含 Default 跟随系统那一档），"引擎认哪串字面"归 <c>BoardPolicy.EngineThemeName</c>／
+    /// 换语言那一刻（<see cref="OnLocaleChanged"/>）、换画板主题那一刻（设置页「画板主题」那一格经
+    /// <see cref="BoardsWindows.ReapplyAppearance"/> 名册叫到，片273 起与主窗主题分家：换主窗主题
+    /// ⛔ 再连带换板——板内深浅只认画板自己那颗设置档）。</para>
+    /// <para>两颗值的<b>主人都不在这一格</b>：主题那颗偏好读画板自己的 <c>LoadBoardTheme</c>
+    /// （片273 分家；「跟随系统」那一档落成浅还是深归 <c>ThemeManager.ResolveEffectiveTheme</c>），
+    /// "引擎认哪串字面"归 <c>BoardPolicy.EngineThemeName</c>／
     /// <c>EngineLangCode</c>。这里只把两边接起来，⛔ 自己判、⛔ 自己拼字面。</para>
     /// </summary>
     public void ReapplyAppearance()
     {
         // 桥没通就发＝发进一颗没人听的口子（连"发没发出去"都⛔ 有回音，与那颗 RequestSceneSnapshot 同一道闸门）。
         if (!_bridgeReady || _tearingDown) return;
-        var pref = App.Services.GetRequiredService<StarMark.UI.Helpers.SettingsStore>().LoadTheme();
+        var pref = App.Services.GetRequiredService<StarMark.UI.Helpers.SettingsStore>().LoadBoardTheme();
         var dark = StarMark.UI.Helpers.ThemeManager.ResolveEffectiveTheme(pref) == Microsoft.UI.Xaml.ElementTheme.Dark;
         // 片204＝P-287 的发侧读数位：宿主订阅→lang.set→桥侧同一棵根重渲染→引擎按 langCode prop
         // 变更惰量加载内嵌 locale，六环静态全通（片204 侧查到底）；用户量到的「不跟」断点只能真机定界。
