@@ -2,6 +2,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using StarMark.Abstractions.Ai;
@@ -260,6 +263,104 @@ public sealed class AiLayerTests
             LocMessage.Of("common.rawValue", "余额不足"), where).Render();
         Assert.Contains("充值", reason);
         Assert.Contains("余额不足", reason);   // 服务商原话跟着走——用户对账时靠它认出是哪笔账
+    }
+
+    // ────────── 截断分型（P-298 丙）：帽不够装与协议不认是两堵墙 ──────────
+
+    [Theory]
+    [InlineData("""{"choices":[{"message":{"content":"x"},"finish_reason":"stop"}]}""", "stop")]
+    [InlineData("""{"choices":[{"message":{"content":"x"},"finish_reason":"length"}]}""", "length")]
+    [InlineData("""{"choices":[{"message":{"content":"x"}}]}""", null)]
+    [InlineData("""{"choices":[]}""", null)]
+    public void OpenAiFinishReasonIsReadFromTheFirstChoice(string json, string? expected)
+        => Assert.Equal(expected, AiWire.ReadOpenAiFinishReason(json));
+
+    [Theory]
+    [InlineData("""{"message":{"content":"x"},"done_reason":"stop"}""", "stop")]
+    [InlineData("""{"message":{"content":"x"},"done_reason":"length"}""", "length")]
+    [InlineData("""{"message":{"content":"x"}}""", null)]
+    public void OllamaDoneReasonIsReadWhereOllamaPutsIt(string json, string? expected)
+        => Assert.Equal(expected, AiWire.ReadOllamaDoneReason(json));
+
+    [Fact]
+    public void TruncationIsFatalBecauseTheSameCapHitsEveryRetry()
+        => Assert.False(AiFailures.IsRetryable(AiFailureKind.Truncated));   // 同帽重试＝再撞同一堵墙：熔断省 token（P-298 丙）
+
+    /// <summary>拿脚本化的 <c>HttpMessageHandler</c> 顶替网络（GitHub 那一族同款台架）：
+    /// 截断三态是 provider 把 JSON 翻成 <see cref="AiReply"/> 的那段逻辑，真网测不到——
+    /// 服务不会按测试的需要正好回一个 <c>finish_reason=length</c>。</summary>
+    private sealed class StubbedHandler : HttpMessageHandler
+    {
+        private readonly string _body;
+        public StubbedHandler(string body) => _body = body;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_body, Encoding.UTF8, "application/json"),
+            });
+    }
+
+    private static OpenAiCompatibleProvider OpenAiOver(string body)
+        => new(new HttpClient(new StubbedHandler(body)));
+
+    private static OllamaProvider OllamaOver(string body)
+        => new(new HttpClient(new StubbedHandler(body)));
+
+    private static AiSettings UsableOpenAi => new(Enabled: true, Provider: AiProviderKind.OpenAiCompatible,
+        Model: "m", ApiKey: "sk-x", BaseUrl: "https://api.example.com/v1");
+
+    private static AiSettings UsableOllama => new(Enabled: true, Provider: AiProviderKind.Ollama,
+        Model: "qwen2.5:7b");
+
+    [Fact]
+    public async Task AnEmptyOpenAiReplyCutByTheCapIsTypedTruncatedAndCarriesItsRealUsage()
+    {
+        using var provider = OpenAiOver(
+            """{"choices":[{"message":{"content":""},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":1200}}""");
+        var reply = await provider.CompleteAsync(UsableOpenAi, new AiRequest("s", "u", MaxTokens: 1200),
+            CancellationToken.None);
+
+        Assert.False(reply.Ok);
+        Assert.Equal(AiFailureKind.Truncated, reply.Failure);   // 旧分型把它误报成 BadResponse——P-298 丙要拆的混型
+        Assert.Equal(1200, reply.Usage!.OutputTokens);          // 丁：真账随 Fail 带出——那批 token 服务已计费
+        Assert.Contains("1200", reply.Detail!.Render());        // 帽值进了那半句，用户看得到该调哪一格
+    }
+
+    [Fact]
+    public async Task AnEmptyOllamaReplyCutByTheCapIsTypedTruncatedToo()
+    {
+        using var provider = OllamaOver(
+            """{"message":{"content":""},"done_reason":"length","prompt_eval_count":10,"eval_count":1200}""");
+        var reply = await provider.CompleteAsync(UsableOllama, new AiRequest("s", "u", MaxTokens: 1200),
+            CancellationToken.None);
+
+        Assert.False(reply.Ok);
+        Assert.Equal(AiFailureKind.Truncated, reply.Failure);   // 两家对称臂：判型同一条路，差别的只有字段名
+        Assert.Equal(1200, reply.Usage!.OutputTokens);
+    }
+
+    [Fact]
+    public async Task AHalfOpenAiAnswerCutByTheCapStaysOkAndIsFlagged()
+    {
+        using var provider = OpenAiOver(
+            """{"choices":[{"message":{"content":"1: tool"},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":1200}}""");
+        var reply = await provider.CompleteAsync(UsableOpenAi, new AiRequest("s", "u"), CancellationToken.None);
+
+        Assert.True(reply.Ok);                                   // 答了一半：正文照常成功，提案不丢（GLM 半行变体）
+        Assert.Equal("1: tool", reply.Text);
+        Assert.Equal(AiWire.CutOffReason, reply.FinishReason);   // 截断标带出去，由编排层汇成「没答完」那半句
+    }
+
+    [Fact]
+    public async Task AFullOpenAiAnswerCarriesNoCutFlag()
+    {
+        using var provider = OpenAiOver(
+            """{"choices":[{"message":{"content":"1: tool"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":30}}""");
+        var reply = await provider.CompleteAsync(UsableOpenAi, new AiRequest("s", "u"), CancellationToken.None);
+
+        Assert.True(reply.Ok);
+        Assert.Null(reply.FinishReason);                         // 答完即止：与被切齐的批在状态行上分得开
     }
 
     [Theory]

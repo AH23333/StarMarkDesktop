@@ -24,6 +24,8 @@ namespace StarMark.UI.Services;
 /// <param name="FirstFailure"><see cref="FirstError"/> 败在哪一型上（片259·用户点名）：与那句话出自同一批，
 /// 闸自己拦下（预算／通道／没候选）＝<see cref="AiFailureKind.Unknown"/>——那是"没发出去"而不是"发了没成"，
 /// 配不上"通道撞了哪堵墙"的分型。界面靠它决定致命型失败要不要上卡顶状态横幅。</param>
+/// <param name="TruncatedBatches">答复被输出帽切过但仍算 Ok 的批数（P-298 丙）：整理出来的提案照留，
+/// 但"没答完"要上状态行——坏批与半答批是两句话（见 <c>ClassifyRunReport.TruncatedBatches</c>）。</param>
 public sealed record OrganiseOutcome(
     ClassifyPlan Plan,
     int AskedItems,
@@ -35,7 +37,8 @@ public sealed record OrganiseOutcome(
     int DroppedTags,
     int DroppedItems,
     LocMessage? FirstError,
-    AiFailureKind FirstFailure = AiFailureKind.Unknown)
+    AiFailureKind FirstFailure = AiFailureKind.Unknown,
+    int TruncatedBatches = 0)
 {
     public bool NothingOrganised => Plan.IsEmpty && FailedBatches > 0;
 }
@@ -209,7 +212,9 @@ public sealed class AiClassifyService
             request => _gateway.CompleteAsync(settings.ForClassify(), request, ct),
             async done =>
             {
-                // §20.1 计量：只记"服务真的答过"的批（失败批的 Usage 为 null，不猜消耗）。
+                // §20.1 计量：只记"服务真的答过"的批（失败批的 Usage 多为 null，不猜消耗）。
+                // P-298 丁的改口：空正文被帽切断的批（Truncated 失败）带<b>真 usage</b>——那批 token
+                // 服务已经计费，账随 Fail 一起带出，这一格照 `Usage is {}` 原样入账，不另开一条路。
                 // 在检查点同一批边界落账——进度、方案、用量三件事共享同一个"批"的时间戳，
                 // 用户停掉时看到的三张表永远互相能对得上。写侧吞异常（账本不拦功能，见 AiUsageRepository）。
                 if (done.Usage is { } used && _usage is { } ledger)
@@ -252,7 +257,8 @@ public sealed class AiClassifyService
             ?? (report.Batches.FirstOrDefault(batch => !batch.Ok) is { } firstBad
                 ? firstBad.Error
                 : null),
-            report.FirstFailure);
+            report.FirstFailure,
+            report.TruncatedBatches);
     }
 
     /// <summary>把一批的结果并进"目前为止"。<b>同一条目再出现时以新的那份为准而不是合并标签</b>：

@@ -20,10 +20,16 @@ public sealed record AiUsage(int InputTokens, int OutputTokens, bool Estimated)
 /// 种类决定"上哪儿改"，原文决定"改的时候该看哪一句"——只留一个都会让用户来回试。</summary>
 /// <param name="RetryAfterSeconds">服务在 <c>Retry-After</c> 响应头里给的「隔几秒再来」（429/503 常带）。
 /// null＝服务没说——编排层的固定退避顶上（片233·P-297）。</param>
+/// <param name="FinishReason">结束原因（OpenAI 的 <c>finish_reason</c>／Ollama 的 <c>done_reason</c>，P-298 丙）。
+/// null＝服务没说；<see cref="AiWire.CutOffReason"/>＝被输出帽切齐。<b>非空正文＋被切齐时这仍是 Ok</b>
+/// （答了一半的提案不丢），截断标由编排层汇成「有 N 批没答完」那半句；空正文＋被切齐在 provider 那侧
+/// 已经落成 <see cref="AiFailureKind.Truncated"/> 失败，不走这一位。</param>
 public sealed record AiReply(bool Ok, string? Text, AiFailureKind Failure = AiFailureKind.Unknown,
-    LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null)
+    LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null,
+    string? FinishReason = null)
 {
-    public static AiReply Success(string text, AiUsage? usage = null) => new(true, text, Usage: usage);
+    public static AiReply Success(string text, AiUsage? usage = null, string? finishReason = null)
+        => new(true, text, Usage: usage, FinishReason: finishReason);
 
     public static AiReply Fail(AiFailureKind kind, LocMessage? detail = null, int? retryAfterSeconds = null)
         => new(false, null, kind, detail, RetryAfterSeconds: retryAfterSeconds);

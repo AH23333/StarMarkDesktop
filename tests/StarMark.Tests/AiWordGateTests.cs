@@ -85,6 +85,7 @@ public sealed class AiWordGateTests : IDisposable
         "settings.ai.result.stopped",
         "settings.ai.result.failed",
         "settings.ai.result.failedWith",
+        "settings.ai.result.truncated",
         "settings.ai.result.tail",
         "settings.ai.resumeIdle",
         "settings.ai.resumeCount",
@@ -154,12 +155,13 @@ public sealed class AiWordGateTests : IDisposable
         haystack.Length == 0 || needle.Length == 0 ? 0 : haystack.Split(new[] { needle }, StringSplitOptions.None).Length - 1;
 
     /// <summary>①颗数：名单长度当场对平（这颗数的是<b>我自己抄进本档的那一串</b>，加一颗不登记就红）。
-    /// 72（片234 后）→ 77：P-90「整批撤销」补入五颗（确认框三颗＋两句读数）。</summary>
+    /// 72（片234 后）→ 77：P-90「整批撤销」补入五颗（确认框三颗＋两句读数）。
+    /// 77 → 78：P-298 丙补入 <c>result.truncated</c>——Ok 但被输出帽切过的批也要上状态行。</summary>
     [Fact]
     public void TheRosterHasExactlyTheKeysThisBatchHandedIn()
     {
-        Assert.Equal(77, Keys.Length);
-        Assert.Equal(77, Keys.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(78, Keys.Length);
+        Assert.Equal(78, Keys.Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在五档里恰好被点名一次、在标记里一次都没有。</summary>
@@ -192,8 +194,11 @@ public sealed class AiWordGateTests : IDisposable
         Assert.Contains("public (int Seconds, LocMessage? Reason) LoadAiBatchTimeout", CodeOf(Store));
         // 片259 改口一处：OrganiseOutcome 的收尾从 FirstError 换成 FirstFailure（致命型分型随同一批带出——
         // 卡顶状态横幅靠它判"该不该上"，只有那句话没有分型时界面无从判起）。两行一起钉：收尾对、分型在。
+        // P-298 丙再补一格：TruncatedBatches（Ok 但被帽切过的批数）排在 FirstFailure 之后收尾——
+        // 「没答完」与「批坏了」是两句话，这一格钉的是它们也分属两颗键。
         Assert.Contains("    LocMessage? FirstError,", CodeOf(Service));
-        Assert.Contains("    AiFailureKind FirstFailure = AiFailureKind.Unknown)", CodeOf(Service));
+        Assert.Contains("    AiFailureKind FirstFailure = AiFailureKind.Unknown,", CodeOf(Service));
+        Assert.Contains("    int TruncatedBatches = 0)", CodeOf(Service));
         Assert.Contains("int limit, Action<LocMessage> onStatus,", CodeOf(Service));
         Assert.Contains("private static LocMessage Describe(OrganiseOutcome outcome)", CodeOf(Ai));
         Assert.Contains("private static LocMessage DescribeFixedBatchLimits()", CodeOf(Ai));
@@ -347,7 +352,7 @@ public sealed class AiWordGateTests : IDisposable
     [Fact]
     public void TheGlueKeysSayTheSameThingInAllThreeLanguages()
     {
-        Row("settings.ai.result.full", "{0}{1}{2}{3}{4}{5}{6}");
+        Row("settings.ai.result.full", "{0}{1}{2}{3}{4}{5}{6}{7}");   // P-298 丙：{6}＝没答完那半句，{7}＝尾巴
         Row("settings.ai.usage.full", "{0}{1}{2}{3}");
         Row("settings.ai.tagJoin", "{0}、{1}", "{0}, {1}", "{0}、{1}");
         Row("settings.ai.groupJoin", "、", ", ", "、");
@@ -453,7 +458,7 @@ public sealed class AiWordGateTests : IDisposable
         {
             var line = LocMessage.Of("settings.ai.result.full",
                 LocMessage.Of("settings.ai.result.noneBecause", reason),
-                null, null, null, null, null,
+                null, null, null, null, null, null,
                 LocMessage.Of("settings.ai.result.tail", LocMessage.Of("settings.ai.applyGroup")));
             var said = new HashSet<string>(StringComparer.Ordinal);
             foreach (var language in new[] { AppLanguage.Chinese, AppLanguage.English, AppLanguage.Japanese })

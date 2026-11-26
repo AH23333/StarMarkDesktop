@@ -117,6 +117,29 @@ public static class AiWire
         return NonBlank(AsText(first["message"]?["content"])) ?? NonBlank(AsText(first["text"]));
     }
 
+    /// <summary>结束原因里"被输出帽切断"的那颗值：OpenAI 兼容端的 <c>finish_reason</c> 与 Ollama 的
+    /// <c>done_reason</c> 恰好用同一个词（P-298 丙）。这是判型用的<b>协议机器值</b>——按原样比对，⛔ 翻译。</summary>
+    public const string CutOffReason = "length";
+
+    /// <summary>OpenAI 兼容端的结束原因（<c>choices[0].finish_reason</c>）。<c>stop</c>＝答完自己停；
+    /// <c>length</c>＝被 <c>max_tokens</c> 帽切齐——隐藏思考模型把帽全花在推理上时，正文一侧就是空的，
+    /// 而旧分型把这读成「choices 里没有正文」，教用户去查一个其实好好的端点（P-298 丙要拆开的混型）。</summary>
+    public static string? ReadOpenAiFinishReason(string? json)
+    {
+        var first = TryParse(json)?["choices"]?.AsArray().FirstOrDefault() as JsonObject;
+        return NonBlank(AsText(first?["finish_reason"]));
+    }
+
+    /// <summary>Ollama 的结束原因（<c>/api/chat</c> 回顶层 <c>done_reason</c>）。<c>stop</c> 与 <c>length</c>
+    /// 的语义与 OpenAI 那侧逐字对齐——两家的差别只在字段名，判型走同一条路（P-298 丙的对称臂）。</summary>
+    public static string? ReadOllamaDoneReason(string? json)
+        => NonBlank(AsText(TryParse(json)?["done_reason"]));
+
+    /// <summary>「被帽切断」那半句（P-298 丙）。两家 provider 都来这里取——<c>ai.transport.truncated</c>
+    /// 只在这一个主人手里点名，各写一遍就是第二个出处（✅WI-61b2 那颗分岔同一形状）。</summary>
+    public static LocMessage CutOffDetail(int maxTokens)
+        => LocMessage.Of("ai.transport.truncated", maxTokens);
+
     /// <summary>服务在错误响应里给的原因。两家的字段不一样：<c>{"error":"..."}</c>（Ollama）与
     /// <c>{"error":{"message":"..."}}</c>（OpenAI）；<b>读出来才能把这句原话贴给用户</b>，
     /// 否则"400"这种码值对用户毫无意义。</summary>

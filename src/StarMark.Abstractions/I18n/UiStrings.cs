@@ -876,8 +876,8 @@ public static class UiStrings
             "{0} The budget and past usage are in the boxes below.", "{0}予算と過去の使用量は下の欄にあります。"),
         new Entry("settings.ai.confirm.go", "开始", "Start", "開始"),
         new Entry("settings.ai.result.full",
-            "{0}{1}{2}{3}{4}{5}{6}",
-            "{0}{1}{2}{3}{4}{5}{6}", "{0}{1}{2}{3}{4}{5}{6}"),
+            "{0}{1}{2}{3}{4}{5}{6}{7}",
+            "{0}{1}{2}{3}{4}{5}{6}{7}", "{0}{1}{2}{3}{4}{5}{6}{7}"),
         new Entry("settings.ai.result.none", "没有整理出可用的建议", "Nothing usable came out of it", "使える提案は出ませんでした"),
         // ✅WI-63（P-195）：三发静默拒绝（预算熔断／通道没配好／没东西可整理）那句"为什么"终于上了屏。
         // ⛔ 给这一句加结尾句号——收尾那颗「。」由 result.tail 那颗槽提供，加了就念成「建议。。点」。
@@ -906,6 +906,12 @@ public static class UiStrings
         new Entry("settings.ai.result.failedWith",
             "，{0} 批没成功（{1}）",
             ", {0} batches failed ({1})", "、{0} バッチが失敗（{1}）"),
+        // P-298 丙：Ok 但被输出帽切过的批（GLM 半行变体）——提案照留，「没答完」要出声，与"批坏了"分开两句。
+        // 英文列走 label 形（复数闸门家法）：名词摆到数字前面，「1 批」与「N 批」念同一句。
+        new Entry("settings.ai.result.truncated",
+            "，{0} 批没答完（答复被输出上限截断，建议缩小批量或换模型）",
+            ", unfinished batches: {0} (cut off by the output cap — smaller batches or another model will help)",
+            "、{0} バッチが最後まで答えられませんでした（出力上限で切断。バッチを小さくするかモデルの変更を推奨）"),
         new Entry("settings.ai.result.tail",
             "。点「{0}」才会写进库。",
             ". Nothing is written until you press “{0}”.", "。「{0}」を押して初めてライブラリに書き込まれます。"),
@@ -1078,6 +1084,10 @@ public static class UiStrings
         new Entry("ai.failure.badResponse",
             "服务答了，但答的不是能读的形式（404 也常是地址少了一段，例如 OpenAI 兼容端点要填到 /v1）。{0}",
             "The service answered, but not in a form that could be read (a 404 is often an address missing a segment — an OpenAI-compatible endpoint wants /v1 in it). {0}", "サービスは答えましたが、読める形式ではありません（404 はアドレスの一部欠落が多いです。OpenAI 互換エンドポイントなら /v1 まで入力します）。{0}"),
+        // P-298 丙：截断与"协议不认"分家——这句给的路是换小批/换模型，不是去查地址。
+        new Entry("ai.failure.truncated",
+            "模型的答复被输出上限截断了：{0}",
+            "The model's reply was cut off by the output cap: {0}", "モデルの回答が出力上限で切断されました：{0}"),
         new Entry("ai.failure.unknown", "AI 调用没成功：{0}", "The AI call didn't succeed: {0}", "AI の呼び出しが失敗しました：{0}"),
         new Entry("ai.failure.noReason", "未给出原因", "no reason given", "理由は返されませんでした"),
         new Entry("ai.request.noUserPrompt", "没有要发给模型的内容", "There is nothing to send to the model", "モデルに送る内容がありません"),
@@ -1110,6 +1120,11 @@ public static class UiStrings
         new Entry("ai.transport.noChoices",
             "服务答了，但 choices 里没有正文（这个端点可能不支持 chat 形式）",
             "The service answered, but there is no text in choices (this endpoint may not support the chat form)", "サービスは答えましたが choices に本文が有りません（このエンドポイントは chat 形式に非対応の可能性）"),
+        // P-298 丙：截断那半句的独一出处（两家 provider 都经 AiWire.CutOffDetail 来取）。{0}＝那次的输出帽值。
+        new Entry("ai.transport.truncated",
+            "被 {0} token 的输出上限切断，一个字的正文都没剩（思考型模型把帽全花在推理上就长这样；缩小批量或换非思考模型再试）",
+            "cut off by the {0}-token output cap with not a character of text left (a thinking model spending the whole cap on reasoning looks exactly like this; try smaller batches or a non-thinking model)",
+            "{0} token の出力上限で切断され、本文が一文字も残りませんでした（思考型モデルが上限を全て推論に使うとこの姿になります。バッチを小さくするか非思考型モデルでお試しください）"),
         new Entry("ai.transport.emptyInventory",
             "端点答了，但模型清单是空的或形式不对",
             "The endpoint answered, but the model list is empty or in the wrong form", "エンドポイントは答えましたが、モデル一覧が空か形式が合いません"),

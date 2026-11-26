@@ -487,6 +487,70 @@ public sealed class AiClassifyTests
         Assert.Equal(AiFailureKind.QuotaExhausted, report.FirstFailure);
     }
 
+    // ────────── 截断三态（P-298：丙分型／甲地板／丁账随 Fail 走） ──────────
+
+    [Fact]
+    public async Task AnEmptyTruncatedBatchIsFatalSkipsRetriesAndBreaksTheRest()
+    {
+        var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();   // 三批（80/80/10）
+        var calls = 0;
+        var waited = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            _ =>
+            {
+                calls++;
+                return Task.FromResult(new AiReply(false, null, AiFailureKind.Truncated,
+                    LocMessage.Of("common.rawValue", "被 2400 token 的输出上限切断"),
+                    new AiUsage(100, 2400, Estimated: false)));
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(1, calls);                                     // 同帽重试＝再撞同一堵墙：致命型一次都不重试
+        Assert.Empty(waited);                                       // 也没有退避——退避是为"再试可能成"准备的
+        Assert.Single(report.Batches);
+        Assert.False(report.Batches[0].Ok);
+        Assert.Equal(AiFailureKind.Truncated, report.Batches[0].Failure);
+        Assert.Equal(2500, report.Batches[0].Usage!.TotalTokens);   // 丁：真账随 Fail 带出——§20.1 入账有据
+        Assert.Equal(2, report.SkippedBatches);                     // 后面两批不再烧同一个帽
+        Assert.Equal(3, report.BatchesTotal);
+        Assert.NotNull(report.AbortReason);
+        Assert.Contains("截断", report.AbortReason!.Render());      // 与"不给标签/协议不认"在状态行上分得开（判据 ②）
+        Assert.Equal(AiFailureKind.Truncated, report.FirstFailure);
+    }
+
+    [Fact]
+    public async Task AHalfAnswerBatchStaysOkAndTheRunSaysItDidNotFinish()
+    {
+        var report = await ClassifyRunner.RunAsync(new[] { Item(1, "A"), Item(2, "B") }, Array.Empty<string>(),
+            _ => Task.FromResult(AiReply.Success("1: 工具", finishReason: AiWire.CutOffReason)),
+            null, CancellationToken.None);
+
+        Assert.True(report.Batches[0].Ok);                          // 答了一半：提案不丢（GLM 半行变体）
+        Assert.Single(report.Proposals);
+        Assert.True(report.Batches[0].Truncated);                   // 批报告挂截断标
+        Assert.Equal(1, report.TruncatedBatches);                   // 轮汇总念「有 N 批没答完」那半句
+        Assert.Equal(0, report.FailedBatches);                      // 半答不是坏批——两句话分开说
+        Assert.Equal(AiFailureKind.Unknown, report.FirstFailure);   // Ok 批不碰失败分型（横幅不误亮）
+    }
+
+    [Fact]
+    public async Task TheOutputCapFloorCoversThinkingModels()
+    {
+        AiRequest? seen = null;
+        var items = Enumerable.Range(1, 20).Select(n => Item(n, "T" + n)).ToList();   // 一批 20 条
+
+        await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            request => { seen = request; return Reply("""{"items":[{"id":1,"tags":["工具"]}]}"""); },
+            null, CancellationToken.None);
+
+        // P-298 甲：20×28=560 被地板抬到 2400——思考型模型把帽花在推理上也得剩一点给正文
+        // （Bailu 梯子探针：800–2000 全档零正文，2400 第一次见答完）。
+        // 对非思考模型这是天花板不是成本：答完即 stop，一个 token 不多花。
+        Assert.Equal(ClassifyRunner.MinBatchMaxTokens, seen!.MaxTokens);
+        Assert.Equal(2400, seen.MaxTokens);
+    }
+
     /// <summary>退避是等待，不是占着不让停：按停止的那一刻要能立刻带着已整理的东西回来。</summary>
     [Fact]
     public async Task CancellingDuringBackoffKeepsWhatWasOrganised()

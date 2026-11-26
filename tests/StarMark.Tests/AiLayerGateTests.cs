@@ -112,7 +112,10 @@ public sealed class AiLayerGateTests
         // 分型链路三节：编排层带出 → 整理结果透传 → 界面才判得出"致不致命"，断一节横幅就永远升不起来
         Assert.Contains("AiFailureKind FirstFailure = AiFailureKind.Unknown",
             Read("src/StarMark.Core/Ai/ClassifyRunner.cs"));
-        Assert.Contains("report.FirstFailure)", Read("src/StarMark.UI/Services/AiClassifyService.cs"));
+        // P-298 丙改口：OrganiseOutcome 尾上多了 TruncatedBatches（Ok 但被帽切过的批数），
+        // FirstFailure 从收尾位挪前一位——透传这件事没变，钉的形状跟着挪。
+        Assert.Contains("report.FirstFailure,", Read("src/StarMark.UI/Services/AiClassifyService.cs"));
+        Assert.Contains("report.TruncatedBatches)", Read("src/StarMark.UI/Services/AiClassifyService.cs"));
     }
 
     [Fact]

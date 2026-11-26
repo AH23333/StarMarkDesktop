@@ -25,6 +25,8 @@ namespace StarMark.Core.Ai;
 /// <param name="Failure">这一批最终败在哪一型上（Ok 批＝Unknown 占位）。重试/熔断的分界读它（P-297）。</param>
 /// <param name="RetryAfterSeconds">服务最后一次给的 <c>Retry-After</c> 秒数（没给＝null）。</param>
 /// <param name="Attempts">这一批实际发了几次（含重试；一次成＝1）。</param>
+/// <param name="Truncated">这一批的答复被输出帽切过（结束原因＝length）但仍算 Ok（P-298 丙）：
+/// 提案照留，「没答完」由轮汇总念出来——静默就是让"整理完了"变成一句假话。</param>
 public sealed record ClassifyBatchReport(
     int Index,
     int ItemCount,
@@ -36,7 +38,8 @@ public sealed record ClassifyBatchReport(
     AiUsage? Usage = null,
     AiFailureKind Failure = AiFailureKind.Unknown,
     int? RetryAfterSeconds = null,
-    int Attempts = 1);
+    int Attempts = 1,
+    bool Truncated = false);
 
 /// <summary>整轮的结果。</summary>
 /// <param name="StoppedBatches">因为叫停而没问成的批数——<b>正在飞的那一批也算在内</b>（它没拿到结果）。
@@ -50,6 +53,8 @@ public sealed record ClassifyBatchReport(
 /// （没熔断＝第一个坏批，熔断＝撞闸那一批）——两处各取一批就会出现"横幅说额度、状态行说超时"的两张脸。
 /// 全成＝<see cref="AiFailureKind.Unknown"/>。界面靠它判"这一轮的失败配不配上状态横幅"：
 /// 致命型（重试救不回的那堵墙）才配，限流/超时是瞬时态。</param>
+/// <param name="TruncatedBatches">答复被输出帽切过但仍算 Ok 的批数（P-298 丙）。与 <see cref="FailedBatches"/>
+/// 分开报："批坏了"（换通道/等网络）与"批答了一半"（缩小批量/换模型）是两句话，混在一个数里就说不清该做哪件。</param>
 public sealed record ClassifyRunReport(
     IReadOnlyList<ClassifyBatchReport> Batches,
     IReadOnlyList<TagProposal> Proposals,
@@ -59,7 +64,8 @@ public sealed record ClassifyRunReport(
     IReadOnlyList<string> NewTags,
     int SkippedBatches = 0,
     LocMessage? AbortReason = null,
-    AiFailureKind FirstFailure = AiFailureKind.Unknown)
+    AiFailureKind FirstFailure = AiFailureKind.Unknown,
+    int TruncatedBatches = 0)
 {
     public int AnsweredItems => Proposals.Count;
     public int BatchesTotal => Batches.Count + StoppedBatches + SkippedBatches;
@@ -101,6 +107,17 @@ public static class ClassifyRunner
     /// 照单全收＝用户对着一个"看起来死了"的界面干等；夹到 60 秒，超出的部分按 60 秒等——
     /// <b>服务说"别急着来"不等于"用户愿意等"</b>，两边各让一步。</summary>
     public const int MaxRetryAfterSeconds = 60;
+
+    /// <summary>单批输出帽（<c>max_tokens</c>／<c>num_predict</c>）的地板。400 → 2400（P-298 甲）：
+    /// Bailu 的 bailu-2.7-free 这类<b>隐藏思考模型</b>把输出帽几乎全花在推理上——梯子探针实测
+    /// （bin/WI37C/probe_bailu_floor.py，2026-11-25）10 条批的帽 800–2000 全档被切断且正文零字，
+    /// 2400 才第一次见到答完；GLM 的 24 条@672 死判例是同一张脸。地板对非思考模型零影响：
+    /// <b>帽是天花板不是成本</b>——答完即 stop，一个 token 都不会多花。</summary>
+    public const int MinBatchMaxTokens = 2400;
+
+    /// <summary>单批输出帽的天花板。一批最多 80 条 × 每条 28 ≈ 2240 &lt; 地板 2400 ⇒
+    /// 今天每一批都落在地板上；保留夹取形状是给"每批条数上限放开"的那一天——那时这颗才开始真夹。</summary>
+    public const int MaxBatchMaxTokens = 4000;
 
     /// <summary>把"用户填的那个秒数"换算成能用的秒数：<b>没填或越界一律回默认，不静默夹到边上</b>
     /// （夹边只该用在"想要但够不着"那一类，而 0 秒与 9999 秒不是够不着，是不成立）。
@@ -198,7 +215,8 @@ public static class ClassifyRunner
             newTags.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             skipped,
             abortReason,
-            firstFailure);
+            firstFailure,
+            reports.Count(report => report.Truncated));
     }
 
     /// <summary>单批＋重试：可重试型失败最多再发 <see cref="MaxAttemptsPerBatch"/> 减一次，
@@ -239,8 +257,9 @@ public static class ClassifyRunner
                 ClassifyPrompt.SystemPrompt(catalog),
                 ClassifyPrompt.UserPrompt(batch),
                 TimeoutSeconds: timeoutSeconds,
-                // 一批（O7 后最多 80 条）× 最多 4 个标签，留出 JSON 的标点与换行
-                MaxTokens: Math.Clamp(batch.Count * 28, 400, 4000));
+                // 一批（O7 后最多 80 条）× 最多 4 个标签的行答复 + 地板罩住思考型模型（P-298 甲：
+                // 地板 2400 是探针校准值，见 MinBatchMaxTokens；帽＝天花板而非成本，非思考模型零影响）
+                MaxTokens: Math.Clamp(batch.Count * 28, MinBatchMaxTokens, MaxBatchMaxTokens));
             var reply = await call(request);
             if (!reply.Ok)
                 return new ClassifyBatchReport(index, batch.Count, false, reply.Explain(LocMessage.Of("ai.where.channel")),
@@ -253,7 +272,8 @@ public static class ClassifyRunner
                     batch.Count, parsed.UnknownIds.Count);
 
             return new ClassifyBatchReport(index, batch.Count, true, null, parsed.Proposals,
-                parsed.MissingIds.Count, parsed.UnknownIds.Count, reply.Usage);
+                parsed.MissingIds.Count, parsed.UnknownIds.Count, reply.Usage,
+                Truncated: reply.FinishReason == AiWire.CutOffReason);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

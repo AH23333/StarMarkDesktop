@@ -1297,3 +1297,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 现场状态：settings.json AI 段已被 AiProbe 改指 Bailu（原 glm-4.5-air 覆盖・GLM 额度尽）——用户 in-app 真测可直用；AiProbe 实跑落了一颗 54 条规则方案在盘（未应用・预览后自行应用）。
 - 验证：docgates 26/26（落账后）・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量基线 7058/7058 维持（零产品码不重跑）。
 - 下一刀候选：①P-298 四叉裁决＋落地刀（丙 finish_reason=length 透传分型证据最厚・可与甲/丁合批）；②真机「立即更新」实路验证；③P-147 等用户离线备份私钥（更迫切）；④热键 Ctrl+Alt+P 占用者定位（环境小事）。
+
+## 一百四十九、片268：P-298 落地刀（甲丙丁合批）——截断三态分型＋地板 2400＋真 usage 随 Fail 入账・四判据全过线・基线 7073/7073
+- 分型口径（本轮新家法）：空正文＋length＝Fail(Truncated)（致命型：跳重试・熔断断后续）；非空＋length＝Success 留提案＋finishReason=length（轮汇总念「有 N 批没答完」）；答完＝零差。「不给标签」（空标签行/全 missing）・截断・BadResponse 三句话可分辨——片267「截断误读协议不配」从此有分型挡着。
+- 批帽公式：Math.Clamp(批数×28, 2400, 4000)——地板 2400＝探针校准值（10 条批梯子 800-2000 全切断・2400 首见 stop・completion 1713）；批上限 80 的今天每批都落地板；帽＝天花板非成本。
+- 账本口径：§20.1 改口「空截断批真 usage 随 Fail 入账」（Usage is {} 照记）；§20.5 预估侧零改动（dry estTokens~2376 与片255 同读数）。
+- 器械：AiProbe outcome 行加 truncated=；新 --peek 诊断档（打印答复原文・不落盘不记账）；check_usage_298.py 查账本与在盘方案。运行布局重铺照坑 #1186（robocopy app bin→out\＋native 平根）。
+- 观察不立项：Bailu 同 prompt 两轮答复非确定（out=503 vs 1373）・管线判读均正确；编译存量 6 警在三个未碰测试档。
+- 验证：编译 0 错（6 警存量）・AI 定向 215/215・docgates 26/26・计数器 300/298/2 VERDICT OK（开放 P-147/P-298）・全量 **7073/7073 新基线**（7058＋15・21m14s）。本刀无新坑。
+- 下一刀候选：①P-298 翻牌（留用户）；②乙臂 thinking 参数（Bailu 认不认 thinking.type=disabled 未测・另立刀）；③真机「立即更新」实路验证；④P-147 等用户离线备份私钥（更迫切）；⑤热键 Ctrl+Alt+P 占用者定位（环境小事）。

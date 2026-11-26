@@ -43,8 +43,9 @@ public sealed class AiChannelWordGateTests : IDisposable
     private const string Policy = "src/StarMark.Core/Widgets/WidgetStartupPolicy.cs";
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    /// <summary>本扇交进表里的 52 颗键，逐颗点名（计数型判据抓不到"换名"＝#164；名单由 <c>rows_67j.py</c> 现生成，
-    /// 片234·P-297 补入 <c>quotaExhausted</c>／<c>aborted</c> 两颗）。</summary>
+    /// <summary>本扇交进表里的 54 颗键，逐颗点名（计数型判据抓不到"换名"＝#164；名单由 <c>rows_67j.py</c> 现生成，
+    /// 片234·P-297 补入 <c>quotaExhausted</c>／<c>aborted</c> 两颗；P-298 丙补入 <c>truncated</c> 两颗——
+    /// 截断与「协议不认」分家，一家一颗）。</summary>
     private static readonly string[] Keys =
     {
         "ai.problem.notEnabled",
@@ -70,6 +71,7 @@ public sealed class AiChannelWordGateTests : IDisposable
         "ai.failure.timedOut",
         "ai.failure.serviceError",
         "ai.failure.badResponse",
+        "ai.failure.truncated",
         "ai.failure.unknown",
         "ai.failure.noReason",
         "ai.request.noUserPrompt",
@@ -90,6 +92,7 @@ public sealed class AiChannelWordGateTests : IDisposable
         "ai.transport.notModelList",
         "ai.transport.emptyReply",
         "ai.transport.noChoices",
+        "ai.transport.truncated",
         "ai.transport.emptyInventory",
         "ai.probe.urlMalformed",
         "ai.run.batchFailed",
@@ -132,18 +135,18 @@ public sealed class AiChannelWordGateTests : IDisposable
 
     /// <summary>①名单颗数：这颗数的是<b>我自己抄进本档的那一串</b>，加一颗不登记就红。</summary>
     [Fact]
-    public void TheRosterIsExactlyTheFiftyTwoSentencesThisSliceHandedIn()
+    public void TheRosterIsExactlyTheFiftyFourSentencesThisSliceHandedIn()
     {
-        Assert.Equal(52, Keys.Length);
-        Assert.Equal(52, Keys.Distinct(StringComparer.Ordinal).Count());
-        // 前缀⛔ 混：settings.ai.* 那 71 颗的主人是界面层（✅WI-41），ai.* 这 52 颗的主人是句厂三层——
+        Assert.Equal(54, Keys.Length);
+        Assert.Equal(54, Keys.Distinct(StringComparer.Ordinal).Count());
+        // 前缀⛔ 混：settings.ai.* 那 78 颗的主人是界面层（✅WI-41），ai.* 这 54 颗的主人是句厂三层——
         // 两族各一把尺，混成一把就分不清"是谁在产地取的词"。
         Assert.All(Keys, key => Assert.StartsWith("ai.", key, StringComparison.Ordinal));
         Assert.DoesNotContain(Keys, key => key.StartsWith("settings.ai.", StringComparison.Ordinal));
     }
 
     /// <summary>②双向对账：每颗在表里恰好一行、在十一档里恰好被点名一次、在标记里一次都没有。
-    /// <para>0 次＝白进表（那句还是有人手写），2 次＝两个主人（改一处漏一处）。现场数：52/52 都是 1。</para></summary>
+    /// <para>0 次＝白进表（那句还是有人手写），2 次＝两个主人（改一处漏一处）。现场数：54/54 都是 1。</para></summary>
     [Fact]
     public void EverySentenceHasOneRowAndExactlyOneVoice()
     {
@@ -209,7 +212,10 @@ public sealed class AiChannelWordGateTests : IDisposable
 
         Assert.Contains("public static LocMessage Reason(AiFailureKind kind, LocMessage? detail, LocMessage where) => kind switch", CodeOf(Failures));
 
-        Assert.Contains("LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null)", CodeOf(Results));
+        // P-298 丙：AiReply 尾上多一位 FinishReason（OpenAI finish_reason／Ollama done_reason）——
+        // 供应商写在答复里的事实进 DTO，不进键。截断那一族的翻译键只有下面 AiWire 一处主人（词闸 ②）。
+        Assert.Contains("LocMessage? Detail = null, AiUsage? Usage = null, int? RetryAfterSeconds = null,", CodeOf(Results));
+        Assert.Contains("string? FinishReason = null)", CodeOf(Results));
         Assert.Contains("public LocMessage Explain(LocMessage where) =>", CodeOf(Results));
         Assert.Contains("public LocMessage Explain(LocMessage where, string? configuredModel)", CodeOf(Results));
 
@@ -330,6 +336,7 @@ public sealed class AiChannelWordGateTests : IDisposable
             AiFailureKind.NotConfigured,   // 有明细走 notConfiguredWith，没有走 notConfigured 那句落点
             AiFailureKind.ServiceError,
             AiFailureKind.BadResponse,
+            AiFailureKind.Truncated,       // P-298 丙：帽值那半句带进槽——用户看得到该调哪一格（截断≠协议不认）
             AiFailureKind.QuotaExhausted,  // 片234·P-297：额度那支把服务商原话带进槽——用户对账时靠它认出是哪笔账
             AiFailureKind.Unknown,
         };

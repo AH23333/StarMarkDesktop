@@ -23,6 +23,11 @@ public enum AiFailureKind
     TimedOut,
     ServiceError,
     BadResponse,
+    /// <summary>答复被输出帽切断（<c>finish_reason</c>／<c>done_reason</c>＝length，正文为空）。
+    /// 与 <see cref="BadResponse"/> 分开是 P-298 丙的裁定：这是"帽不够装"——隐藏思考模型（Bailu 的
+    /// bailu-2.7-free 实测）把 <c>max_tokens</c> 全花在推理上，正文一个字不剩——下一步是缩小批量或换模型；
+    /// 而旧分型把它误报成 BadResponse「choices 里没有正文」，教用户去查一个其实好好的端点。</summary>
+    Truncated,
     Unknown,
 }
 
@@ -62,7 +67,7 @@ public static class AiFailures
            || text.Contains("账户已欠费", StringComparison.Ordinal);
 
     /// <summary>这一型值不值得<b>原样再发一遍</b>（片233·P-297 的重试分界）。断联/限流/超时/服务错是
-    /// "这一下没成"，再试一次可能就过；未配置/Key 拒/模型名不对/额度耗尽/协议不认是"这堵墙就在那里"，
+    /// "这一下没成"，再试一次可能就过；未配置/Key 拒/模型名不对/额度耗尽/协议不认/帽不够装是"这堵墙就在那里"，
     /// 重试只是把同一堵墙再撞两遍——致命型由编排层直接熔断，⛔ 在这里做任何等待。</summary>
     public static bool IsRetryable(AiFailureKind kind)
         => kind is AiFailureKind.Unreachable or AiFailureKind.RateLimited
@@ -96,6 +101,9 @@ public static class AiFailures
         AiFailureKind.TimedOut => LocMessage.Of("ai.failure.timedOut"),
         AiFailureKind.ServiceError => LocMessage.Of("ai.failure.serviceError", Shown(detail)),
         AiFailureKind.BadResponse => LocMessage.Of("ai.failure.badResponse", Shown(detail)),
+        // 截断（P-298 丙）：帽不够装不是协议不认——那半句给的是"换小批/换模型"这条路，
+        // 而 BadResponse 那句教人去查地址少没少一段。两堵墙两句话，混了用户就改错地方。
+        AiFailureKind.Truncated => LocMessage.Of("ai.failure.truncated", Shown(detail)),
         _ => LocMessage.Of("ai.failure.unknown", Shown(detail)),
     };
 

@@ -70,10 +70,20 @@ public sealed class OllamaProvider : IAiProvider, IDisposable
         if (!transport.Succeeded)
             return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
                 AiHttp.DetailOf(transport), transport.RetryAfterSeconds);
-        return AiWire.ReadOllamaText(transport.Body) is { Length: > 0 } text
-            ? AiReply.Success(text, AiWire.ReadOllamaUsage(transport.Body)
-                ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))   // 没回 usage 就折算（§20.5），正文照常返回
-            : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.emptyReply"));
+        var text = AiWire.ReadOllamaText(transport.Body);
+        var usage = AiWire.ReadOllamaUsage(transport.Body);
+        var cut = AiWire.ReadOllamaDoneReason(transport.Body) == AiWire.CutOffReason;
+        if (text is not { Length: > 0 })
+            // 空＋被帽切断（P-298 丙）：num_predict 被推理整个吃光——与"形状读不出"是两堵不同的墙；
+            // 丁：真 usage 照带——那批 token 服务已经计费，§20.1 入账时不猜（读不到就落 null，照旧不记）。
+            return cut
+                ? new AiReply(false, null, AiFailureKind.Truncated, AiWire.CutOffDetail(request.MaxTokens), usage)
+                : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.emptyReply"));
+        var metered = usage ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text);   // 没回 usage 就折算（§20.5）
+        // 非空＋被帽切断＝答了一半：正文照常成功（提案不丢），结束原因带出去由编排层念「没答完」那半句
+        return cut
+            ? AiReply.Success(text, metered, AiWire.CutOffReason)
+            : AiReply.Success(text, metered);
     }
 
     public void Dispose() => _http.Dispose();
@@ -101,10 +111,28 @@ public sealed class OpenAiCompatibleProvider : IAiProvider, IDisposable
         if (!transport.Succeeded)
             return AiReply.Fail(AiFailures.FromStatus(transport.Status, transport.Body),
                 AiHttp.DetailOf(transport), transport.RetryAfterSeconds);
-        return AiWire.ReadOpenAiText(transport.Body) is { Length: > 0 } text
-            ? AiReply.Success(text, AiWire.ReadOpenAiUsage(transport.Body)
-                ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text))
-            : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.noChoices"));
+        return Read(transport, request);
+    }
+
+    /// <summary>答复的判读从 <c>CompleteAsync</c> 里收出来（与 <see cref="OllamaProvider.Read"/> 同形）：
+    /// 截断三态（空＋切断／非空＋切断／答完）是 P-298 丙在这一家的落点。</summary>
+    private static AiReply Read(AiTransport transport, AiRequest request)
+    {
+        var text = AiWire.ReadOpenAiText(transport.Body);
+        var usage = AiWire.ReadOpenAiUsage(transport.Body);
+        var cut = AiWire.ReadOpenAiFinishReason(transport.Body) == AiWire.CutOffReason;
+        if (text is not { Length: > 0 })
+            // 空＋被帽切断（P-298 丙）：Bailu（bailu-2.7-free）这类隐藏思考模型把 max_tokens 全花在推理上、
+            // 正文一个字不剩——旧分型误报 BadResponse「choices 里没有正文」，教用户去查一个其实好好的端点。
+            // 丁：真 usage 照带——那批 token 服务已经计费，§20.1 入账时不猜。
+            return cut
+                ? new AiReply(false, null, AiFailureKind.Truncated, AiWire.CutOffDetail(request.MaxTokens), usage)
+                : AiReply.Fail(AiFailureKind.BadResponse, LocMessage.Of("ai.transport.noChoices"));
+        var metered = usage ?? AiWire.Approximate(request.SystemPrompt + request.UserPrompt, text);
+        // 非空＋被帽切断＝GLM 半行变体：正文照常成功（提案不丢），结束原因带出去由编排层念「没答完」那半句
+        return cut
+            ? AiReply.Success(text, metered, AiWire.CutOffReason)
+            : AiReply.Success(text, metered);
     }
 
     public async Task<AiModelInventory> ListModelsAsync(AiSettings settings, CancellationToken ct)

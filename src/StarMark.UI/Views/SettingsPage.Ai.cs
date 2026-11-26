@@ -111,7 +111,7 @@ public sealed partial class SettingsPage
     private void ShowAiChannelProblem(OrganiseOutcome outcome)
     {
         if (outcome.FirstFailure is AiFailureKind.ModelNotFound or AiFailureKind.Unauthorized
-                or AiFailureKind.QuotaExhausted or AiFailureKind.BadResponse
+                or AiFailureKind.QuotaExhausted or AiFailureKind.BadResponse or AiFailureKind.Truncated
             && outcome.FirstError is { } why)
             ShowAiChannelProblem(why);
         else
@@ -428,6 +428,10 @@ public sealed partial class SettingsPage
             ? outcome.FirstError is { } err
                 ? LocMessage.Of("settings.ai.result.failedWith", outcome.FailedBatches, err)
                 : LocMessage.Of("settings.ai.result.failed", outcome.FailedBatches)
+            : null,
+        // P-298 丙：Ok 但被帽切过的批也要出声——静默就是让"整理完了"吞掉"有几批答了一半"。
+        outcome.TruncatedBatches > 0
+            ? LocMessage.Of("settings.ai.result.truncated", outcome.TruncatedBatches)
             : null,
         // 那句尾巴里点名的那颗按钮⛔ 把名字抄进句子：改了它的说法，这句还在教人点一个不存在的名字。
         LocMessage.Of("settings.ai.result.tail", LocMessage.Of("settings.ai.applyGroup")));

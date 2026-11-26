@@ -243,7 +243,7 @@ public sealed class I18nContractTests : IDisposable
             ["calc.num"] = "纯骨架「{0}」：那一格只装一个读数，三语同形，没有词可翻（批次 WI-55b／P-182b）",
             ["common.rawValue"] = "纯骨架「{0}」三列同形：这一行不是句子，是「把一样东西原样交出去」那道门（批次 WI-61d／P-185）——对话框形参改收 LocMessage 之后，文件路径、条目标题、组件默认名这些**读数**要有合法出口，⛔ 为此把它们各抄一份字面量进表（那才是第二份措辞出处）",
             ["card.title.withCategory"] = "纯骨架「{0} · {1}」三列同形：右下角提示卡抬头那句「谁在说话 · 说了什么」的分隔符（批次 WI-61d 片2／P-185）——卡片形参改收 LocMessage 之后，抬头由两份身份拼成，⛔ 分隔符留在 C# 里（那是第二份拼装出处，✅P-178 当年把「·」收成一颗主人正是为此）",
-            ["settings.ai.result.full"] = "纯胶水「{0}…{6}」：一句话交代这一轮的那七段各是一句独立的话，拼接位⛔ 译（✅WI-60b 那颗 widget.mon.note.join 同一口径：代码里拼 + 就是把语序钉死在中文那一侧）（批次 WI-41／P-188 第四刀）",
+            ["settings.ai.result.full"] = "纯胶水「{0}…{7}」：一句话交代这一轮的那八段各是一句独立的话，拼接位⛔ 译（✅WI-60b 那颗 widget.mon.note.join 同一口径：代码里拼 + 就是把语序钉死在中文那一侧）（批次 WI-41／P-188 第四刀；P-298 丙把七段扩成八段——{6}＝「有 N 批没答完」，{7}＝尾巴）",
             ["settings.ai.tagJoin"] = "连接位「{0}、{1}」：中日都用顿号，英文用逗号＋空格——连的是<b>用户自己起的标签名</b>，这一行没有词可翻（批次 WI-41／P-188 第四刀）",
             ["ai.preview.join"] = "连接号「、」中日同形，en 列是 \", \"：那一行没有词可翻，连的是<b>服务侧的模型名</b>（批次 WI-67 片7，与 health.join.list／hotkey.conflict.join／settings.ai.groupJoin 同形）",
             ["ai.preview.list"] = "纯胶水「{0}{1}」：只把「模型名那一串」与「也许没有的后半句」并起来，缺的那半句交 null（与 rss.statusJoin／settings.ai.usage.full 同形）（批次 WI-67 片7）",
