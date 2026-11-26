@@ -215,6 +215,7 @@ public sealed class AiClassifyService
                 // §20.1 计量：只记"服务真的答过"的批（失败批的 Usage 多为 null，不猜消耗）。
                 // P-298 丁的改口：空正文被帽切断的批（Truncated 失败）带<b>真 usage</b>——那批 token
                 // 服务已经计费，账随 Fail 一起带出，这一格照 `Usage is {}` 原样入账，不另开一条路。
+                // P-300 升帽重试救回的批带<b>两发的总账</b>（撞墙那一发的真 usage 已被并进 Usage）——一行账不缺段。
                 // 在检查点同一批边界落账——进度、方案、用量三件事共享同一个"批"的时间戳，
                 // 用户停掉时看到的三张表永远互相能对得上。写侧吞异常（账本不拦功能，见 AiUsageRepository）。
                 if (done.Usage is { } used && _usage is { } ledger)

@@ -219,37 +219,60 @@ public static class ClassifyRunner
             reports.Count(report => report.Truncated));
     }
 
-    /// <summary>单批＋重试：可重试型失败最多再发 <see cref="MaxAttemptsPerBatch"/> 减一次，
-    /// 退避先看服务的 <c>Retry-After</c>（夹在 <see cref="MaxRetryAfterSeconds"/> 内），否则按固定档。
+    /// <summary>单批＋重试。三枝：<b>可重试型</b>最多再发 <see cref="MaxAttemptsPerBatch"/> 减一次，
+    /// 退避先看服务的 <c>Retry-After</c>（夹在 <see cref="MaxRetryAfterSeconds"/> 内），否则按固定档；
+    /// <b>截断升帽</b>（P-300）：空正文被帽切断且帽还没到天花板 ⇒ 帽推到 <see cref="MaxBatchMaxTokens"/>
+    /// 立即再发一发——同帽再发是再撞同一堵墙（P-297 的致命分界不动），升帽才是换墙的高度；
+    /// <b>其他致命型或帽已到顶</b> ⇒ 收口。每一发已花的真账都攒着，最后并成这一批的总账带出（§20.1）。
     /// 退避途中被叫停 ⇒ 抛给外层按"叫停落在这一批"收——<b>退避是等待，不是占着不让停</b>。</summary>
     private static async Task<ClassifyBatchReport> OneWithRetryAsync(
         int index, IReadOnlyList<ClassifyItem> batch, IReadOnlyList<string> catalog,
         Func<AiRequest, Task<AiReply>> call, int timeoutSeconds, CancellationToken ct,
         Func<TimeSpan, CancellationToken, Task>? wait)
     {
-        var report = await OneAsync(index, batch, catalog, call, timeoutSeconds, ct);
+        // 输出帽在这一层定（P-300）：升帽重试换的就是它——OneAsync 只管"按这顶帽发一次"。
+        // 一批（O7 后最多 80 条）× 最多 4 个标签的行答复 + 地板罩住思考型模型（P-298 甲：
+        // 地板 2400 是探针校准值，见 MinBatchMaxTokens；帽＝天花板而非成本，非思考模型答完即 stop 零影响）
+        var cap = Math.Clamp(batch.Count * 28, MinBatchMaxTokens, MaxBatchMaxTokens);
+        var report = await OneAsync(index, batch, catalog, call, timeoutSeconds, ct, cap);
         var attempts = 1;
+        // 每一发已花的账都从这儿攒（P-300）：救回的批带总账——§20.1 那一行不缺撞墙那一发（丁的账不许在升帽后消失）
+        var spent = report.Usage;
         while (!report.Ok && attempts < MaxAttemptsPerBatch && !ct.IsCancellationRequested)
         {
-            if (!AiFailures.IsRetryable(report.Failure)) break;   // 致命型：重试只是把同一堵墙再撞两遍
-            var delaySeconds = report.RetryAfterSeconds is { } asked && asked > 0
-                ? Math.Min(asked, MaxRetryAfterSeconds)
-                : (attempts == 1 ? FirstRetryDelaySeconds : SecondRetryDelaySeconds);
-            StarLog.Info($"[AI] 第 {index + 1} 批第 {attempts} 次失败（{report.Failure}），{delaySeconds} 秒后重试");
-            var delay = TimeSpan.FromSeconds(delaySeconds);
-            if (wait is null) await Task.Delay(delay, ct);
-            else await wait(delay, ct);
+            if (AiFailures.IsRetryable(report.Failure))
+            {
+                var delaySeconds = report.RetryAfterSeconds is { } asked && asked > 0
+                    ? Math.Min(asked, MaxRetryAfterSeconds)
+                    : (attempts == 1 ? FirstRetryDelaySeconds : SecondRetryDelaySeconds);
+                StarLog.Info($"[AI] 第 {index + 1} 批第 {attempts} 次失败（{report.Failure}），{delaySeconds} 秒后重试");
+                var delay = TimeSpan.FromSeconds(delaySeconds);
+                if (wait is null) await Task.Delay(delay, ct);
+                else await wait(delay, ct);
+            }
+            else if (report.Failure == AiFailureKind.Truncated && cap < MaxBatchMaxTokens)
+            {
+                // 升帽不退避：这不是"来得太快"，是"帽子太小"，隔几秒再发帽子不会自己变高。
+                // 梯子读数（probe_bailu_retry.py，2026-11-26）：同一 10 条批 2400 地板撞墙零正文（推理烧穿），
+                // 4000 天花板 3/3 过线（烧 1908/2535/3590）——升帽是把墙换矮，不是把头再撞一遍。
+                StarLog.Info($"[AI] 第 {index + 1} 批被 {cap} 输出帽切断零正文，升帽到 {MaxBatchMaxTokens} 重发");
+                cap = MaxBatchMaxTokens;
+            }
+            else break;   // 其他致命型或帽已到顶：重试只是把同一堵墙再撞两遍
             attempts++;
-            report = await OneAsync(index, batch, catalog, call, timeoutSeconds, ct);
+            report = await OneAsync(index, batch, catalog, call, timeoutSeconds, ct, cap);
+            spent = AiUsage.Combine(spent, report.Usage);
         }
-        return report with { Attempts = attempts };
+        return report with { Attempts = attempts, Usage = spent };
     }
 
-    /// <summary>单批：任何异常都收在这里，<b>绝不让它冒到循环外</b>。
+    /// <summary>单批一发（帽由 <see cref="OneWithRetryAsync"/> 定，P-300）。
+    /// 任何异常都收在这里，<b>绝不让它冒到循环外</b>。
     /// 一个批超时不该把已经整理好的五批丢掉——那是用户最没法理解的那种失败。</summary>
     private static async Task<ClassifyBatchReport> OneAsync(
         int index, IReadOnlyList<ClassifyItem> batch, IReadOnlyList<string> catalog,
-        Func<AiRequest, Task<AiReply>> call, int timeoutSeconds, CancellationToken ct)
+        Func<AiRequest, Task<AiReply>> call, int timeoutSeconds, CancellationToken ct,
+        int maxTokens)
     {
         try
         {
@@ -257,9 +280,8 @@ public static class ClassifyRunner
                 ClassifyPrompt.SystemPrompt(catalog),
                 ClassifyPrompt.UserPrompt(batch),
                 TimeoutSeconds: timeoutSeconds,
-                // 一批（O7 后最多 80 条）× 最多 4 个标签的行答复 + 地板罩住思考型模型（P-298 甲：
-                // 地板 2400 是探针校准值，见 MinBatchMaxTokens；帽＝天花板而非成本，非思考模型零影响）
-                MaxTokens: Math.Clamp(batch.Count * 28, MinBatchMaxTokens, MaxBatchMaxTokens));
+                // 帽＝天花板而非成本：非思考模型答完即 stop 一个 token 不多花（P-298 甲；P-300 起帽在编排层可升）
+                MaxTokens: maxTokens);
             var reply = await call(request);
             if (!reply.Ok)
                 return new ClassifyBatchReport(index, batch.Count, false, reply.Explain(LocMessage.Of("ai.where.channel")),

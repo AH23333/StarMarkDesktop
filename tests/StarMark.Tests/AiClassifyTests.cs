@@ -490,33 +490,103 @@ public sealed class AiClassifyTests
     // ────────── 截断三态（P-298：丙分型／甲地板／丁账随 Fail 走） ──────────
 
     [Fact]
-    public async Task AnEmptyTruncatedBatchIsFatalSkipsRetriesAndBreaksTheRest()
+    public async Task AnEmptyTruncatedBatchRaisesTheCapOnceThenStaysFatalAndBreaksTheRest()
     {
         var items = Enumerable.Range(1, 170).Select(n => Item(n, "T" + n)).ToList();   // 三批（80/80/10）
         var calls = 0;
         var waited = new List<int>();
+        var caps = new List<int>();
 
         var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
-            _ =>
+            request =>
             {
                 calls++;
+                caps.Add(request.MaxTokens);
                 return Task.FromResult(new AiReply(false, null, AiFailureKind.Truncated,
                     LocMessage.Of("common.rawValue", "被 2400 token 的输出上限切断"),
                     new AiUsage(100, 2400, Estimated: false)));
             },
             null, CancellationToken.None, wait: RecordingWait(waited));
 
-        Assert.Equal(1, calls);                                     // 同帽重试＝再撞同一堵墙：致命型一次都不重试
-        Assert.Empty(waited);                                       // 也没有退避——退避是为"再试可能成"准备的
+        Assert.Equal(new[] { 2400, 4000 }, caps);                   // P-300：同一批两发——2400 撞墙零正文，升帽到天花板再发一发
+        Assert.Empty(waited);                                       // 升帽不退避：不是来得太快，是帽子太小
         Assert.Single(report.Batches);
         Assert.False(report.Batches[0].Ok);
         Assert.Equal(AiFailureKind.Truncated, report.Batches[0].Failure);
-        Assert.Equal(2500, report.Batches[0].Usage!.TotalTokens);   // 丁：真账随 Fail 带出——§20.1 入账有据
-        Assert.Equal(2, report.SkippedBatches);                     // 后面两批不再烧同一个帽
+        Assert.Equal(2, report.Batches[0].Attempts);                // 「试了几次」要看得见：升帽也算一发
+        Assert.Equal(5000, report.Batches[0].Usage!.TotalTokens);   // 两发各真花 2500（丁）——总账并成一笔（P-300）
+        Assert.Equal(2, report.SkippedBatches);                     // 到顶仍截断＝致命：后面两批不再烧同一个帽
         Assert.Equal(3, report.BatchesTotal);
         Assert.NotNull(report.AbortReason);
         Assert.Contains("截断", report.AbortReason!.Render());      // 与"不给标签/协议不认"在状态行上分得开（判据 ②）
         Assert.Equal(AiFailureKind.Truncated, report.FirstFailure);
+    }
+
+    /// <summary>P-300 的主判例：Bailu 隐藏思考的实测形状——2400 地板撞墙零正文，升帽到 4000 一发救回。
+    /// 救回的批带<b>两发的总账</b>（§20.1 一行不缺段），不挂"没答完"半句，对用户是纯静默的韧性。</summary>
+    [Fact]
+    public async Task ARaisedCapRetrySavesTheBatchAndLedgersBothAttempts()
+    {
+        var items = Enumerable.Range(1, 10).Select(n => Item(n, "T" + n)).ToList();   // 一批 10 条（片268 实测批形）
+        var calls = 0;
+        var waited = new List<int>();
+        var caps = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            request =>
+            {
+                calls++;
+                caps.Add(request.MaxTokens);
+                return calls == 1
+                    ? Task.FromResult(new AiReply(false, null, AiFailureKind.Truncated,
+                        LocMessage.Of("common.rawValue", "被 2400 token 的输出上限切断"),
+                        new AiUsage(1554, 2400, Estimated: false)))   // 撞墙那发：Bailu 实报形状（in 1554・out 2400 全烧推理）
+                    : Task.FromResult(AiReply.Success("1: 工具", new AiUsage(1554, 2587, Estimated: false)));
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(new[] { 2400, 4000 }, caps);                   // 第一发地板、升帽那发天花板——帽换了，墙矮了
+        Assert.Empty(waited);                                       // 升帽立即重发：不退避
+        Assert.Equal(0, report.FailedBatches);                      // 掷出去的硬币被升帽接住——这一批对用户是成功的
+        Assert.True(report.Batches[0].Ok);
+        Assert.Equal(2, report.Batches[0].Attempts);
+        Assert.False(report.Batches[0].Truncated);                  // 救回那发 finish=stop：不念「没答完」半句
+        Assert.Single(report.Proposals);
+        // §20.1 那一行是这一批的总账：两发的 in/out 各自相加——缺了撞墙那发就是"花了两发只记一发"
+        Assert.Equal(1554 + 1554, report.Batches[0].Usage!.InputTokens);
+        Assert.Equal(2400 + 2587, report.Batches[0].Usage!.OutputTokens);
+        Assert.False(report.Batches[0].Usage!.Estimated);           // 两发都是服务实报：并账不降口径
+    }
+
+    /// <summary>升帽那发撞上限流：照 P-297 的退避档重试（总试数仍夹在 3）——升帽改的是帽，不动退避的分界。</summary>
+    [Fact]
+    public async Task ARaisedAttemptHittingARateLimitGetsTheStandardBackoff()
+    {
+        var items = Enumerable.Range(1, 10).Select(n => Item(n, "T" + n)).ToList();
+        var calls = 0;
+        var waited = new List<int>();
+        var caps = new List<int>();
+
+        var report = await ClassifyRunner.RunAsync(items, Array.Empty<string>(),
+            request =>
+            {
+                calls++;
+                caps.Add(request.MaxTokens);
+                return calls switch
+                {
+                    1 => Task.FromResult(new AiReply(false, null, AiFailureKind.Truncated,
+                        LocMessage.Of("common.rawValue", "被 2400 token 的输出上限切断"))),
+                    2 => Task.FromResult(AiReply.Fail(AiFailureKind.RateLimited, retryAfterSeconds: 7)),
+                    _ => Task.FromResult(AiReply.Success("1: 工具")),
+                };
+            },
+            null, CancellationToken.None, wait: RecordingWait(waited));
+
+        Assert.Equal(new[] { 2400, 4000, 4000 }, caps);             // 升帽之后留在 4000：退避重试不把帽子退回去
+        Assert.Equal(new[] { 7 }, waited);                          // 限流那半仍听服务的 Retry-After（P-297 分界零改动）
+        Assert.True(report.Batches[0].Ok);
+        Assert.Equal(3, report.Batches[0].Attempts);                // 升帽＋退避重试都算发，总数仍夹在 3
+        Assert.Single(report.Proposals);
     }
 
     [Fact]

@@ -14,6 +14,19 @@ namespace StarMark.Abstractions.Ai;
 public sealed record AiUsage(int InputTokens, int OutputTokens, bool Estimated)
 {
     public int TotalTokens => InputTokens + OutputTokens;
+
+    /// <summary>两笔账并一笔（P-300 升帽重试）：撞墙那一发已花的真账不许在救回之后消失——
+    /// §20.1 入账的那一行得是这一批的<b>总账</b>。任一侧是估算，并起来就按估算报
+    /// （<see cref="Estimated"/> 是整笔账的口径，不是逐段的）。</summary>
+    public static AiUsage? Combine(AiUsage? left, AiUsage? right)
+        => (left, right) switch
+        {
+            (null, null) => null,
+            (null, { } only) => only,
+            ({ } only, null) => only,
+            ({ } l, { } r) => new AiUsage(l.InputTokens + r.InputTokens, l.OutputTokens + r.OutputTokens,
+                l.Estimated || r.Estimated),
+        };
 }
 
 /// <summary>一次补调的结果。<b>失败必须带种类，而且种类与原文原因都要留</b>：
