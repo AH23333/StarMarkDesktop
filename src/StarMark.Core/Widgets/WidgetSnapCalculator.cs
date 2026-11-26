@@ -38,7 +38,7 @@ public readonly record struct WidgetMoveSnapResult(
 
 /// <summary>
 /// 纯物理像素吸附求解器，移动与缩放会话共用。
-/// 移植自 DeskBox <c>Services/WidgetSnapCalculator.cs</c>（v1.5.x），行为与其保持一致：
+/// 移植自 DeskBox <c>Services/WidgetSnapCalculator.cs</c>（v1.5.x；DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生），行为与其保持一致：
 /// <list type="bullet">
 ///   <item>水平、垂直两轴都基于<b>原始</b> proposed 矩形求解，互不干扰（禁止把已吸附结果传给另一轴）；</item>
 ///   <item>垂直投影距离只作<b>打散条件</b>，不作门槛过滤——与 Figma / PowerPoint 的智能参考线一致，

@@ -58,6 +58,13 @@ Write-Host "  主程序 : $entry"
 Write-Host "  更新器 : $updater"
 Write-Host "  界面   : $xbf + $pri（.xbf 共 $((Get-ChildItem -Recurse -Filter *.xbf -Path $OutDir).Count) 颗）"
 
+# 第五样是那颗许可证正文（片274・P-301）：GPL-3.0 的再分发要求"随附许可证"，而 zip 与 setup 都吃这棵树——
+# 少了它＝发出去的每一份都不合规，且这条链上一句错误都不会先喊出来（同上面 .xbf 那族的形状）。
+# 装载那一步在 StarMark.UI.csproj 的 Content（publish 把仓根 LICENSE 带进树）；这里只负责"没带成就别出货"。
+# ⚠ 与图标那节同一条纪律："查"与"拒"必须写在同一行——ReleasePackagingGateTests 按行读，把 throw 挪到下一行它就红。
+$lic = Join-Path $OutDir "LICENSE"
+if (-not (Test-Path -LiteralPath $lic)) { throw "树里没有许可证正文：$lic（GPL-3.0 再分发必须随附；zip 与安装包都吃这棵树）" }
+
 # ---- 4/4 冻结清单（P-209）：把"这棵树里每颗字节"记成一份名字↔内容的账，三颗调用点拿它当凭据 ----
 # 那笔账的起因：v1.0.3 的 stage\1.0.3 在发布之后被人重新产过一次树，事后量出 403 条目里 23 颗 CRC
 # 不同——"审包认的字节"与"用户装到的字节"从那一刻起就不是同一批，而链上一句错误都没喊。

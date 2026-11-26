@@ -12,7 +12,7 @@ namespace StarMark.UI.Services;
 
 /// <summary>
 /// 全局快捷键服务（Win32 <c>RegisterHotKey</c> + 窗口子类化接收 <c>WM_HOTKEY</c>）。
-/// 移植并简化自 DeskBox <c>GlobalHotkeyService</c>：手势模型 + 动作映射 + 冲突允许。
+/// 移植并简化自 DeskBox <c>GlobalHotkeyService</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）：手势模型 + 动作映射 + 冲突允许。
 /// <list type="bullet">
 ///   <item>同一手势可绑定多个动作，触发时全部执行（用户可借此一次完成多个操作）。</item>
 ///   <item>冲突不阻止保存：<see cref="HotkeyBindings.GetConflicts"/> 仅用于 UI 提示。</item>

@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/.NET-10-blue?style=flat-square&logo=dotnet" alt=".NET 10">
   <img src="https://img.shields.io/badge/platform-Windows%2010%2019041%2B%20%7C%2011-lightgrey?style=flat-square&logo=windows" alt="platform">
   <img src="https://img.shields.io/badge/architecture-x64-lightgrey?style=flat-square" alt="x64">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/AH23333/StarMarkDesktop?style=flat-square" alt="MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/AH23333/StarMarkDesktop?style=flat-square" alt="GPL-3.0"></a>
 </p>
 
 ---
@@ -267,7 +267,7 @@ $env:STARMARK_GITHUB_USERNAME = "your-name"
 dotnet test tests\StarMark.Tests\StarMark.Tests.csproj -c Debug -p:Platform=x64
 ```
 
-当前基线：**7,057 项全绿**（含源码形状闸门）。
+当前基线：**7,078 项全绿**（含源码形状闸门）。
 
 - **测试工程不引用 `StarMark.UI`** ⇒ UI 侧的行为无法直接断言，这一半靠**源码形状闸门**守：
   测试从磁盘读源文件、抹掉注释后检查形状（某颗判据是否只有一处、某个已删的出口有没有回来、某段文字是否只在一个出处）。
@@ -361,6 +361,7 @@ StarMark/
 - [Ollama](https://ollama.com/) — 本机 AI 整理通道
 - [SQLite FTS5](https://www.sqlite.org/fts5.html) — 全文索引
 - [Inno Setup](https://jrsoftware.org/isinfo.php) — 安装包
+- [DeskBox](https://github.com/Tianyu199509/DeskBox) — 桌面组件的移植出处（GPL-3.0；派生署名见 [License](#license)）
 - [Windows App SDK / WinUI 3](https://learn.microsoft.com/windows/apps/windows-app-sdk/) — UI 框架
 
 ## 文档
@@ -393,4 +394,21 @@ StarMark/
 
 ## License
 
-[MIT](LICENSE)
+本项目自 2026-11-26（片274）起以 **GPL-3.0** 授权（此前为 MIT），许可证正文见 [LICENSE](LICENSE)。
+
+### 派生组件署名（GPL-3.0）
+
+下列组件移植／照搬自 [DeskBox](https://github.com/Tianyu199509/DeskBox)（作者 Tianyu199509；其自 v1.2.0 起以 GPL-3.0 授权），
+依 GPL-3.0 保留出处署名；派生时间线与出处正本见 `docs/DeskBox桌面组件借鉴与优化意见.md`「授权红线」一节：
+
+- `WidgetSnapCalculator`（完整移植＋82 测试）
+- `WidgetZOrderPolicy`（移植 IdleWidgetZOrderPolicy）
+- `WidgetLayerService`（移植三个核心动作）
+- `WidgetContentFactory`（移植分层思路）
+- `HotkeyService`（移植并简化自 GlobalHotkeyService）
+- `WidgetDescriptor` / `WidgetRegistry`（移植 WidgetContentDescriptor / WidgetRegistry）
+- `WidgetChromeMode`
+- `GlanceCalendar`（农历／清明算法）
+- `WeatherCode`（WMO 映射）
+- `MusicPlaybackMode`（三态循环）
+- `WidgetBackdropKind` 的 Solid 档

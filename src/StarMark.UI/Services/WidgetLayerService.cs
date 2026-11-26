@@ -8,7 +8,7 @@ namespace StarMark.UI.Services;
 
 /// <summary>
 /// 组件窗口层级服务：决定组件"贴在桌面上"而不是"永远压在屏幕上"。
-/// 移植自 DeskBox <c>Services/WidgetLayerService.cs</c> 的三个核心动作：
+/// 移植自 DeskBox <c>Services/WidgetLayerService.cs</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）的三个核心动作：
 /// <list type="number">
 ///   <item><b>挂载桌面图标层</b>：把窗口所有者设为 Explorer 的 <c>SHELLDLL_DefView</c>，
 ///         组件便落在"桌面层"内——在所有应用窗口之下、在桌面图标之上，

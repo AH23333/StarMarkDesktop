@@ -8,8 +8,8 @@ namespace StarMark.Core.Widgets;
 /// <summary>
 /// 「今日速览（Glance）」组件的日历计算：农历、节日、下一个节日倒计时。
 /// <para>
-/// 纯逻辑、不依赖 WinUI，便于单测。农历与清明节算法照搬 DeskBox 的
-/// <c>Services/GlanceFestivalService.cs</c>——底层直接用 .NET 内置的
+/// 纯逻辑、不依赖 WinUI，便于单测。农历与清明节算法照搬 DeskBox（自 v1.2.0 起以 GPL-3.0 授权）的
+/// <c>Services/GlanceFestivalService.cs</c>——本档为其 GPL-3.0 派生；底层直接用 .NET 内置的
 /// <see cref="ChineseLunisolarCalendar"/>，因此<b>不需要自建闰月表 / 节气表</b>。
 /// </para>
 /// <para>

@@ -56,6 +56,10 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 ; 所以"打包时看到的星"与"装完跑起来的星"是同一颗文件，不可能分岔。
 ; ⚠ 这里指一个不存在的文件是**编译期就报错**——比悄悄用默认图标好查得多（ISCC 会直接停下）。
 SetupIconFile={#SourceDir}\StarMark.ico
+; 首装向导的许可页（片274・P-301）：念的也是载荷树里那一份 LICENSE——与 zip 里那颗同一份文件，
+; 不是仓里第二条路径（同上面那颗图标的道理）。指向不存在的文件是编译期就报错（ISCC 直接停下）；
+; 而"许可页悄悄没了"这种事故构建期没人喊、只有装的人看得见——让它编译期就断。
+LicenseFile={#SourceDir}\LICENSE
 Compression=lzma2/max
 SolidCompression=yes
 ; 载荷就是 publish-tree 那一棵 x64 树，没有 x86 分支可发。

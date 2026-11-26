@@ -20,7 +20,7 @@ public readonly record struct WidgetZOrderCandidate(
 
 /// <summary>
 /// 空闲期（无交互）组件 Z 序策略。
-/// 移植自 DeskBox <c>Services/IdleWidgetZOrderPolicy.cs</c>：
+/// 移植自 DeskBox <c>Services/IdleWidgetZOrderPolicy.cs</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）：
 /// <b>位置靠下的组件保持在上方</b>，这样上方组件的投影不会压暗下方组件的顶边。
 /// 纯函数，便于单元测试。返回值第一个元素位于最上层。
 /// </summary>

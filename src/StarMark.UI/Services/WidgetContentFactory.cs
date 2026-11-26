@@ -12,7 +12,7 @@ namespace StarMark.UI.Services;
 
 /// <summary>
 /// 组件内容工厂：负责"某种组件的内容长什么样"，窗口宿主只负责承载。
-/// 移植自 DeskBox <c>Services/WidgetContentFactory.cs</c> 的分层思路——
+/// 移植自 DeskBox <c>Services/WidgetContentFactory.cs</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）的分层思路——
 /// 元数据在 <see cref="WidgetRegistry"/>，创建逻辑在工厂，生命周期与层级在窗口/管理器。
 /// 新增组件只需在此注册一个委托，不必修改 <c>WidgetWindow</c>。
 /// </summary>

@@ -6,7 +6,7 @@ namespace StarMark.Abstractions;
 /// <para>
 /// 六种材质与 DeskBox 的 Mica / MicaAlt / Acrylic(Thin) / AcrylicBase(Base) / Solid 一一对应，
 /// 走 DesktopAcrylicController / MicaController 的原生系统背景方案（不再用实色盖住 SystemBackdrop）；
-/// <see cref="Solid"/> 照搬 DeskBox：不挂任何控制器，改由内容表面铺一层「强调色实色」。
+/// <see cref="Solid"/> 照搬 DeskBox（自 v1.2.0 起以 GPL-3.0 授权）：不挂任何控制器，改由内容表面铺一层「强调色实色」——本档为其 GPL-3.0 派生。
 /// 新增成员一律追加新的整数值，旧配置（0/1/2）语义不变，无需迁移。
 /// </para>
 /// </summary>

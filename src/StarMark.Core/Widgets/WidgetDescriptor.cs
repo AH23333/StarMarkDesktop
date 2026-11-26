@@ -19,7 +19,7 @@ public enum WidgetContentAvailability
 }
 
 /// <summary>
-/// 组件外壳（标题栏/胶囊）的呈现模式，移植自 DeskBox <c>WidgetChromeMode</c>。
+/// 组件外壳（标题栏/胶囊）的呈现模式，移植自 DeskBox <c>WidgetChromeMode</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）。
 /// <para>
 /// <b>持久化契约：只能追加、不得重排或改值。</b>此枚举经 <c>System.Text.Json</c> 按<b>底层整数</b>
 /// 写入 <c>widgets.json</c>（全仓无 <c>JsonStringEnumConverter</c>），且 <c>WidgetStorage</c> 依赖
@@ -38,7 +38,7 @@ public enum WidgetChromeMode
 
 /// <summary>
 /// 组件类型的元数据描述。
-/// 移植自 DeskBox <c>WidgetContentDescriptor</c>：把标题、图标、默认尺寸、可否缩放、
+/// 移植自 DeskBox <c>WidgetContentDescriptor</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）：把标题、图标、默认尺寸、可否缩放、
 /// 成熟度、外壳模式等"按类型分支"的信息集中到一个不可变记录里，
 /// 使新增组件只需在 <see cref="WidgetRegistry"/> 的清单中加一行，
 /// 而不必到各处 switch 里补分支。
@@ -69,7 +69,7 @@ public sealed record WidgetDescriptor(
 
 /// <summary>
 /// 组件类型注册表：整个应用对"有哪些组件"的唯一事实来源。
-/// 移植自 DeskBox <c>Services/WidgetRegistry.cs</c>。
+/// 移植自 DeskBox <c>Services/WidgetRegistry.cs</c>（DeskBox 自 v1.2.0 起以 GPL-3.0 授权，本档为其 GPL-3.0 派生）。
 /// 已规划但未实现的类型可以先注册进来（<c>CanCreateWindow: false</c>），
 /// 使其配置可持久化，但不会被创建成窗口。
 /// </summary>

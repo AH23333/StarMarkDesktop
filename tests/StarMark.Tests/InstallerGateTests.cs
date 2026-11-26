@@ -349,4 +349,47 @@ public sealed class InstallerGateTests
         Assert.DoesNotContain("Exclude:", files, StringComparison.Ordinal);
         Assert.Contains("{#SourceDir}", files, StringComparison.Ordinal);   // 树由脚本传，不在这里写死
     }
+
+    /// <summary>
+    /// GPL-3.0 的再分发要求<b>随附许可证正文</b>（✅P-301 换轨那刀）——这条链上没有任何一步会替我们喊：
+    /// 少一颗 LICENSE 的树照样打成 zip、照样编成 setup，构建全程 0 警告，只有分发出去的那一刻不合规。
+    /// <para>五处一串钉：①仓根 <c>LICENSE</c> 是 GPL-3.0 正文；②它由 <c>csproj</c> 的 publish Content
+    /// 带进载荷树；③publish-tree 的守卫<b>查与拒同行</b>（只查不拒＝那句检查是装饰，#258 同族）；
+    /// ④首装向导的许可页念的是<b>树里那一份</b>——同 <c>SetupIconFile</c> 的道理，不是仓里第二条路径；
+    /// ⑤README 不再把整仓说成 MIT。</para>
+    /// </summary>
+    [Fact]
+    public void TheLicenseTravelsWithEveryShippedCopyOfTheTree()
+    {
+        // ① 正身：换轨判据①——正文不再是 GPL-3.0 它先红（回去看 LICENSE，别改这里）。
+        var license = ReadRepoFile("LICENSE");
+        Assert.Contains("GNU GENERAL PUBLIC LICENSE", license, StringComparison.Ordinal);
+        Assert.Contains("Version 3, 29 June 2007", license, StringComparison.Ordinal);
+
+        // ② 装载：仓根那颗由 publish Content 带进树（zip 与 setup 都吃同一棵树）。
+        //    刻意用 CopyToPublishDirectory 而不是 CopyToOutputDirectory：许可证只需进发布产物、不占开发 bin，
+        //    也不把 AppIconGateTests 钉死的 CopyToOutputDirectory="PreserveNewest" 恰 3 次顶爆。
+        var csproj = ReadRepoFile("src/StarMark.UI/StarMark.UI.csproj");
+        Assert.Equal(1, Count(csproj, @"Include=""..\..\LICENSE"""));
+        Assert.Equal(1, Count(csproj, @"CopyToPublishDirectory=""PreserveNewest"""));
+
+        // ③ 拒绝出货：守卫必须「同一行既查又拒」——只查不拒等于放行。
+        var publish = PsCode(ReadRepoFile("scripts/publish-tree.ps1"));
+        Assert.Equal(1, Count(publish, "\"LICENSE\""));
+        Assert.True(publish.Split('\n').Any(l => l.Contains("Test-Path", StringComparison.Ordinal)
+                && l.Contains("$lic", StringComparison.Ordinal)
+                && l.Contains("throw", StringComparison.Ordinal)),
+            "publish-tree 对 LICENSE 的守卫不再是「同一行既查又拒」");
+
+        // ④ 许可页：LicenseFile 念的是载荷树里那一份（{#SourceDir}），不是仓里第二条路径。
+        var directives = IssDirectives(IssText());
+        Assert.Equal(1, Count(directives, "LicenseFile"));
+        Assert.Contains(@"LicenseFile={#SourceDir}\LICENSE", directives, StringComparison.Ordinal);
+
+        // ⑤ 对外的口：换轨判据②——README 不再把整仓说成 MIT。
+        var readme = ReadRepoFile("README.md");
+        Assert.DoesNotContain("[MIT](LICENSE)", readme, StringComparison.Ordinal);
+        Assert.DoesNotContain("alt=\"MIT\"", readme, StringComparison.Ordinal);
+        Assert.Contains("GPL-3.0", readme, StringComparison.Ordinal);
+    }
 }

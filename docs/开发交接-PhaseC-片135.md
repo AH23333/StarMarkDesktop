@@ -1340,3 +1340,12 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 活档指针回写：bump_pointers_273.py 9 组换号（SettingsPage.xaml +10・SettingsPageViewModel.cs +5・UiStrings.cs +1・落空基线 19 一颗不动）＋bump_bare_273.py 账本 6622 行同句两颗裸号重指（1280→1290・1319→1329）。
 - 验证：UI 编译 0 警 0 错（Debug x64）・定向滤 1794/1794・全量 **7077/7077 新基线**（7075＋2 判例・9m47s）・docgates 26/26（落账后）・计数器 **302/301/1 VERDICT OK（开放 P-301）**。
 - 下一刀候选：①P-301 执行刀（LICENSE→GPL-3.0＋README/发版链对齐＋11 派生面署名）；②画板主题真机观感（设置页三档・已开板当帧换肤・随用户）；③拷贝山别前缀旧目录清理（GcA/GcB/SY*/SZ*/TB*/TC*/UF*/UI3/UJ*/UK2/UM*/UN*/VO1 等・另立刀・待用户）；④DeskBox 1.6.x 思路级候选（更新器 UX・内存修剪节律・P2-2 进程外隔离触发参照）。
+
+## 一百五十五、片274：P-301 执行刀落地——全仓授权换轨 MIT→GPL-3.0（LICENSE/README/发版链/署名四刀齐落）＋新判例钉换轨・全量基线 7078/7078
+- LICENSE＝GPL-3.0 正本（35,823 字节・纯 ASCII・674 行 CRLF）；README badge/License 段/致谢/「派生组件署名（GPL-3.0）」清段列 11 面・全量基线数 7,057→7,078；发版链三处：csproj publish Content（CopyToPublishDirectory・避开 AppIcon 恰 3 钉）＋publish-tree.ps1 产物树 LICENSE 守卫＋StarMark.iss LicenseFile={#SourceDir}\LICENSE 首装许可页（ISCC 编译期断缺）；实跑 publish 验证 LICENSE 进树同字节（SHA256 230184f60bae2fea…）。
+- 11 处派生面署名（10 档头注就地扩行零加行・census 保平）：WidgetSnapCalculator・WidgetZOrderPolicy・WidgetDescriptor（三面）・GlanceCalendar・WeatherCode・WidgetLayerService・HotkeyService・WidgetContentFactory・MusicPlaybackMode・WidgetBackdropKind.Solid；正本改口：借鉴文档 v4 三处＋组件功能扩展实现详解.md。
+- 新判例 InstallerGateTests.TheLicenseTravelsWithEveryShippedCopyOfTheTree 五钉：LICENSE 正身・csproj 装载恰 1・publish-tree 守卫同行查拒・.iss LicenseFile 恰 1・README 不再称 MIT。
+- 验证：UI 编译 0 警 0 错・定向滤 72/72・全量 **7078/7078 新基线**（首跑 1 红＝#1182 族〔C 盘 0.2GB〕・单跑绿・TEMP 改道 D 盘复跑全绿 8m46s）・docgates 26/26（落账后）・计数器 302/302/0 VERDICT OK（P-301 翻牌）。
+- 下一版发版注记：v1.0.8 发布说明须提授权换轨（zip/更新清单自动多一颗 LICENSE・551→552・更新链零码改动自动随树分发）。
+- 环境报备：C 盘余量 0.2GB——建议清理（满载全量 flaky 风险常态化）。
+- 下一刀候选：①画板主题真机观感（设置页三档・已开板当帧换肤・随用户）；②拷贝山别前缀旧目录清理（GcA/GcB/SY*/SZ*/TB*/TC*/UF*/UI3/UJ*/UK2/UM*/UN*/VO1 等・另立刀・待用户）；③DeskBox 1.6.x 思路级候选（更新器 UX・内存修剪节律・P2-2 进程外隔离触发参照）；④v1.0.8 发版（AI 稳健性链已装・发布说明提换轨）。

@@ -37,12 +37,12 @@ v3 对应一次**直接拉取 DeskBox 源码复用**的实作，而非再次评�
 
 v4 对应一次**上游更新拉取与学习**：`github.com/Tianyu199509/DeskBox` 已从 v3 时的 v1.5.2（2026-09-15）演进到 **v1.6.2**（2026-11-25，`e7d35931`），中间 429 个提交、10 个版本（1.5.3…1.6.2）。最新源码已重新 clone 到 `D:\Visual Studio Code\Something\DeskBox-ref`（旧参考树已不在本机）。
 
-### ⚠️ 授权红线（v4 最重要的新增事实，需用户拍板）
+### ⚠️ 授权红线（v4 最重要的新增事实；✅已拍板并落地：③ 整体改 GPL-3.0＝✅P-301，片274 收口）
 
 - DeskBox **v1.0.0（2026-06-11）是 MIT；v1.2.0（2026-07-02）起改 GPL-3.0**；1.6.0 起正式双轨「GPL-3.0-only + 商业授权」（`LICENSING.md`，明确独立 `.dbxwidget` 免传染豁免）。
-- StarMarkDesktop 是 **MIT**。而 v3 那次「直接拉取 DeskBox 源码复用」发生在 **v1.5.2 时代 ⇒ 搬的是 GPL-3.0 码进 MIT 仓**。
+- StarMarkDesktop v1.0.7 及之前是 **MIT**（2026-11-26 片274 起整体换轨 **GPL-3.0**：✅P-301 已落地）。而 v3 那次「直接拉取 DeskBox 源码复用」发生在 **v1.5.2 时代 ⇒ 搬的是 GPL-3.0 码进 MIT 仓**（换轨前的历史事实，照旧成立）。
 - 按代码内自述，**派生面（移植/照搬级）至少 11 处**：`WidgetSnapCalculator`（完整移植＋82 测试，自述「行为与其保持一致」）、`WidgetZOrderPolicy`（移植 IdleWidgetZOrderPolicy）、`WidgetLayerService`（移植三个核心动作）、`WidgetContentFactory`（移植分层）、`HotkeyService`（移植并简化自 GlobalHotkeyService）、`WidgetDescriptor`/`WidgetRegistry`（移植 WidgetContentDescriptor / WidgetRegistry）、`WidgetChromeMode`（移植）、`GlanceCalendar`（农历/清明算法照搬）、`WeatherCode`（WMO 映射照搬）、`MusicPlaybackMode`（三态循环照搬）、`WidgetBackdropKind.Solid`（照搬）。注释级「同款思路/对标」的引用不构成派生，不在清单内。
-- **出路四选一（挂待决策）：** ① 向 DeskBox 作者（Tianyu199509）取商业授权；② **净室重写**上述派生文件（以现 GPL 版为行为规格、由未读源码者按规格重写，成本集中在 SnapCalculator＋测试，其余多为薄封装）；③ StarMark 整体改 GPL-3.0；④ 维持现状（不合规，不建议）。
+- **出路四选一（✅已裁决并落地：③ StarMark 整体改 GPL-3.0＝P-301，片274 执行刀收口）：** ① 向 DeskBox 作者（Tianyu199509）取商业授权；② **净室重写**上述派生文件（以现 GPL 版为行为规格、由未读源码者按规格重写，成本集中在 SnapCalculator＋测试，其余多为薄封装）；③ StarMark 整体改 GPL-3.0；④ 维持现状（不合规，不建议）。
 - **v4 起的纪律：学思路、不搬码。** 上游现读是 GPL-3.0-only，任何 1.6.x 的代码级借鉴同样被传染；本节以下条目全部是思路级。
 
 ### 1.5.2 → 1.6.2 值得学的（思路级，按对 StarMark 的相关度排序）

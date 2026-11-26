@@ -6,8 +6,8 @@ namespace StarMark.Core.Widgets;
 /// <summary>
 /// WMO 天气解释码（Weather interpretation codes）→ 那句天气话的<b>键</b> / Segoe Fluent 字形 / emoji 的映射。
 /// <para>
-/// 码表来源：Open-Meteo 文档（https://open-meteo.com/en/docs），与 DeskBox 的
-/// <c>Helpers/WeatherCodeMapper.cs</c> 同源。DeskBox 那份还有 MSN 描述文本反查与 11 种语言，
+/// 码表来源：Open-Meteo 文档（https://open-meteo.com/en/docs），与 DeskBox（自 v1.2.0 起以 GPL-3.0 授权）的
+/// <c>Helpers/WeatherCodeMapper.cs</c> 同源，本档为其 GPL-3.0 派生。DeskBox 那份还有 MSN 描述文本反查与 11 种语言，
 /// StarMark 一份表配三列（见 <c>UiStrings</c>），故这里只留正向映射，而词交在表里。
 /// </para>
 /// </summary>
