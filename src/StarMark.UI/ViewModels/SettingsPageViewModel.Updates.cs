@@ -26,6 +26,11 @@ public partial class SettingsPageViewModel
     /// <summary>「每天自动检查一次」那颗开关。默认开＝这条功能刚上线时的行为；关掉之后程序一次网也不上。</summary>
     [ObservableProperty] private bool _updateAutoCheckEnabled;
 
+    /// <summary>「更新完成后弹说明卡」那颗开关（片280，默认开）。与上面那颗是两件事：关掉自动检查是
+    /// "别自己上网问"，关掉这颗是"更新完了别拿说明卡打扰我"。记账不停（上一场跑的是哪一版照写），
+    /// 所以关一阵子再打开，收到的仍是"刚装的那一版"的说明，而不是一张迟到好几版的卡。</summary>
+    [ObservableProperty] private bool _updateShowChangelogEnabled;
+
     /// <summary>状态行（<b>只给界面读</b>：名字含 Status，因此不会被那次防抖整页保存当成待写项）。
     /// <para>批次 WI-65 片1 起它交的是<b>还没取词的</b>「键＋实参」：那句话的一半住在 <c>UpdatePolicy.Describe*</c>，
     /// 从前在这里先拼成字符串，换语言那一刻既没人重贴也没人重算 ⇒ 整行停在上一门语言（✅P-194 第一颗）。
@@ -49,6 +54,13 @@ public partial class SettingsPageViewModel
     {
         if (_suppressUpdateApply) return;
         ApplyUpdateAutoCheck(value);
+    }
+
+    /// <summary>按下去当场落盘（片280）。这颗开关没有定时器要重排：说明卡那一条每次出卡前现读这一格。</summary>
+    partial void OnUpdateShowChangelogEnabledChanged(bool value)
+    {
+        if (_suppressUpdateApply) return;
+        Updates().ShowChangelogEnabled = value;
     }
 
     /// <summary>
@@ -191,13 +203,14 @@ public partial class SettingsPageViewModel
     }
 
     /// <summary>
-    /// 回灌只读那两格：<b>不因为"显示"而去起停定时器、也不落盘</b>（否则每次打开设置页都把巡查表收掉再起，
+    /// 回灌只读那三格：<b>不因为"显示"而去起停定时器、也不落盘</b>（否则每次打开设置页都把巡查表收掉再起，
     /// 与自动备份、护眼那两条同一口径）。
     /// </summary>
     public void BackfillUpdateState()
     {
         _suppressUpdateApply = true;
         UpdateAutoCheckEnabled = Safe(() => _settings.LoadUpdateState().AutoCheckEnabled, true, "自动检查更新");
+        UpdateShowChangelogEnabled = Safe(() => _settings.LoadUpdateState().ShowChangelogEnabled, true, "更新完成弹说明卡");
         _suppressUpdateApply = false;
         RefreshUpdateStatus();
     }

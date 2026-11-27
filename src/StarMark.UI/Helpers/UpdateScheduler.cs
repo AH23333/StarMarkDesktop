@@ -35,6 +35,14 @@ public static class UpdateScheduler
     /// <summary>开机之后第一次问之前让出的时间（与自动备份同一口径：抢首屏那几秒的磁盘与网络都不合适）。</summary>
     public static readonly TimeSpan FirstProbeDelay = TimeSpan.FromSeconds(20);
 
+    /// <summary>
+    /// 更新完成后的说明卡让出的时间（片280）。比 <see cref="FirstProbeDelay"/> 更早：
+    /// 这张卡说的是"你刚拿到的东西"，趁他对"这一版长什么样"还有印象时贴上去；
+    /// 而提示卡整仓只有一扇窗，先到先得——说明卡若排在首查之后，会被"有新版"那张顶掉
+    /// （刚更新完又恰好问出"还有更新"是同一版发布窗口里真实会出现的场面）。
+    /// </summary>
+    public static readonly TimeSpan ChangelogCardDelay = TimeSpan.FromSeconds(10);
+
     private static Timer? _timer;
 
     /// <summary>一次巡查正在跑（跨 tick 重入的闩：启动那一次与定时器第一次 tick 可能撞上）。</summary>
@@ -102,6 +110,29 @@ public static class UpdateScheduler
         });
 
     /// <summary>
+    /// 更新完成之后的那张说明卡（片280）：上一场记下的版本与这一场不同，说明这次启动是"刚更新过"。
+    /// 判据、开关与正文全在 <see cref="UpdateService.ChangelogAfterUpdateAsync"/>（Core），这里只管时机与投递。
+    /// <para>拿不到卡（不是刚更新过／开关关着／本机版本读不到）就安安静静——那不是失败，是"这次不该出声"。</para>
+    /// <para>异常只进日志不上抛：这条链也在池线程跑（<see cref="ScheduleFirstProbe"/> 同一处境），
+    /// 抛出去就是没人接的 unobserved task。</para>
+    /// </summary>
+    public static void ScheduleChangelogAfterUpdate(UpdateService service)
+        => _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(ChangelogCardDelay).ConfigureAwait(false);
+                var card = await service.ChangelogAfterUpdateAsync().ConfigureAwait(false);
+                if (card is null) return;
+                ShowChangelogCard(card);
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error("更新后的说明卡没能给出（不影响使用）", ex);
+            }
+        });
+
+    /// <summary>
     /// 他主动问的那一次（托盘「检查更新」）：<b>无论结果是什么都要当场看得见</b>——他刚做完一个动作，
     /// 而"点了没反应"与"正在后台跑"在用户侧长得一样（IF／P-54 那一族）。
     /// 只有"确实有新版"才附带那颗打开发布页的动作：在"还没发布过"那一格给一个下载出口，
@@ -137,6 +168,34 @@ public static class UpdateScheduler
             }
             catch (Exception ex) { StarLog.Warn($"[更新] 提示卡没能贴上屏幕：{ex.Message}"); }
             if (!shown) StarLog.Info($"（提示卡没能贴上屏幕，结果只留在日志）{title}：{report.Text}");
+        });
+    }
+
+    /// <summary>
+    /// 把"这一版改了什么"贴上屏幕（片280）。与 <see cref="ShowCard"/> 同一条路：回 UI 线程、
+    /// 贴没贴上问屏幕、失败留日志——提示卡整仓只有一扇窗，说明卡与"有新版"那两张共用它。
+    /// <para>正文是 Core 交来的整颗 <see cref="LocMessage"/>，这里原样递出去、
+    /// ⛔ 再套数据门——套一层等于把"这句话是谁说的"这件事弄没（✅WI-65 片1 同一条口径）。</para>
+    /// </summary>
+    private static void ShowChangelogCard(PostUpdateChangelog card)
+    {
+        var pump = App.MainWindow?.DispatcherQueue;
+        if (pump is null)
+        {
+            StarLog.Info($"[提示卡] 主窗已不在，这条更新说明只留在日志：{card.Body}");
+            return;
+        }
+        pump.TryEnqueue(() =>
+        {
+            var shown = false;
+            try
+            {
+                // 地址交出去的是 card.PageUrl——本程序按配置里的仓库拼的那一个，不是远端回的连接串。
+                shown = NoticeCard.Show(LocMessage.Of("upd.changelog.title", card.VersionText),
+                    card.Body, card.PageUrl, LocMessage.Of("card.action.releasePage"));
+            }
+            catch (Exception ex) { StarLog.Warn($"[更新] 说明卡没能贴上屏幕：{ex.Message}"); }
+            if (!shown) StarLog.Info($"（说明卡没能贴上屏幕，结果只留在日志）{card.Body}");
         });
     }
 }

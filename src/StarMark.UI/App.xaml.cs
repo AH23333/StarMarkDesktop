@@ -363,6 +363,9 @@ public partial class App : Application
                 var updates = Services.GetRequiredService<StarMark.Core.Updates.UpdateService>();
                 UpdateScheduler.ScheduleFirstProbe(fileSettings, updates);
                 UpdateScheduler.Start(fileSettings, updates);
+                // 片280：更新完成后的说明卡。排在巡查起好之后（它自己会让出 10 秒），
+                // 与开关无关都排——开关只管"弹不弹"，记账（上一场是哪一版）永远要走。
+                UpdateScheduler.ScheduleChangelogAfterUpdate(updates);
             }
             catch (Exception uex)
             {

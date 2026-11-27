@@ -192,7 +192,9 @@ public sealed class NoticeCardGateTests
         var upd = SourceGate.Code(SourceGate.ReadRepoFile("src/StarMark.UI/Helpers/UpdateScheduler.cs"));
         Assert.Equal(1, SourceGate.Count(win, "LocMessage.Of(\"card.hint.plain\", KeepSeconds)"));
         Assert.Equal(1, SourceGate.Count(win, "LocMessage.Of(\"card.hint.withAction\", label ?? LocMessage.Of(\"card.action.link\"), KeepSeconds)"));
-        Assert.Equal(1, SourceGate.Count(upd, "LocMessage.Of(\"card.action.releasePage\")"));
+        // 片280 起是两处：一处「有新版」那张卡（批次 UE），一处「更新完成」那张说明卡（片280）——
+        // 两张卡各递各的动作标签，标签本身仍只有表里那一个主人。
+        Assert.Equal(2, SourceGate.Count(upd, "LocMessage.Of(\"card.action.releasePage\")"));
         foreach (var dead in new[] { "\"点一下关闭", "\"点一下打开", "\"链接\"", "\"发布页\"" })
         {
             Assert.DoesNotContain(dead, win);

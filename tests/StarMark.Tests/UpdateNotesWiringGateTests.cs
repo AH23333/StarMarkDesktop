@@ -74,7 +74,10 @@ public sealed class UpdateNotesWiringGateTests
         Assert.DoesNotContain("Notes", MethodBody(vm, "private LocMessage BuildUpdateStatus()"), StringComparison.Ordinal);
     }
 
-    /// <summary>清 markdown 这件事<b>全仓只有一个调用点</b>，且那一处住在 Core。</summary>
+    /// <summary>清 markdown 这件事<b>全仓只有一个调用方档案</b>，且那一处住在 Core。
+    /// <para>片280 起 Core 里有两处 <c>ReleaseNotes.Clean</c>（同一档、同一收敛）：
+    /// 一处喂「有新版」那张卡的折叠区（批次 VX），一处喂「更新完成」那张说明卡（片280）——
+    /// 收敛规则仍只有一个主人（这一档），多一次<b>调用</b>不是多一副正文。</para></summary>
     [Fact]
     public void TheTextIsCleanedInExactlyOnePlaceAndItIsCore()
     {
@@ -83,7 +86,7 @@ public sealed class UpdateNotesWiringGateTests
             .Select(entry => entry.RelativePath)
             .ToArray();
         Assert.Equal(["src/StarMark.Core/Updates/UpdateService.cs"], callers);
-        Assert.Equal(1, Count(Code(ReadRepoFile(Service)), "ReleaseNotes.Clean"));
+        Assert.Equal(2, Count(Code(ReadRepoFile(Service)), "ReleaseNotes.Clean"));   // VX 那一处＋片280 那一处，都收敛同一份规则
     }
 
     /// <summary>
@@ -98,20 +101,37 @@ public sealed class UpdateNotesWiringGateTests
         Assert.DoesNotContain("Substring", cleaner, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 更新完成那张说明卡的<b>正文进 Core 的那一处</b>走 <c>common.rawValue</c> 那道数据门（片280）：
+    /// 问到的说明是机器文本，照原样交——与 OCR 引擎那句同一先例（✅片3 第二刀），
+    /// ⛔ 为它另立一颗措辞行，那道门三列都是 {0}，早有主人。整档恰一次：
+    /// 多一次就是同一份正文两处包装，少一次就是 <c>upd.changelog.fetchMissed</c> 顶替了真说明。
+    /// </summary>
+    [Fact]
+    public void TheChangelogBodyEntersThroughTheDataDoorExactlyOnce()
+    {
+        var service = Code(ReadRepoFile(Service));
+        Assert.Equal(1, Count(service, "LocMessage.Of(\"common.rawValue\""));
+        Assert.Contains("LocMessage.Of(\"common.rawValue\", notes)", service, StringComparison.Ordinal);
+    }
+
     // ===== 边界：正文绝不进设置档 =====
 
     /// <summary>
-    /// 宿主那几格<b>就是那几格</b>：读六行＋写六行＝十二处，多一处就是给那段外部文本开了一格存档。
+    /// 宿主那几格<b>就是那几格</b>：读八行＋写八行＝十六处，多一处就是给那段外部文本开了一格存档。
     /// 这条比"文件里有没有 Notes 这个词"硬：它钉的是形状，改名字躲不过去。
     /// <para>批次 VZ 把 10 改成 12：多出来那一格是 <c>UpdateLastPublishedUnix</c>（这一版何时发布），
     /// 它不是那段正文、也不会冒充别的东西，而这条闸门要挡的两样都还挡着——<b>数量对得上</b>、
     /// <b>正文类的名字一格都不许出现</b>。改数字的正当理由留在这里，下次它再动要先回答同一问。</para>
+    /// <para>片280 把 12 改成 16：新四格是「更新完成弹说明卡」开关与「上一场跑的版本」那一对（各读一行写一行）。
+    /// 同一问答：<b>两样都不是那段正文</b>——开关是本机布尔、版本号是本机事实，
+    /// 而 <c>Notes</c>／<c>Body</c>／<c>Markdown</c> 那三个名字仍一格不许出现。</para>
     /// </summary>
     [Fact]
     public void TheSettingsFileStillCarriesOnlyTheVerdictKeys()
     {
         var store = Code(ReadRepoFile(Store));
-        Assert.Equal(12, Count(store, "d.Update"));
+        Assert.Equal(16, Count(store, "d.Update"));
         foreach (var banned in new[] { "Notes", "Body", "Markdown" })
             Assert.DoesNotContain(banned, store, StringComparison.Ordinal);
         // 唯一允许进档的"对方给的时刻"就是发布时刻，而且它必须与标签同进同出（配错就没法判新鲜度）。

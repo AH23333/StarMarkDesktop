@@ -301,6 +301,18 @@
                                                   MinWidth="0"
                                                   IsOn="{x:Bind ViewModel.UpdateAutoCheckEnabled, Mode=TwoWay}"/>
                                 </Grid>
+                                <!-- 片280：更新完成之后那张说明卡的开关。与上面那颗「自动检查」是两件事——
+                                     关掉自动检查是"别自己上网问"，关掉这颗是"更新完了别拿说明卡打扰我"；
+                                     而记账（上一场跑的是哪一版）不停，所以哪天再打开，收到的仍是"刚装的那一版"的说明。 -->
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock i18n:LocText.Key="settings.general.showChangelog"/>
+                                    </StackPanel>
+                                    <ToggleSwitch Grid.Column="1"
+                                                  i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off"
+                                                  MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.UpdateShowChangelogEnabled, Mode=TwoWay}"/>
+                                </Grid>
                                 <!-- ⛔ 把这句绑成成品串：话的一半住在 UpdatePolicy.Describe*，绑字符串＝换语言没人重贴（批次 WI-65 片1，由宿主那一拍走 LocText.SetMessage） -->
                                 <TextBlock x:Name="UpdateStatusText" Style="{StaticResource SettingRowText}" TextWrapping="Wrap"/>
                                 <StackPanel Orientation="Horizontal" Spacing="6">

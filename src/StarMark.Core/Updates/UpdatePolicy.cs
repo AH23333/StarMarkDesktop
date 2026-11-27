@@ -162,6 +162,22 @@ public static class UpdatePolicy
             && !string.Equals(releaseTag, alreadyAnnouncedTag, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// 更新完成之后要不要把"这一版改了什么"摆到他眼前（片280）。
+    /// <para>三道闸各挡一种错弹：<b>开关关着</b>⇒不弹（他要的是安静，不是少一张卡）；
+    /// <b>上一版没记过</b>⇒不弹——第一次见面不是"更新"（新装），存量用户也不补弹：
+    /// 补弹只能弹错版，谁也不知道他上一版是什么；<b>本机与上一版是同一版</b>⇒不弹（重启不是更新）。</para>
+    /// <para>读不懂的版本号一律不猜：猜"换过版"会为一次没发生的更新弹卡，猜"没换过"会吞掉一次真更新——
+    /// 两种都错，所以两种都不选（<see cref="Classify"/> 那条"无从比较就不比"的同一口径）。</para>
+    /// </summary>
+    public static bool ShouldShowChangelog(bool enabled, string? lastRunVersionText, string? currentVersionText)
+    {
+        if (!enabled) return false;
+        if (!AppVersion.TryParse(lastRunVersionText, out var lastRun)) return false;
+        if (!AppVersion.TryParse(currentVersionText, out var current)) return false;
+        return AppVersion.Compare(lastRun, current) != 0;
+    }
+
+    /// <summary>
     /// 界面上那颗「打开下载页」该不该出现。判据只有这一处：<b>只有"确实有一版比你现在的更新"才有东西可下</b>。
     /// <para>留着按钮而点下去是 GitHub 的 404 页，与"点了没反应"是同一类缺陷（P-54）；
     /// 而在"已经最新""还没发布过"那些格放一个下载按钮，等于用界面暗示有一个并不存在的产物。</para>

@@ -5,7 +5,7 @@ using StarMark.Core.Updates;
 namespace StarMark.UI.Helpers;
 
 /// <summary>
-/// SettingsStore 的这一段——检查更新那六格（批次 UE，第六格由 VZ 加）。
+/// SettingsStore 的这一段——检查更新那八格（批次 UE 起六格，VZ 加第六格，片280 再加两格）。
 /// <para>
 /// 这里是 <see cref="IUpdateStateStore"/> 在真宿主上的<b>唯一</b>实现：Core 那边只管"读一次、算完、写一次"，
 /// 怎么落到 settings.json、脏值怎么回落都只住在这几行。
@@ -21,6 +21,11 @@ namespace StarMark.UI.Helpers;
 /// 一个固定宽度的瞬间不会随时间变得不真实，也不会冒充别的东西——
 /// 这两条正是 release 正文被挡在档外的那两条理由，它都不犯。
 /// </para>
+/// <para>
+/// 片280 那两格（<c>UpdateShowChangelogEnabled</c>／<c>UpdateLastRunVersion</c>）与上面六格不是一族：
+/// 开关是设置，而"上一场是哪一版"是<b>程序自己记的账</b>——它单独变、不与六格配对，写的时机也在
+/// 另一条链上（每场收尾盖章）。同一条边界照旧：<b>只记本机事实，远端给的文本一个字不进档</b>。
+/// </para>
 /// </summary>
 public sealed partial class SettingsStore : IUpdateStateStore
 {
@@ -34,7 +39,9 @@ public sealed partial class SettingsStore : IUpdateStateStore
             ParseVerdict(d.UpdateLastVerdict),
             d.UpdateLastRemoteTag,
             d.UpdateAnnouncedTag,
-            UnixToUtc(d.UpdateLastPublishedUnix));
+            UnixToUtc(d.UpdateLastPublishedUnix),
+            d.UpdateShowChangelogEnabled ?? true,
+            d.UpdateLastRunVersion);
     }
 
     /// <summary>整批写回（见 <see cref="IUpdateStateStore"/>：这几格说的是同一件事，不许分开落盘）。</summary>
@@ -47,6 +54,8 @@ public sealed partial class SettingsStore : IUpdateStateStore
         d.UpdateLastRemoteTag = state.LastRemoteTag;
         d.UpdateAnnouncedTag = state.AnnouncedTag;
         d.UpdateLastPublishedUnix = state.LastPublishedUtc?.ToUnixTimeSeconds();
+        d.UpdateShowChangelogEnabled = state.ShowChangelogEnabled;
+        d.UpdateLastRunVersion = state.LastRunVersion;
         Save(d);
     }
 

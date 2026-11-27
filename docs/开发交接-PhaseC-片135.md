@@ -1395,3 +1395,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - v5 候选清单（供裁决・学习刀不立项）：①更新日志自动弹（高）②自动下载＋计费网络（中）③全屏遮挡感知收窗（低）④选择器进程外化（触发式）。
 - 验证：零产品码・全量 7084/7084 维持不重跑（片276 先例）・docgates 26/26（落账后）・计数器 303/303/0 维持。
 - 下一刀候选：①v5 候选清单裁决（更新日志自动弹高优先）；②「关主窗退出链」真鼠标复现（用户在用机器・待窗口期）；③v1.0.8 发版（AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）。
+
+## 一百六十二、片280：更新完成自动弹更新说明卡（借鉴文档 v5 候选①头名）——判据三道闸＋正文三路＋finally 盖章＋10s 先于首查・全量 7101 新基线
+- 裁决：片279 v5 候选清单头名・用户拍板即执行。九产品档＋四门/测档落码（UpdateService／UpdatePolicy／SettingsStore 两档／UpdateScheduler／App／SettingsPage／SettingsPageViewModel.Updates／UiStrings＋UpdateCheckTests／UpdateNotesWiring／LogOnlyWord／NoticeCard）。
+- 机制要点（接手人视角）：判据三道闸（UpdatePolicy.ShouldShowChangelog）＝开关关／上一场没记过（新装存量都不补弹）／同版一律不弹・任一版本号读不懂不猜；正文三路全在 Core（ChangelogAfterUpdateAsync：版本匹配守卫→ReleaseNotes.Clean 非空交 common.rawValue／空退 upd.changelog.noNotes／不匹配没问到退 upd.changelog.fetchMissed＋本机版发布页）・调度只递不重算；每场 finally 盖 LastRunVersion（StampLastRunVersion 值同不写・关开关也盖——关的是「弹」不是「记账」）；本机版本读不懂＝回 null 不盖章；ChangelogCardDelay=10s 早于 FirstProbeDelay 20s（提示卡整仓单窗先到先得・排首查后会被「有新版」顶掉）；开关行在自动检查行后・UiStrings 四键三语（settings.general.showChangelog／upd.changelog.title／noNotes／fetchMissed）。
+- 指针腿：真棘轮＝两活档 census 19（census_280.py 复刻 LivingSourcePointerGateTests.FallenPointers・盘上与 HEAD 两遍对跑）；本批 20 颗换号（3 颗新落空＋17 处静默错位・bump_pointers_280.py 先断言 HEAD 旧行内容=盘上新行 20 颗全过才换）・census_225 的四账 148＝历史叙述存量非棘轮（报告族「照旧 ⛔ 删历史证据・⛔ 修」裁决在案）・#1020 冻结叙述不动；换号后 19/19・新落空 0・愈掉 0。
+- 事故与仪器课：判例首跑红 1＝RemoteRelease 五位参正文误装 Name 位（期望 common.rawValue 实得 noNotes・自造自收当轮修）；增量 build「0 警」假读数再现——全量重编露 6 颗 xUnit 分析器警＝HEAD 存量（HEAD worktree 现编同款・片144–200 老档）非本批・不另立坑。
+- 验证：build 0 错误・docgates 26/26・定向更新族 273/273・全量 **7101/7101 新基线**（7084＋17・正本 bin/WI37C/full_280.txt）・census 19 保平（diffcensus280.txt）・计数器 303/303/0（落账后 304/304/0）。
+- 下一刀候选：①片281 全屏遮挡感知收窗（v5 候选③）；②「关主窗退出链」真鼠标复现（待用户机器窗口期）；③v1.0.8 发版（更新说明卡链＋AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）。

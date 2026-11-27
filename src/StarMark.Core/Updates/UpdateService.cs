@@ -42,13 +42,21 @@ public interface IUpdateStateStore
 /// <para>它进档而 <see cref="UpdateReport.Notes"/> 不进档，不是双标：这是一个<b>固定宽度的瞬间</b>，
 /// 不会冒充别的东西、也不会随时间变得不真实（"这一版发布于那天"永远为真）；
 /// 而一段外部自由文本会在下一版发布后继续冒充"这一版的说明"。</para></param>
+/// <param name="ShowChangelogEnabled">更新完成后要不要把"这一版改了什么"摆到他眼前（片280，默认开）。
+/// <para>它只管"弹不弹"，<b>记账不停</b>：<see cref="LastRunVersion"/> 在它关着时照盖——
+/// 否则他哪天把开关打开，收到的是一张迟到好几版的卡，而正文说的早已不是他刚装的那一版。</para></param>
+/// <param name="LastRunVersion">上一场跑的是哪一版（片280）。它是"这次启动是不是刚更新过"那条比对的基线：
+/// 与本机版本不同 ⇒ 更新过了。<b>只记本机事实</b>，与上面几格同一条边界——不记任何远端给的文本；
+/// 它也不是"设置"：值由程序在每一场收尾时盖章（值不同才写），人不编辑它。</param>
 public sealed record UpdateState(
     bool AutoCheckEnabled,
     DateTimeOffset? LastProbeUtc = null,
     UpdateVerdict? LastVerdict = null,
     string? LastRemoteTag = null,
     string? AnnouncedTag = null,
-    DateTimeOffset? LastPublishedUtc = null);
+    DateTimeOffset? LastPublishedUtc = null,
+    bool ShowChangelogEnabled = true,
+    string? LastRunVersion = null);
 
 /// <summary>
 /// 一次检查的完整答复。<see cref="Text"/> 是给界面与日志用的那一句（出自 <see cref="UpdatePolicy.Describe"/>），
@@ -70,6 +78,18 @@ public sealed record UpdateReport(
     UpdateVerdict Verdict, string? RemoteTag, string PageUrl,
     DateTimeOffset CheckedUtc, bool Announced, LocMessage Text, string? Notes = null,
     DateTimeOffset? PublishedUtc = null);
+
+/// <summary>
+/// 更新完成之后的那张说明卡（片280）。
+/// <para><see cref="Body"/> 由 <b>Core 组好</b>——三路各有各的出处：问到且远端最新就是本机这一版 ⇒
+/// 收敛过的说明正文（套 <c>common.rawValue</c> 那道数据门，机器文本照原样交）；问到但对方没写 ⇒
+/// 表里那句 <c>upd.changelog.noNotes</c>；没问到（离线／又出了更新的版）⇒ <c>upd.changelog.fetchMissed</c>。
+/// 调度那一层只递不动：它再拼一次就有了第二份正文出处（<see cref="ReleaseNotes"/> 只此一家的口径）。</para>
+/// <para><see cref="PageUrl"/> 与 <see cref="UpdateReport.PageUrl"/> 同一条边界：
+/// 本程序按配置里的仓库拼，远端回的连接串一个字节都不参与。</para>
+/// </summary>
+/// <param name="VersionText">本机现在跑的这一版（"已更新到 {0}"的那个 {0}）。</param>
+public sealed record PostUpdateChangelog(string VersionText, LocMessage Body, string PageUrl);
 
 /// <summary>
 /// 检查更新的编排：<b>问 → 判 → 记 → （只在必要时）出声</b>（批次 UE）。
@@ -96,6 +116,13 @@ public sealed class UpdateService
     private Task<UpdateReport>? _inFlight;
     private readonly object _gate = new();
 
+    /// <summary>
+    /// 状态档那一把"读→算→写"的整段锁（片280）。检查那一发、两颗开关、收尾盖章四路都会改<b>同一份档</b>，
+    /// 各改各的就会把对方刚写的那格盖掉——半套状态（"改了 A 丢了 B"）是这条线上最隐蔽的坏法，
+    /// 而它只在两条线真正并发之后才出现。锁内不放 await。
+    /// </summary>
+    private readonly object _stateGate = new();
+
     /// <summary>取当前时刻的缝（测试里给固定值；默认走 UTC 系统时钟）。</summary>
     public delegate DateTimeOffset Clock();
 
@@ -119,8 +146,28 @@ public sealed class UpdateService
         get => _state.Read().AutoCheckEnabled;
         set
         {
-            var current = _state.Read();
-            _state.Write(current with { AutoCheckEnabled = value });
+            lock (_stateGate)
+            {
+                var current = _state.Read();
+                _state.Write(current with { AutoCheckEnabled = value });
+            }
+        }
+    }
+
+    /// <summary>
+    /// 「更新完成后弹说明卡」那颗开关（片280）。默认开：这张卡说的是他<b>刚拿到手</b>的东西，
+    /// 与"有新版"那种打断不同；关掉＝从此更新完安安静静，但记账（<see cref="UpdateState.LastRunVersion"/>）照走。
+    /// </summary>
+    public bool ShowChangelogEnabled
+    {
+        get => _state.Read().ShowChangelogEnabled;
+        set
+        {
+            lock (_stateGate)
+            {
+                var current = _state.Read();
+                _state.Write(current with { ShowChangelogEnabled = value });
+            }
         }
     }
 
@@ -195,27 +242,33 @@ public sealed class UpdateService
         var verdict = UpdatePolicy.Classify(probe, local);
         var now = _now();
         var release = probe.Release;
-        var stored = _state.Read();
-
-        // 这一版值不值得"告诉他"（第一次见到这个标签的新版）。
-        var tells = UpdatePolicy.ShouldAnnounce(verdict, release?.Tag, stored.AnnouncedTag);
-        // 弹卡只给自动那一发：手动那一发他正盯着屏幕，结果已经在他点的那下里了，再弹一张是叠噪。
-        var showCard = tells && !manual;
-        // 但两种都算"已经告诉他了"，一起把标签记下来——否则手动查完 1.1.0，第二天开机还会为同一版弹一次卡。
-        var recordAnnounced = tells && release is not null;
-
-        // 「问过」这件事只在真的拿到对方答复时才记（见 UpdatePolicy.CountsAsProbed 那段理由）
-        var updated = stored with
+        bool showCard;
+        // 状态那一段"读→算→写"整段占着 _stateGate：检查、两颗开关、收尾盖章改的是同一份档，
+        // 各改各的会把对方刚写的那格盖掉（半套状态，见 _stateGate 那段理由）。
+        lock (_stateGate)
         {
-            LastProbeUtc = UpdatePolicy.CountsAsProbed(verdict) ? now : stored.LastProbeUtc,
-            LastVerdict = UpdatePolicy.CountsAsProbed(verdict) ? verdict : stored.LastVerdict,
-            LastRemoteTag = UpdatePolicy.CountsAsProbed(verdict) ? release?.Tag : stored.LastRemoteTag,
-            // 与标签同一条件写入：只留一个的话就会出现"标签是新的、发布时刻是旧的"那种配对错误，
-            // 而那个错恰好会喂给清单新鲜度那道算术一个假参照。
-            LastPublishedUtc = UpdatePolicy.CountsAsProbed(verdict) ? release?.PublishedUtc : stored.LastPublishedUtc,
-            AnnouncedTag = recordAnnounced ? release!.Tag : stored.AnnouncedTag,
-        };
-        _state.Write(updated);
+            var stored = _state.Read();
+
+            // 这一版值不值得"告诉他"（第一次见到这个标签的新版）。
+            var tells = UpdatePolicy.ShouldAnnounce(verdict, release?.Tag, stored.AnnouncedTag);
+            // 弹卡只给自动那一发：手动那一发他正盯着屏幕，结果已经在他点的那下里了，再弹一张是叠噪。
+            showCard = tells && !manual;
+            // 但两种都算"已经告诉他了"，一起把标签记下来——否则手动查完 1.1.0，第二天开机还会为同一版弹一次卡。
+            var recordAnnounced = tells && release is not null;
+
+            // 「问过」这件事只在真的拿到对方答复时才记（见 UpdatePolicy.CountsAsProbed 那段理由）
+            var updated = stored with
+            {
+                LastProbeUtc = UpdatePolicy.CountsAsProbed(verdict) ? now : stored.LastProbeUtc,
+                LastVerdict = UpdatePolicy.CountsAsProbed(verdict) ? verdict : stored.LastVerdict,
+                LastRemoteTag = UpdatePolicy.CountsAsProbed(verdict) ? release?.Tag : stored.LastRemoteTag,
+                // 与标签同一条件写入：只留一个的话就会出现"标签是新的、发布时刻是旧的"那种配对错误，
+                // 而那个错恰好会喂给清单新鲜度那道算术一个假参照。
+                LastPublishedUtc = UpdatePolicy.CountsAsProbed(verdict) ? release?.PublishedUtc : stored.LastPublishedUtc,
+                AnnouncedTag = recordAnnounced ? release!.Tag : stored.AnnouncedTag,
+            };
+            _state.Write(updated);
+        }
 
         var text = UpdatePolicy.Describe(verdict, release, local);
         // 说明文字只有"确实有一版更新"这一格才给：在"已经最新"那一格摊开这一版的改动，
@@ -230,4 +283,74 @@ public sealed class UpdateService
 
     private string? LocalText()
         => AppVersion.TryParse(_localVersion(), out var v) ? AppVersion.Describe(v) : null;
+
+    /// <summary>
+    /// 更新完成之后的那张说明卡（片280）：上一场记下的版本与这一场不同 ⇒ 这次启动是"刚更新过"，
+    /// 把这一版改了什么摆到他眼前；取不到正文时<b>卡照出、链接照给</b>——"没拿到说明"与"没更新"是两件事。
+    /// <para>无论走不走得下去，<b>这一场的版本号都要盖章</b>（<c>finally</c>）：章是下一次比对的基线，
+    /// 漏盖的下场是每一场启动都被当成"刚更新过"，那是这条功能唯一会烦人的形状。
+    /// 开关关着也照盖——关的是"弹"，不是"记账"（见 <see cref="UpdateState.ShowChangelogEnabled"/>）。</para>
+    /// <para>本机版本读不到时直接回 null、不盖章：无从判"这一场是不是更新过"，也就无从盖起。</para>
+    /// </summary>
+    public async Task<PostUpdateChangelog?> ChangelogAfterUpdateAsync(CancellationToken ct = default)
+    {
+        var local = LocalText();
+        if (local is null) return null;
+        try
+        {
+            var stored = _state.Read();
+            if (!UpdatePolicy.ShouldShowChangelog(stored.ShowChangelogEnabled, stored.LastRunVersion, local))
+                return null;
+
+            var repository = UpdatePolicy.RepositoryOf(_environment());
+            ReleaseProbeResult probe;
+            try
+            {
+                probe = await _source.ProbeAsync(repository, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // 取消不是"没拿到"：原样交回，不许被兜底吞掉（P-55 那条口径）
+                throw;
+            }
+            catch (Exception ex)
+            {
+                StarLog.Warn($"[更新] 更新后取说明异常（按没拿到处理）：{ex.GetType().Name} {ex.Message}");
+                probe = new ReleaseProbeResult(ReleaseProbeStatus.NotReachable, null, ex.GetType().Name);
+            }
+
+            // 版本匹配守卫：远端最新＝本机这一版，正文说的才是"这一版"；远端又往前走了（或没问到），
+            // 拿到的正文说的就是别的版——冒充比空着更糟（UpdateReport.Notes 那条理由的同一面）。
+            if (probe.Release is { } release
+                && AppVersion.TryParse(release.Tag, out var remote)
+                && AppVersion.TryParse(local, out var current)
+                && AppVersion.Compare(remote, current) == 0)
+            {
+                var cleaned = ReleaseNotes.Clean(release.Body);
+                return new PostUpdateChangelog(local,
+                    cleaned is { } notes ? LocMessage.Of("common.rawValue", notes)
+                        : LocMessage.Of("upd.changelog.noNotes"),
+                    UpdatePolicy.ReleasePageUrl(repository, release.Tag));
+            }
+
+            StarLog.Info($"[更新] 没拿到这一版（{local}）的说明，卡上只给发布页");
+            return new PostUpdateChangelog(local, LocMessage.Of("upd.changelog.fetchMissed"),
+                UpdatePolicy.ReleasePageUrl(repository, local));
+        }
+        finally
+        {
+            StampLastRunVersion(local);
+        }
+    }
+
+    /// <summary>把"这一场跑的是哪一版"盖进档里（值没变就不写盘）。</summary>
+    private void StampLastRunVersion(string versionText)
+    {
+        lock (_stateGate)
+        {
+            var current = _state.Read();
+            if (string.Equals(current.LastRunVersion, versionText, StringComparison.Ordinal)) return;
+            _state.Write(current with { LastRunVersion = versionText });
+        }
+    }
 }

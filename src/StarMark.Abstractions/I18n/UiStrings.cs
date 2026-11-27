@@ -317,6 +317,8 @@ public static class UiStrings
         // 这一句是"自动那一发"与"点下去那一发"的边界，两列都必须把两件事分开说：
         // 只有 UpdateApplyWiringGateTests 那两格钉着它不许变回全局承诺（"本程序不做下载安装"）。
         new Entry("settings.general.autoCheckNote", "自动那一发只问发布了哪一版；只有点「立即更新」才真的下载并替换", "The automatic pass only asks which version was published; only “Update now” downloads and replaces files", "自動の回は公開バージョンを確認するだけ。「今すぐ更新」を押して初めてダウンロードと差し替えが行われます"),
+        // 片280：与上面那颗「自动检查」是两件事——那颗管"要不要自己上网问"，这颗管"更新完了要不要出声说改了什么"。
+        new Entry("settings.general.showChangelog", "更新完成后，自动展示这一版的更新说明", "Automatically show what changed after an update", "更新完了後、この版の更新内容を自動で表示"),
                     new Entry("settings.general.checkNow", "立即检查", "Check now", "今すぐチェック"),
         // 那颗按钮在跑的那一段换的是<b>键</b>不是字（见 SettingsPage.Updates.cs 卷首）：
         // 写死的字面量会在换语言那一刻被重贴成"空闲"那句，等于界面替一件还在跑的事改口。
@@ -2126,6 +2128,11 @@ public static class UiStrings
         new Entry("rss.src.stillThere", "，仍然摆着缓存里的 {0} 条", ", still showing {0} cached entries", "。キャッシュの {0} 件を引き続き表示中"),
         new Entry("upd.card.checkTitle", "检查更新", "Update check", "更新の確認"),
         new Entry("upd.card.newVersionTitle", "发现新版本", "New version found", "新しいバージョンが見つかりました"),
+        // 片280：更新完成之后的那张说明卡。标题带版本号；后两颗是"正文没到手"的两种说法——
+        // "对方没写"与"没问到"（离线／远端又往前走了）不是一件事，不说成一句。
+        new Entry("upd.changelog.title", "已更新到 {0}", "Updated to {0}", "{0} に更新しました"),
+        new Entry("upd.changelog.noNotes", "这一版没有写更新说明", "This release has no release notes", "このリリースには更新内容の記載がありません"),
+        new Entry("upd.changelog.fetchMissed", "这一版的更新说明没有拿到，去发布页看", "Couldn't fetch the notes for this release — see the release page", "この版の更新内容を取得できませんでした。リリースページをご覧ください"),
         new Entry("upd.verdict.newer", "有新版本 {0}（本机 {1}）", "New version available: {0} (local {1})", "新しいバージョンがあります {0}（ローカル {1}）"),
         new Entry("upd.verdict.upToDate", "已经是最新（{0}）", "Already up to date ({0})", "すでに最新です（{0}）"),
         new Entry("upd.verdict.localAhead", "本机版本 {0} 比远端 {1} 更新（这通常是预发布或自己编的版）", "Local version {0} is newer than remote {1} (usually a prerelease or a local build)", "ローカルのバージョン {0} はリモート {1} より新しくなっています（プレリリースか自分でビルドしたものの可能性）"),

@@ -421,6 +421,140 @@ public sealed class UpdateCheckTests
         => Assert.Null(new UpdateService(new FakeSource(Found("x")), new FakeStore(),
             localVersion: () => "1.0.0").LastReport());
 
+    // ===== 更新完成后的说明卡（片280）=====
+
+    /// <summary>
+    /// 判据三道闸各挡一种错弹：开关关着、上一场没记过（新装不是"更新"，存量用户也不补弹——
+    /// 补弹只能弹错版，谁也不知道他上一版是什么）、这一场与上一场是同一版（重启不是更新）。
+    /// 读不懂的版本号一律不猜：猜"换过版"会为一次没发生的更新弹卡，猜"没换过"会吞掉一次真更新。
+    /// </summary>
+    [Theory]
+    [InlineData(false, "1.0.8", "1.0.9", false)]    // 开关关着 ⇒ 不弹（他要的是安静，不是少一张卡）
+    [InlineData(true, null, "1.0.9", false)]        // 第一次见面不是"更新"（新装）
+    [InlineData(true, "1.0.9", "1.0.9", false)]     // 同一版 ⇒ 重启不是更新
+    [InlineData(true, "1.0.8", "1.0.9", true)]      // 上一场是另一版 ⇒ 弹
+    [InlineData(true, "junk", "1.0.9", false)]      // 上一场读不懂 ⇒ 不猜
+    [InlineData(true, "1.0.8", "junk", false)]      // 这一场读不懂 ⇒ 不猜
+    public void TheCardOnlyComesAfterARealUpdate(bool enabled, string? lastRun, string? current, bool expected)
+        => Assert.Equal(expected, UpdatePolicy.ShouldShowChangelog(enabled, lastRun, current));
+
+    [Fact]
+    public async Task AFirstRunIsSilentButStillStampsItsVersion()
+    {
+        var store = new FakeStore();
+        var source = new FakeSource(Found("v1.0.9"));
+        var service = new UpdateService(source, store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        Assert.Null(await service.ChangelogAfterUpdateAsync());
+        Assert.Equal(0, source.Calls);                        // 第一次见面不弹、也不上网问
+        Assert.Equal("1.0.9", store.Latest.LastRunVersion);   // 但章要盖：它是下一次"是不是刚更新过"的基线
+    }
+
+    [Fact]
+    public async Task TheCardAfterAnUpdateCarriesTheCleanedNotesOfThatVersion()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8"));
+        var service = new UpdateService(
+            new FakeSource(new ReleaseProbeResult(ReleaseProbeStatus.Found,
+                new RemoteRelease("v1.0.9", null, false, null, "## 修好了\n- 崩溃那刀"))), store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        var card = await service.ChangelogAfterUpdateAsync();
+
+        Assert.NotNull(card);
+        Assert.Equal("1.0.9", card!.VersionText);
+        Assert.Equal("common.rawValue", card.Body.Key);       // 机器文本走那道数据门，原样交
+        Assert.Contains("修好了", card.Body.Render(), StringComparison.Ordinal);   // 收敛只剥记号，不剥内容
+        Assert.DoesNotContain("##", card.Body.Render(), StringComparison.Ordinal);
+        Assert.Equal("https://github.com/AH23333/StarMarkDesktop/releases/tag/v1.0.9", card.PageUrl);
+        Assert.Equal("1.0.9", store.Latest.LastRunVersion);   // 问到了也要盖章
+    }
+
+    [Fact]
+    public async Task TheCardFallsBackToTheTableWhenTheReleaseWroteNoNotes()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8"));
+        var service = new UpdateService(new FakeSource(Found("v1.0.9")), store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        var card = await service.ChangelogAfterUpdateAsync();
+
+        Assert.NotNull(card);
+        Assert.Equal("upd.changelog.noNotes", card!.Body.Key);   // "对方没写"与"没问到"不说成一句
+        Assert.Equal("https://github.com/AH23333/StarMarkDesktop/releases/tag/v1.0.9", card.PageUrl);
+    }
+
+    [Fact]
+    public async Task TheCardPointsAtTheLocalVersionWhenTheRemoteHasMovedOn()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8"));
+        // 远端最新已是 1.1.0：问到的正文说的会是别的版，冒充比空着更糟 ⇒ 只给"去发布页看"
+        var service = new UpdateService(new FakeSource(Found("v1.1.0")), store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        var card = await service.ChangelogAfterUpdateAsync();
+
+        Assert.NotNull(card);
+        Assert.Equal("upd.changelog.fetchMissed", card!.Body.Key);
+        Assert.Equal("https://github.com/AH23333/StarMarkDesktop/releases/tag/1.0.9", card.PageUrl);
+        Assert.Equal("1.0.9", store.Latest.LastRunVersion);
+    }
+
+    [Fact]
+    public async Task ADisabledCardStillKeepsTheBooks()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8", ShowChangelogEnabled: false));
+        var source = new FakeSource(Found("v1.0.9"));
+        var service = new UpdateService(source, store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        Assert.Null(await service.ChangelogAfterUpdateAsync());
+        Assert.Equal(0, source.Calls);                        // 关的是"弹"与"问"，不是只关"弹"
+        Assert.Equal("1.0.9", store.Latest.LastRunVersion);   // 记账不停：哪天打开开关，收到的仍是刚装的那一版
+    }
+
+    [Fact]
+    public async Task APlainRestartNeitherAsksNorWrites()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.9"));
+        var source = new FakeSource(Found("v1.0.9"));
+        var service = new UpdateService(source, store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        Assert.Null(await service.ChangelogAfterUpdateAsync());
+        Assert.Equal(0, source.Calls);
+        Assert.Equal(0, store.Writes);                        // 同版连章都不用盖（值没变不写盘）
+    }
+
+    [Fact]
+    public async Task AnUnreadableLocalVersionStampsNothing()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8"));
+        var service = new UpdateService(new FakeSource(Found("v1.0.9")), store,
+            localVersion: () => "nightly-20261127", environment: () => null, now: () => Noon);
+
+        Assert.Null(await service.ChangelogAfterUpdateAsync());
+        Assert.Equal("1.0.8", store.Latest.LastRunVersion);   // 无从判"是不是刚更新过"，也就无从盖起
+        Assert.Equal(0, store.Writes);
+    }
+
+    [Fact]
+    public async Task AThrowingSourceDegradesToTheReleasePageCard()
+    {
+        var store = new FakeStore(new UpdateState(true, LastRunVersion: "1.0.8"));
+        var source = new ThrowingSource();
+        var service = new UpdateService(source, store,
+            localVersion: () => "1.0.9", environment: () => null, now: () => Noon);
+
+        var card = await service.ChangelogAfterUpdateAsync();   // 异常折成"没拿到"：这条链在池线程跑，不许上抛
+
+        Assert.NotNull(card);
+        Assert.Equal("upd.changelog.fetchMissed", card!.Body.Key);
+        Assert.Equal("https://github.com/AH23333/StarMarkDesktop/releases/tag/1.0.9", card.PageUrl);
+        Assert.Equal("1.0.9", store.Latest.LastRunVersion);
+    }
+
     // ===== 分层与边界 =====
 
     /// <summary>版本解析只读装配属性一处，且不许掺进任何互操作（层次闸门同口径）。</summary>
@@ -549,9 +683,10 @@ public sealed class UpdateCheckTests
     // ===== 分层：宿主在 UI，判据在 Core，界面不另写一句措辞 =====
 
     /// <summary>
-    /// 落盘那五格的<b>键名只许各出现一次</b>（DTO 那格声明 + 读 + 写）：多一处就是多一个编辑入口，
+    /// 落盘那几格的<b>键名只许各出现一次</b>（DTO 那格声明 + 读 + 写）：多一处就是多一个编辑入口，
     /// 而"同一个设置两处写"是本仓反复判过的缺陷（EachSettingHasExactlyOneEditor 同一条口径，
     /// 只是这一组的宿主是 Core 的那个 record，不是散着的 28 项）。
+    /// 片280 起这一组从五格变七格：新两格（说明卡开关／上一场跑的版本）同一条规矩。
     /// </summary>
     [Theory]
     [InlineData("UpdateAutoCheckEnabled")]
@@ -559,6 +694,8 @@ public sealed class UpdateCheckTests
     [InlineData("UpdateLastVerdict")]
     [InlineData("UpdateLastRemoteTag")]
     [InlineData("UpdateAnnouncedTag")]
+    [InlineData("UpdateShowChangelogEnabled")]
+    [InlineData("UpdateLastRunVersion")]
     public void EachPersistedUpdateKeyHasExactlyOneFieldOneReaderOneWriter(string key)
     {
         var store = Code(ReadRepoPartials("src/StarMark.UI/Helpers/SettingsStore.cs"));
@@ -601,6 +738,17 @@ public sealed class UpdateCheckTests
             Calls++;
             await _gate.Task;
             return result;
+        }
+    }
+
+    /// <summary>片280：说明卡那条链的兜底证人——抓取器整个炸掉也不许把异常抛回池线程。</summary>
+    private sealed class ThrowingSource : IReleaseSource
+    {
+        public int Calls;
+        public Task<ReleaseProbeResult> ProbeAsync(string repository, CancellationToken ct = default)
+        {
+            Calls++;
+            throw new InvalidOperationException("boom");
         }
     }
 

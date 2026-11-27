@@ -345,6 +345,20 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// 单独留下它没有意义，所以两侧同生同死（见 <c>UpdateService.RunAsync</c> 那个写入块）。
         /// </summary>
         public long? UpdateLastPublishedUnix { get; set; }
+
+        /// <summary>
+        /// 「更新完成后弹说明卡」那颗开关（片280，默认开）。它只管"弹不弹"，<b>记账不停</b>：
+        /// 关着的时候 <see cref="UpdateLastRunVersion"/> 那一格照写——否则他哪天把开关打开，
+        /// 收到的是一张迟到好几版的卡，而正文说的早已不是他刚装的那一版。
+        /// </summary>
+        public bool? UpdateShowChangelogEnabled { get; set; }
+
+        /// <summary>
+        /// 上一场跑的是哪一版（片280）。它是"这次启动是不是刚更新过"那条比对的基线：
+        /// 与本机版本不同 ⇒ 更新过了，按开关弹说明卡。<b>只记本机事实，不记任何远端文本</b>
+        /// （与上面六格同一条边界）；值由程序在每一场收尾时盖章（值不同才写），它不是设置，是账。
+        /// </summary>
+        public string? UpdateLastRunVersion { get; set; }
     }
 
     public SettingsStore(string? path = null) => _path = path ?? ResolveSettingsPath();
