@@ -187,6 +187,7 @@ public sealed partial class WidgetWindow : Window
         StartupProfile.Measure($"组件内容构建 {_kind}", BuildContent, logWhenMs: 10);
         WireChrome();
         SetupQuickLaunchDrop();
+        SetupClipboardGridDrop();
 
         // 内容里有一部分是**异步**才建出来的（天气指标格、速览的常看按钮、列表项容器），
         // 首次套用时它们还不存在。这里补一条节流扫描，让晚到的文本也能拿到当前缩放系数。

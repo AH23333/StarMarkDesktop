@@ -150,4 +150,66 @@ public sealed class ClipboardCaptureTests : IDisposable
         await Assert.ThrowsAsync<ArgumentNullException>(
             () => ClipboardCapture.CaptureAsync(_repo, null!, "x", ClipboardEntry.FormatText, "chrome", Ms()));
     }
+
+    // ── ✅P-306：拖进剪贴板格的两口。显式动作：不走去抖/回声（那是"系统广播"那一路的防重），
+    // 只过同一道策略门（过短、敏感形状）；前台排除清单不适用（拖进来是用户亲手指定要记的那一下）。──
+
+    private Task<Item?> ImportText(string? raw)
+        => ClipboardCapture.ImportDroppedTextAsync(_repo, raw);
+
+    private Task<Item?> ImportFiles(params string[] paths)
+        => ClipboardCapture.ImportDroppedFilesAsync(_repo, paths);
+
+    [Fact]
+    public async Task DroppedText_IsRecordedWithoutDedupeOrEcho()
+    {
+        var first = await ImportText("拖进剪贴板格的文本");
+        Assert.NotNull(first);
+        Assert.Equal(ClipboardEntry.FormatText, ClipboardEntry.Format(first!));
+        Assert.Equal(1, await Count());
+
+        // 再拖同一段＝显式再来一次：不去重，copy count 累加、仍然只有一条历史
+        // （与采集"出连发窗后再复制"同口径——upsert by (source, source_id)，不是又一行）。
+        var again = await ImportText("拖进剪贴板格的文本");
+        Assert.NotNull(again);
+        Assert.Equal(2, ClipboardEntry.CopyCount(again!));
+        Assert.Equal(1, await Count());
+    }
+
+    [Fact]
+    public async Task DroppedText_EmptyShortOrSensitiveShapes_Rejected()
+    {
+        Assert.Null(await ImportText(null));
+        Assert.Null(await ImportText(""));
+        Assert.Null(await ImportText("x"));
+        Assert.Null(await ImportText("-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA"));
+        Assert.Equal(0, await Count());
+    }
+
+    [Fact]
+    public async Task DroppedFiles_JoinPathsAsTheSameShapeAsACapture()
+    {
+        var item = await ImportFiles("C:\\a.txt", "D:\\b.docx");
+
+        Assert.NotNull(item);
+        Assert.Equal(ClipboardEntry.FormatFiles, ClipboardEntry.Format(item!));
+        Assert.Equal("C:\\a.txt…", item!.Title);           // 与真实 CF_HDROP 采集同一形状：标题＝首行，正文＝全部路径
+        Assert.Equal("C:\\a.txt\nD:\\b.docx", item.Description);
+    }
+
+    [Fact]
+    public async Task DroppedFiles_WithoutUsablePaths_Rejected()
+    {
+        Assert.Null(await ImportFiles());
+        Assert.Null(await ImportFiles("", "  "));
+        Assert.Equal(0, await Count());
+    }
+
+    [Fact]
+    public async Task Import_NullRepoOrPaths_ThrowsInsteadOfSwallowing()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(() => ClipboardCapture.ImportDroppedTextAsync(null!, "x"));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => ClipboardCapture.ImportDroppedFilesAsync(null!, new[] { "C:\\a" }));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => ClipboardCapture.ImportDroppedFilesAsync(_repo, null!));
+    }
 }

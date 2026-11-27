@@ -2865,6 +2865,14 @@ public static class UiStrings
         new Entry("widget.drop.receipt.missing", "这个快捷启动实例已经不在了，一条都没加进去", "This Quick launch instance no longer exists; nothing was added", "このクイック起動インスタンスはもう存在しないため、何も追加されませんでした"),
         new Entry("widget.drop.receipt.noPaths", "拖入的 {0} 项都没有可用路径", "None of the {0} dropped items had a usable path", "ドロップされた {0} 項目には有効なパスがありません"),
         new Entry("widget.drop.receipt.failed", "添加失败：{0}", "Failed to add: {0}", "追加に失敗しました：{0}"),
+        // ✅P-306：拖进剪贴板格（文件/文本拖入＝记一条历史，那条历史立刻可以再贴出）。
+        // 「没有可用路径」那一句⛔ 不另立键：与 widget.drop.receipt.noPaths 同一句，一句一行多主（loadFailed 先例）。
+        new Entry("widget.clipdrop.hint", "松开以记入剪贴板历史", "Release to record in Clipboard history", "ドロップしてクリップボード履歴に記録"),
+        new Entry("widget.clipdrop.caption", "记入剪贴板历史", "Record in Clipboard history", "クリップボード履歴に記録"),
+        new Entry("widget.clipdrop.receipt.text", "已记入剪贴板历史", "Recorded in Clipboard history", "クリップボード履歴に記録しました"),
+        new Entry("widget.clipdrop.receipt.files", "已记入剪贴板历史（共 {0} 个路径）", "Recorded the {0} dropped paths in Clipboard history", "クリップボード履歴に記録しました（{0} 件のパス）"),
+        new Entry("widget.clipdrop.receipt.rejected", "这段内容没有记入历史：过短或属于敏感形状", "Not recorded: too short or a sensitive shape", "記録しませんでした：短すぎるか機密性のある内容です"),
+        new Entry("widget.clipdrop.receipt.failed", "记入剪贴板历史失败：{0}", "Failed to record in Clipboard history: {0}", "クリップボード履歴への記録に失敗しました：{0}"),
 
         // ===== 护眼 · 休息提醒整节（批次 WI-37-B）=====
         // 这一族过去住在 Core：`EyeRestPolicy.IntervalLabels`／`NoticeLabels`／`NoticeHint` 直接拼中文成品串，

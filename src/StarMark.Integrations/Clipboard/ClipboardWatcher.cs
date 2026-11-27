@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -41,6 +42,48 @@ public static class ClipboardCapture
         var draft = ClipboardEntry.Build(text, foregroundApp, format,
             DateTimeOffset.FromUnixTimeMilliseconds(nowMs));
         return await repo.RecordClipboardAsync(draft, ct, maxEntries: textMaxEntries);
+    }
+
+    /// <summary>
+    /// ✅P-306：拖进剪贴板格的<b>文本</b>那一口。拖进来是显式动作：不走去抖/回声
+    /// （那是"系统广播"那一路的防重），只过同一道策略门（过短、敏感形状）——
+    /// 安全闸门集中在策略层，这条显式路没有绕过它的能力。
+    /// 前台排除清单不适用（<paramref name="foregroundApp"/> 一侧固定传 null）：
+    /// 密码管理器排除防的是"后台顺手记"，拖进来是用户亲手指定要记的那一下。
+    /// 返回被记录/更新的条目；被门挡掉（空、过短、敏感形状）时返回 null。
+    /// </summary>
+    public static async Task<Item?> ImportDroppedTextAsync(
+        IItemRepository repo, string? rawText,
+        int maxEntries = ClipboardPolicy.MaxEntries, CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (!ClipboardPolicy.ShouldRecord(rawText, null, out var text)) return null;
+
+        var draft = ClipboardEntry.Build(text, null, ClipboardEntry.FormatText, DateTimeOffset.UtcNow);
+        return await repo.RecordClipboardAsync(draft, ct, maxEntries: maxEntries);
+    }
+
+    /// <summary>
+    /// ✅P-306：拖进剪贴板格的<b>文件</b>那一口。路径按采集帧同一口径 join("\n")——
+    /// 首行＝标题、正文＝全部路径，与真实 CF_HDROP 采集完全同形：两条进路在库里只是同一种历史，
+    /// 没有"拖的"与"复的"两副面孔。返回被记录/更新的条目；
+    /// 一条可用路径都没有、或被策略门挡掉时返回 null。
+    /// </summary>
+    public static async Task<Item?> ImportDroppedFilesAsync(
+        IItemRepository repo, IReadOnlyList<string> paths,
+        int maxEntries = ClipboardPolicy.MaxEntries, CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (paths is null) throw new ArgumentNullException(nameof(paths));
+
+        var usable = paths.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (usable.Count == 0) return null;
+
+        var raw = string.Join("\n", usable);
+        if (!ClipboardPolicy.ShouldRecord(raw, null, out var text)) return null;
+
+        var draft = ClipboardEntry.Build(text, null, ClipboardEntry.FormatFiles, DateTimeOffset.UtcNow);
+        return await repo.RecordClipboardAsync(draft, ct, maxEntries: maxEntries);
     }
 
     /// <summary>
