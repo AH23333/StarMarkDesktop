@@ -1372,3 +1372,9 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 自研 R2R v16 符号化（r2rmap_276.py・零现成工具）：NI 头→15 节表→MethodDefEntryPoints＝NativeArray（nativeformatreader.h 变长整数＋块位图树）→RUNTIME_FUNCTION[id].BeginAddress＋#~ 表解名——8,262/8,737 方法映射・rf 9,352 条覆盖 [0x9f810,0x1e4543)；×6「0x37fc04 嵌套帧」翻案＝#Blob 流签名指针栈残留（新坑 #1193 栈扫描假帧・#1194 hex 量级误读）。
 - 验证：零产品码零测试码・docgates 26/26（落账后）・计数器 **303/302/1 VERDICT OK（开放 P-302）**・全量 7078/7078 维持不重跑。
 - 下一刀候选：①P-302 裁决（云移位 UX 修复＋TagsPage 延迟补齐＋崩溃缓解〔退出链/窗口销毁顺序〕是否动产品码——待用户）；②「关主窗退出链」真鼠标复现候选（用户在用机器・待窗口期）；③真机观感（app 重开看标签栏/筛选・随用户）；④v1.0.8 发版（AI 稳健性链已装・发布说明提授权换轨）；⑤C 盘清理报备（余量 0.2GB・根治归用户）。
+## 一百五十九、片277：P-302 甲执行刀——「选标签后无法清除」根修（标签页常驻状态条・三态零漂移）＋TagsPage TryEnqueue 延迟补齐＋TagChipDeferralGateTests 三页同款判例——全量 7082/7082 新基线
+- 根修（甲①）：TagsPage Row 0 筛选栏 Visibility 折叠＝云移位病根（30-35px・点偏落空）→ 常驻状态条（槽位恒占・MinHeight=36・chips/空态提示同槽切换・EmptyHintText 上移入槽・Invert 转换器照旧）；repro_277.ps1 真鼠标 6/6：select/chip 清除/清除键三态漂移全 0px・chip ✕ 与清除键真清除验证・零崩溃。
+- 延迟补齐（甲②）：RemoveFilterChip_Click/ClearFilters_Click → DispatcherQueue.GetForCurrentThread()?.TryEnqueue 延迟（坑 #36 同族・对照 SearchPage/FolderTreePage 同款）＋补 using Microsoft.UI.Dispatching（缺它 CS0176）。
+- 新判例：TagChipDeferralGateTests 4 判例（三页同款对照 Theory×3＋状态条形状 Fact×1）。
+- 验证：全量 7082/7082 新基线（7078＋4）・docgates 26/26（落账后）・计数器 303/302/1 VERDICT OK（开放 P-302）・新坑 #1195（UIA 真鼠标三坑）。
+- 下一刀候选：①P-302 乙（MainWindow 退出链/窗口销毁顺序加固・崩溃缓解——用户已裁决依次＝甲后开乙）；②「关主窗退出链」真鼠标复现（用户在用机器・待窗口期）；③v1.0.8 发版（AI 稳健性链已装・GPL-3.0 换轨已落）。

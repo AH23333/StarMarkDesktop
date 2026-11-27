@@ -1,5 +1,6 @@
 #nullable enable
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
@@ -61,15 +62,22 @@ public sealed partial class TagsPage : Page
             _ = ViewModel.ToggleTagCommand.ExecuteAsync(tagName);
     }
 
-    private void ClearFilters_Click(object sender, RoutedEventArgs e)
-    {
-        _ = ViewModel.ClearFiltersCommand.ExecuteAsync(null);
-    }
+    // ───────── 标签筛选 chips（数据来自全局 Main.GlobalTagFilters）─────────
 
+    /// <summary>移除一枚已选标签。延迟到 UI 消息队列末尾执行——直接在此 Click 内同步从
+    /// ItemsRepeater 的 ItemsSource（GlobalTagFilters）移除会触发 WinUI 3 重入崩溃
+    /// （被点的元素仍在视觉树中正被测量，且移除最后一枚 chip 会让父容器折叠）——
+    /// 与 SearchPage/FolderTreePage 同款延迟（坑 #36 同族）。</summary>
     private void RemoveFilterChip_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button { Tag: string tagName })
-            _ = ViewModel.ToggleTagCommand.ExecuteAsync(tagName);
+            DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => _ = ViewModel.ToggleTagCommand.ExecuteAsync(tagName));
+    }
+
+    /// <summary>一键清除全部标签筛选，同一颗延迟门（同上）。</summary>
+    private void ClearFilters_Click(object sender, RoutedEventArgs e)
+    {
+        DispatcherQueue.GetForCurrentThread()?.TryEnqueue(() => _ = ViewModel.ClearFiltersCommand.ExecuteAsync(null));
     }
 
     private void Card_OpenRequested(object sender, long itemId)

@@ -22,38 +22,43 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 标签筛选栏：当前生效的标签以 chip 展示，可单个 ✕ 移除或一键清除（对齐扩展 tag-banner） -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8"
-                    Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}"
-                    Margin="0,0,0,10">
-            <TextBlock i18n:LocText.Key="filter.tagTitle" FontSize="11" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
-            <ItemsRepeater ItemsSource="{x:Bind ViewModel.ActiveFilterChips, Mode=OneWay}">
-                <ItemsRepeater.Layout>
-                    <StackLayout Orientation="Horizontal" Spacing="4"/>
-                </ItemsRepeater.Layout>
-                <ItemsRepeater.ItemTemplate>
-                    <DataTemplate x:DataType="viewModels:TagFilterChip">
-                        <Button Click="RemoveFilterChip_Click" Tag="{x:Bind Name}"
-                                Padding="8,2" CornerRadius="10" BorderThickness="0"
-                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                i18n:LocText.ToolTipKey="filter.tagRemoveTip">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="{x:Bind Name}" FontSize="11"
-                                           Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
-                                <TextBlock Text="✕" FontSize="8" Opacity="0.55" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </DataTemplate>
-                </ItemsRepeater.ItemTemplate>
-            </ItemsRepeater>
-            <Button i18n:LocText.Key="filter.tagClear" Click="ClearFilters_Click"
-                    Style="{StaticResource SecondaryButton}" Padding="6,2"/>
-        </StackPanel>
+        <!-- 常驻状态条（P-302 甲）：Row 0 槽位恒占、高度钉死——筛选栏出现/消失时标签云点击目标不漂移。
+             有筛选：chips 可单 ✕ 移除或一键清除（对齐扩展 tag-banner）；无筛选：同一槽显空态提示。 -->
+        <Grid Grid.Row="0" MinHeight="36" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                        Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}}">
+                <TextBlock i18n:LocText.Key="filter.tagTitle" FontSize="11" Style="{StaticResource MutedText}" VerticalAlignment="Center"/>
+                <ItemsRepeater ItemsSource="{x:Bind ViewModel.ActiveFilterChips, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Orientation="Horizontal" Spacing="4"/>
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="viewModels:TagFilterChip">
+                            <Button Click="RemoveFilterChip_Click" Tag="{x:Bind Name}"
+                                    Padding="8,2" CornerRadius="10" BorderThickness="0"
+                                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                    i18n:LocText.ToolTipKey="filter.tagRemoveTip">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{x:Bind Name}" FontSize="11"
+                                               Foreground="{x:Bind Name, Converter={StaticResource ContainedTagColor}}"/>
+                                    <TextBlock Text="✕" FontSize="8" Opacity="0.55" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+                <Button i18n:LocText.Key="filter.tagClear" Click="ClearFilters_Click"
+                        Style="{StaticResource SecondaryButton}" Padding="6,2" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+        </Grid>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- 标签云：常显，可连续多选（对齐扩展侧栏 tag 列表）。
-                     选中标签后不隐藏，仅在其下方追加「筛选结果」；顶部 chips 同步显示已选。 -->
+                     选中标签后不隐藏；顶部状态条同步显示已选，槽位恒占＝云不漂移。 -->
                 <ItemsRepeater ItemsSource="{x:Bind ViewModel.Tags, Mode=OneWay}">
                     <ItemsRepeater.Layout>
                         <UniformGridLayout Orientation="Horizontal"
@@ -78,13 +83,9 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
 
-                <!-- 空态提示仅在浏览态（未选标签）显示：
-                     否则空文本 + 40/16 边距会在筛选结果上方留出大片空白 -->
-                <TextBlock x:Name="EmptyHintText" Style="{StaticResource MutedText}"
-                           HorizontalAlignment="Center" Margin="0,40,0,16"
-                           Visibility="{x:Bind ViewModel.HasActiveFilter, Mode=OneWay, Converter={StaticResource BoolToVis}, ConverterParameter=Invert}"/>
+                <!-- 空态提示住顶部状态条（与 chips 同一颗恒高槽・P-302 甲）：住云下方会随内容滚走且占大片留白。 -->
 
-                <!-- 标签页是「选择标签区域」：选中后顶部筛选条常显已选标签，
+                <!-- 标签页是「选择标签区域」：选中后顶部状态条常显已选标签，
                      筛选结果在导航栏「文件夹」查看（对齐扩展侧栏 tag 列表 + 树）。 -->
             </StackPanel>
         </ScrollViewer>
