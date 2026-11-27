@@ -1411,3 +1411,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 深度测试（真机・Debug exe・2026-11-27・用户在场配合）：链②遮挡全绿——检测 ≤2s（12 颗标遮挡计宽限）・5:00 整判（6 收 6 不收・remaining 再排 +3 秒那轮恰好出现）・私有内存 341→185 MB（约 26 MB/颗）・撤遮挡 ≤4s 分帧复原 6 颗・12 颗全回存档位・widgets.json 整轮零漂移（fc 字节同）・托盘退出干净；链①更新说明卡复验（片280 feature）——首见不弹/同版不弹/换版弹卡（档改 1.0.6→+10s 整「已更新到 1.0.7」・版本匹配守卫用真发布说明）/记账不停（1.0.6→1.0.7）；settings 三件套备份/fc/恢复全 SAME（坑 #1196 口径）。
 - 验证：build 0 错误・docgates 26/26・定向 8 类 158/158・全量 **7157/7157 新基线**（7101＋56 恰对账：34＋11＋11・正本 bin/WI37C/full_281.txt）・census 19/19 保平（diffcensus281.txt・新落空 1 颗三组换号〔bump_pointers_281.py 锚内容断言全过〕）・计数器 304/304/0（落账后 305/305/0）。
 - 下一刀候选：①「关主窗退出链」真鼠标复现（待用户机器窗口期・验证片278 缓解效果）；②v1.0.8 发版（用户裁决暂缓中——遮挡收窗＋更新说明卡链＋AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）；③自动下载＋计费网络（v5 候选②・随发版节奏议）。
+
+## 一百六十四、片281 后续：「关主窗退出链」真鼠标复现 PASS——P-302 全收口（乙缓解真机验证）＋遮挡链野外自证・零码
+- 用户拍板「现在就做」：真机 Debug exe（三件套临时翻 MinimizeToTray=false＋WidgetsLoadOnStartup=true・备份/还原 fc SAME）→12 颗组件窗全在场（原始崩溃条件）→真鼠标点 ✕（AttachThreadInput 抢前台＋WindowFromPoint 点位安全门＋GetCursorPos 到位复核）→ExitApp 链 **0.37 秒干净退 code 0**（「退出：开始收尾」→「进程退出」）・零 dump・零 WER・零事件日志错误——乙缓解（双关闭路摘 AppWindow 订阅＋ExitApp 150ms 泵）真机过关；P-302 至此全收口（根因仍在 WinAppSDK 环境层・报告 §663 定案不变）。
+- 实证：用户 12 颗组件 widgets.json 逐实例查证全部 Topmost=true（z 序转储 [TOPMOST,TOOL] ×12 一致・非产品 bug）・遮挡链野外自证（本轮回退网格布局・用户前台最大化 Zed 时 1 秒内 12 颗齐标「所在屏被整屏窗口盖住，开始计宽限」）——「z 序不模拟」既定立场在 topmost 组件上同样成立。
+- 仪器课三笔：PS `@(a + b - 23, c)` 数组元素含算术不加括号运行期炸「Object[] 不包含 op_Subtraction」（词法 Tokenize 看不出分组・每元素加括号）；委托回调 pipeline 输出被吞二犯（EnumWindows z 序转储全丢——收集进 List 回来再印）；SetCursorPos 越屏静默钳制（点前 GetCursorPos 复核到位否则中止）。
+- 复现器械：bin/WI37C/repro_exitchain_281.ps1（gitignored・5 迭代）——三件套字节保真翻设置（BOM 保持）・DWMWA_CAPTION_BUTTON_BOUNDS 关闭键点位・真鼠标注入・全链日志抽查。
+- 验证：零产品码零测试码（片276 零码先例）・基线 7157/7157 维持・docgates 26/26（落账后）・计数器 305/305/0 维持（无新 P）。
+- 下一刀候选更新：① v1.0.8 发版（用户暂缓中——遮挡收窗＋更新说明卡链＋AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐＋退出链真机验证完）；② 自动下载＋计费网络（v5 候选②・随发版节奏议）。
