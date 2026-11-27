@@ -1378,3 +1378,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 新判例：TagChipDeferralGateTests 4 判例（三页同款对照 Theory×3＋状态条形状 Fact×1）。
 - 验证：全量 7082/7082 新基线（7078＋4）・docgates 26/26（落账后）・计数器 303/302/1 VERDICT OK（开放 P-302）・新坑 #1195（UIA 真鼠标三坑）。
 - 下一刀候选：①P-302 乙（MainWindow 退出链/窗口销毁顺序加固・崩溃缓解——用户已裁决依次＝甲后开乙）；②「关主窗退出链」真鼠标复现（用户在用机器・待窗口期）；③v1.0.8 发版（AI 稳健性链已装・GPL-3.0 换轨已落）。
+
+## 一百六十、片278：P-302 乙执行刀——崩溃缓解（组件窗订阅双路摘除＋主窗退出链泵一拍 150ms）＋ExitChainHardeningGateTests 2 判例——真机关窗冒烟干净退 0・全量 7084/7084 新基线
+- 缓解①：WidgetWindow 双关闭路摘 AppWindow 事件订阅——匿名 lambda 升格命名（OnAppWindowVisibilityChanged/OnAppWindowClosing）＋DetachAppWindowEvents 三摘（Changed 两颗＋Closing 一颗）；Shutdown 路与 WidgetWindow_Closed 路都摘到（减订阅幂等安全・半死窗口不再被拆毁消息找到）。
+- 缓解②：MainWindow 的 ExitApp 在 ShutdownAllAsync 后、ApplyClipboardHistory 前插 await Task.Delay(150) 泵一拍（XAML 树仍完整时消化队列里的 AppWindow 拆毁消息）；根因在 WinAppSDK 环境层（零托管帧・报告 §663 定案）——产品码只能缓解不能根治。
+- 新判例：ExitChainHardeningGateTests 2 判例（双关闭路摘订阅形状＋ExitApp 顺序链）。
+- 真机冒烟：smoke_278.ps1（备份真机设置→翻 MinimizeToTray→WM_CLOSE 真关主窗→ExitApp 全链干净退 0・零新 dump→设置原字节还原 fc 比对无差异）；坑 #1196（真机 MinimizeToTray 开着时 ✕＝藏托盘・首跑「进程不退」误判一课）。
+- 验证：全量 7084/7084 新基线（7082＋2）・docgates 26/26・计数器 303/303/0 VERDICT OK（P-302 就地翻牌收口）。
+- 下一刀候选：①「关主窗退出链」真鼠标复现（用户在用机器・待窗口期・验证缓解效果）；②v1.0.8 发版（AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）。

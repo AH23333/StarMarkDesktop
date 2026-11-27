@@ -194,10 +194,8 @@ public sealed partial class WidgetWindow : Window
 
         // 可见性变化要驱动内容里的定时器（时钟/世界时钟…），但不必为此按类型分支：
         // 没实现 IWidgetTicker 的内容 _ticker 为 null，这一句本身就是空操作。
-        AppWindow.Changed += (_, e) =>
-        {
-            if (e.DidVisibilityChange) _ticker?.UpdateRunning(AppWindow.IsVisible);
-            };
+        // P-302 乙（片278）：匿名订阅升格命名——窗口关停时要能 -=（见 DetachAppWindowEvents）。
+        AppWindow.Changed += OnAppWindowVisibilityChanged;
 
         // 胶囊模式尺寸夹取：任何经由系统（原生边框 / Win+方向键吸附）的尺寸变更都夹回胶囊尺寸，
         // 与隐藏 grip + LockNativeResize 共同确保「收起为胶囊时禁止修改胶囊大小」。
@@ -209,6 +207,13 @@ public sealed partial class WidgetWindow : Window
             _expandedRect = new RectInt32((int)_config.X, (int)_config.Y, (int)_config.Width, (int)_config.Height);
 
         Closed += WidgetWindow_Closed;
+    }
+
+    /// <summary>可见性变化驱动内容里的定时器（时钟/世界时钟…）；没实现 IWidgetTicker 的内容 _ticker 为 null＝空操作。
+    /// P-302 乙（片278）：从构造器里的匿名 lambda 升格命名，窗口关停时可摘（见 DetachAppWindowEvents）。</summary>
+    private void OnAppWindowVisibilityChanged(object? sender, Microsoft.UI.Windowing.AppWindowChangedEventArgs e)
+    {
+        if (e.DidVisibilityChange) _ticker?.UpdateRunning(AppWindow.IsVisible);
     }
 
     /// <summary>窗口尺寸变化：重算圆角区域（任意模式都保持圆角窗口），并夹回胶囊尺寸（仅胶囊态、非悬停预览）。</summary>
@@ -343,7 +348,24 @@ public sealed partial class WidgetWindow : Window
         if (_shuttingDown) return;
         _shuttingDown = true;
         _ticker?.Stop();
+        // P-302 乙（片278）：关窗前先摘 AppWindow 事件订阅——不留半死窗口给拆毁消息找。
+        DetachAppWindowEvents();
         Close();
+    }
+
+    /// <summary>
+    /// 摘掉本窗口对 AppWindow 事件的全部订阅。P-302 乙（片278）——0xc000027b 定案（片276）：
+    /// 崩溃＝主线程 dispatcher 泵处理 AppWindow 相关 CoreMessaging 消息内部 E_FAIL×2
+    /// （stowed fail-fast・零托管帧零 XAML 控件帧＝环境层 WinAppSDK），时序＝用户刚关完 12 组件窗后 55 秒。
+    /// 根因在框架层，产品码只能缓解：订阅留着＝已关掉的窗口仍会被 AppWindow 的拆毁消息找到，
+    /// 且匿名委托把 Window/AppWindow 一对一起钉在内存里等消息。关停（Shutdown）与真关闭（Closed）
+    /// 两条路都摘——无论哪条路进来，半死窗口都不再被找得到。
+    /// </summary>
+    private void DetachAppWindowEvents()
+    {
+        AppWindow.Changed -= OnAppWindowVisibilityChanged;
+        AppWindow.Changed -= OnAppWindowChanged;
+        AppWindow.Closing -= OnAppWindowClosing;
     }
 
     // ───────────────────────── 内容构建 ─────────────────────────

@@ -73,14 +73,19 @@ public sealed partial class WidgetWindow
             AddResizeGrips();
         }
 
-        AppWindow.Closing += (_, e) =>
-        {
-            if (_shuttingDown) return;
-            // 非代码主动关闭（标题栏已移除，正常不会触发）按“移除组件”处理；
-            // 延迟到回调返回后执行，避免在 Closing 事件内重入 Close
-            e.Cancel = true;
-            DispatcherQueue.TryEnqueue(() => { var task = _manager.RemoveAsync(_instanceId); });
-        };
+        // 非代码主动关闭（标题栏已移除，正常不会触发）按「移除组件」处理；
+        // 延迟到回调返回后执行，避免在 Closing 事件内重入 Close。
+        // P-302 乙（片278）：匿名 lambda 升格命名——窗口关停时要能 -=（见 DetachAppWindowEvents）。
+        AppWindow.Closing += OnAppWindowClosing;
+    }
+
+    /// <summary>非代码主动关闭按「移除组件」处理。P-302 乙：从 WireChrome 里的匿名 lambda 升格命名，
+    /// DetachAppWindowEvents 摘的就是这一颗。</summary>
+    private void OnAppWindowClosing(Microsoft.UI.Windowing.AppWindow sender, Microsoft.UI.Windowing.AppWindowClosingEventArgs e)
+    {
+        if (_shuttingDown) return;
+        e.Cancel = true;
+        DispatcherQueue.TryEnqueue(() => { var task = _manager.RemoveAsync(_instanceId); });
     }
 
     private void PinButton_Click(object sender, RoutedEventArgs e) => TogglePin();
@@ -461,6 +466,8 @@ public sealed partial class WidgetWindow
 
     private void WidgetWindow_Closed(object sender, WindowEventArgs args)
     {
+        // P-302 乙（片278）：先把 AppWindow 事件订阅摘干净——不走 Shutdown 的关闭路径也摘得到。
+        DetachAppWindowEvents();
         _ticker?.Stop();
         // 必须先脱离桌面层，否则会残留指向 SHELLDLL_DefView 的悬挂所有者
         WidgetLayerService.DetachFromDesktopLayer(WindowInterop.GetHwnd(this));

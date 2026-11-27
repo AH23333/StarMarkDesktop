@@ -1,5 +1,6 @@
 #nullable enable
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
@@ -239,6 +240,12 @@ public sealed partial class MainWindow : Window
         _dataSync?.Dispose();
         try { await _widgetManager.ShutdownAllAsync(); }
         catch (Exception ex) { StarLog.Error("关闭桌面组件失败", ex); }
+        // P-302 乙（片278）：关完组件窗让 UI 线程的泵转一拍再继续拆——0xc000027b 定案（片276）：
+        // 崩溃＝主线程 dispatcher 泵处理 AppWindow 相关 CoreMessaging 消息内部 E_FAIL×2
+        // （零托管帧・环境层 WinAppSDK・时序＝用户刚关完 12 组件窗后 55 秒）。根因在框架层，
+        // 产品码只能缓解：把还在队列里的 AppWindow 拆毁消息在 XAML 树仍完整时消化掉，
+        // 而不是撕到一半才被泵进去。150ms 出自看门狗 5 秒预算的零头，退出路上无感。
+        await Task.Delay(150);
         try { App.ApplyClipboardHistory(false); }
         catch (Exception ex) { StarLog.Error("停止剪贴板采集失败", ex); }
         // 本地磁盘搜索开着时，StarMark 拉起的那只自带 Everything 是无托盘的隐藏后台进程：退出不带它走
