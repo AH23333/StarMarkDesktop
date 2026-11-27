@@ -1455,3 +1455,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 零码轮纪律三笔：账本追加段零 `.cs:行号` 指针（LIVING 档口径）・叙述门射程先证后落（LedgerStatusNarrationGateTests 豁免②＝题行无 ✅ 本尺不碰・开放条目追加安全）・状态行改写不翻牌（方案已成＋决策点四颗待裁决・marked 307 unmarked 1 维持）。
 - 验证：零产品码零测试码（片276 先例）・基线 7216/7216 维持不重跑・docgates 26/26（落账后）・计数器 308/308/0 维持・census 19/19 维持（档尾追加不移指针行）。⛔ push（一事一授权）。
 - 下一刀候选：用户裁决决策点四颗（①接收口 A/B 案②稳健机器③切层④排期——B 案 spike 零产品码可随时先行）／v1.0.8 发版（用户暂缓中）。
+
+## 一百七十、片287：P-307 B 案 spike 四问定谳（零码沙盒）——①醒②无懒注册③bridge 全链送达④不共存→B 案改「独占 sink＋重派」形
+- spike 构成：探针 spike307（WinAppSDK・三 exp 状态机 ExpC 处女态/ExpA wrapper+虚拟拖/ExpB wrapper+真文件拖）＋独立拖源 dragdrv（外进程＝与浏览器拖源同构・自包含 publish 独立目录・光标处 4×4 可见 WS_POPUP capture 窗・10Hz SendInput 摆动・3s 自限）——零产品码沙盒 bin/WI37C/spike307〔gitignored〕・两本日志＝探针 spike307-log.txt＋%TEMP%/spike307-dragdrv.log。
+- 四问定谳：①循环醒（QCD 三轮 50/57/48 次・约 16Hz・DoDragDrop 均 hr=0x00040100〔DRAGDROP_S_DROP〕正常返回）②XAML 无懒注册（sawLazyProp=False・全进程窗口静止・ExpC 处女态 XAML enter+1/over+49 照常触发＝走非 RegisterDragDrop 的 fallback 通道・Drop 未触发且 effect=0＝合成拖 artifact 疑点留真浏览器拖 30 秒手动验证）③bridge 座虚拟文件全链送达（ExpA wrapper@bridge DragEnter#1 formats=[FileGroupDescriptorW FileContents CF_UNICODETEXT]・over=56・drop=1・effect=1・top/InputSite 零调用・WindowFromPoint 落点恒 bridge＝唯一座）④不共存（ExpA/B 占座时 XAML enter=+0 全静默＝座互斥・无原 target 可捕获→「捕获→包装→委托」链结构性不成立）。
+- B 案改形（决策点①形状更新）：独占 sink＋重派——占 bridge 座自挂 IDropTarget 独占・全格式自处理（FileGroupDescriptorW/FileContents 与 StorageItems/Text 同一条路）・XAML 事件不再可达须由 sink 重派到应用逻辑补偿（产品影响＝占桥后 P-305/P-306 两面的 XAML drop 亦走重派补偿）。
+- ole32 拖动循环经验模型：循环只认拖源线程自己队列的输入（WM_TIMER/WM_QUIT/线程定时器/PostThreadMessage 全不 dispatch・ESC 键注入不醒）・醒循环三要件＝capture＋按钮按下＋输入路由到源线程；诊断陷阱三笔：GetQueueStatus/GetCapture 是 per-thread API（读错线程恒 0）・SetCapture 返回值＝前 capture HWND（bool 编组误读）・GetCurrentThreadId 住 kernel32 不住 user32。
+- 验证：零产品码零测试码（片286/276 先例）・基线 7216/7216 维持不重跑・账本 P-307 段追加 spike 定谳块（零 `.cs:行号` 指针＝LIVING 档口径・状态行改写不翻牌）・docgates 26/26（落账后）・计数器 308/308/0 维持（marked 307・unmarked 1）・census 19/19 维持（档尾追加不移指针行）。⛔ push（一事一授权）。
+- 下一刀候选：用户裁决决策点四颗（①接收口「独占 sink＋重派」形②稳健机器③切层④排期——主刀〔待办行第一刀〕与 v1.0.8 发版先后待议）／真浏览器拖 30 秒手动验证留后续／v1.0.8 发版（用户暂缓中）。
