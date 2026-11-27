@@ -86,6 +86,15 @@ public static class WidgetReclaimPolicy
     };
 
     /// <summary>
+    /// 用户<b>看不见</b>这颗窗已经持续多久（片281）：隐藏与被整屏遮挡各记各的钟，取更长的那支。
+    /// <para>两钟并存的形状（先被整屏盖住、后来又藏起来）用户同样一直看不见，取 <c>max</c> 才是
+    /// "持续看不见"的真时长；单边为负（时钟回拨）不夹端——按各自原值参与比较，
+    /// 让 <see cref="ShouldReclaim"/> 按它自己的口径对负时长不收。</para>
+    /// </summary>
+    public static TimeSpan InvisibleFor(TimeSpan hiddenFor, TimeSpan occludedFor)
+        => hiddenFor > occludedFor ? hiddenFor : occludedFor;
+
+    /// <summary>
     /// 该不该收这一颗。<b>两条都要成立</b>：这一类被点名判为可收，且已经持续隐藏满宽限期。
     /// <para>时间判据写成"至少这么久"（不是"超过"）——正好 5 分钟是"已经给满机会"，不收就再等一轮巡查；
     /// 负数（时钟回拨／未来时刻）不收，也不夹端：把越界夹成"收"是最坏的一种错法。</para>

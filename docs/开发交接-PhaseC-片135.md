@@ -1403,3 +1403,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 事故与仪器课：判例首跑红 1＝RemoteRelease 五位参正文误装 Name 位（期望 common.rawValue 实得 noNotes・自造自收当轮修）；增量 build「0 警」假读数再现——全量重编露 6 颗 xUnit 分析器警＝HEAD 存量（HEAD worktree 现编同款・片144–200 老档）非本批・不另立坑。
 - 验证：build 0 错误・docgates 26/26・定向更新族 273/273・全量 **7101/7101 新基线**（7084＋17・正本 bin/WI37C/full_280.txt）・census 19 保平（diffcensus280.txt）・计数器 303/303/0（落账后 304/304/0）。
 - 下一刀候选：①片281 全屏遮挡感知收窗（v5 候选③）；②「关主窗退出链」真鼠标复现（待用户机器窗口期）；③v1.0.8 发版（更新说明卡链＋AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）。
+
+## 一百六十三、片281：全屏遮挡感知收窗（v5 候选③）——整屏被盖按隐藏同款 5 分钟宽限收可见组件窗・遮挡结束分帧复原・2s 常转轮询・真机全链验完・全量 7157 新基线
+- 裁决：片279 v5 候选③・片280 遗留点名・用户拍板即执行。七产品档＋三测档落码（Core 判据纯函数 DesktopOcclusionPolicy：三规则/桌面壳四类/排除名单超集・WidgetReclaimPolicy.InvisibleFor 两钟 max・UI 互操作 DesktopOcclusionInterop：CLOAKED/自家窗/通知态 3|4/分层 alpha・WidgetManager.Occlusion：轮询/评估/标解/分帧复原・WidgetManager 主档两字段・Lifecycle 八处含三清・WidgetWindow 遮挡钟＋DesktopOcclusionPolicyTests 34 例/DesktopOcclusionWiringGateTests 11 Fact/WidgetReclaimPolicyTests +11 例）。
+- 机制要点（接手人视角）：2s 常转轮询（WinEvent 钩不搬——P-302 后不新增原生钩机器）；可见窗遮挡钟与隐藏钟各记各的・巡查取 max・负钟不夹；收窗双分支 persist（隐藏 false〔几何已落盘〕/遮挡 true〔没落过盘必写〕）＋复原册 id→屏 key；遮挡结束只复原「那块屏已露出来」的・另一屏还盖着继续等；三清＝用户整群动作（隐藏整群/开机加载关/退出）压过复原债；前台自家窗/桌面壳＝空集短路；独占全屏/演示 3|4 直接标（不含 BUSY）；遮挡段不引 WidgetReclaimPolicy（判据只在巡查一处问）。
+- 仪器课三笔（当轮自造自收）：①Assert.Equal(HashSet, IReadOnlySet) 撞引用相等重载——IReadOnlySet 是更好转换目标・单元素集改 Assert.Equal(单值, Assert.Single(集))；②lambda 体方法（表达式体套 OnUiAsync）的方法体截取用 Span(Between) 前后锚——MethodBody 表达式体分支会在第一颗内层分号截断；③EnumWindows 委托是 (IntPtr, IntPtr) 双参——单参 lambda CS1593 全仓 XamlCompiler 级联红（WMC0001/WMC0010 假象）。
+- 深度测试（真机・Debug exe・2026-11-27・用户在场配合）：链②遮挡全绿——检测 ≤2s（12 颗标遮挡计宽限）・5:00 整判（6 收 6 不收・remaining 再排 +3 秒那轮恰好出现）・私有内存 341→185 MB（约 26 MB/颗）・撤遮挡 ≤4s 分帧复原 6 颗・12 颗全回存档位・widgets.json 整轮零漂移（fc 字节同）・托盘退出干净；链①更新说明卡复验（片280 feature）——首见不弹/同版不弹/换版弹卡（档改 1.0.6→+10s 整「已更新到 1.0.7」・版本匹配守卫用真发布说明）/记账不停（1.0.6→1.0.7）；settings 三件套备份/fc/恢复全 SAME（坑 #1196 口径）。
+- 验证：build 0 错误・docgates 26/26・定向 8 类 158/158・全量 **7157/7157 新基线**（7101＋56 恰对账：34＋11＋11・正本 bin/WI37C/full_281.txt）・census 19/19 保平（diffcensus281.txt・新落空 1 颗三组换号〔bump_pointers_281.py 锚内容断言全过〕）・计数器 304/304/0（落账后 305/305/0）。
+- 下一刀候选：①「关主窗退出链」真鼠标复现（待用户机器窗口期・验证片278 缓解效果）；②v1.0.8 发版（用户裁决暂缓中——遮挡收窗＋更新说明卡链＋AI 稳健性链＋GPL-3.0 换轨＋甲乙修复已齐）；③自动下载＋计费网络（v5 候选②・随发版节奏议）。

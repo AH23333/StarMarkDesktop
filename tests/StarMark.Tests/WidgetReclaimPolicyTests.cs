@@ -145,6 +145,52 @@ public sealed class WidgetReclaimPolicyTests
     [InlineData(12, 34, "12 分 34 秒")]
     public void DurationReadsTheWayAHumanSaysIt(int minutes, int seconds, string want)
         => Assert.Equal(want, WidgetReclaimPolicy.Format(TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds)));
+
+    /// <summary>
+    /// "用户看不见"取两钟里更长的那支（片281）：隐藏与被整屏遮挡各记各的钟，
+    /// 谁更久按谁算——先被盖住后来又藏起来的窗，两段都算"持续看不见"。
+    /// </summary>
+    [Theory]
+    [InlineData(5, 0, 3, 0, 5, 0)]        // 隐藏更久
+    [InlineData(3, 0, 5, 0, 5, 0)]        // 遮挡更久
+    [InlineData(0, 0, 4, 0, 4, 0)]        // 只被遮挡（没隐藏）
+    [InlineData(4, 0, 0, 0, 4, 0)]        // 只隐藏（没被遮挡）
+    [InlineData(5, 0, 5, 0, 5, 0)]        // 两边一样久
+    public void InvisibleForTakesTheLongerClock(int hiddenMin, int hiddenSec,
+        int occludedMin, int occludedSec, int wantMin, int wantSec)
+        => Assert.Equal(TimeSpan.FromMinutes(wantMin) + TimeSpan.FromSeconds(wantSec),
+            WidgetReclaimPolicy.InvisibleFor(
+                TimeSpan.FromMinutes(hiddenMin) + TimeSpan.FromSeconds(hiddenSec),
+                TimeSpan.FromMinutes(occludedMin) + TimeSpan.FromSeconds(occludedSec)));
+
+    /// <summary>
+    /// 两钟谁也不会把谁"夹没"：时钟回拨给出的负时长按原值参与比较，
+    /// 不夹成 0 也不夹成"满了"——对那支正常的钟来说，另一支坏掉不关它的事。
+    /// </summary>
+    [Theory]
+    [InlineData(-3, 300, 300)]    // 隐藏钟回拨，遮挡钟正常：按遮挡算
+    [InlineData(300, -3, 300)]    // 反过来同理
+    [InlineData(-3, -5, -3)]      // 两边都负：取负得少的，仍不收（ShouldReclaim 对负数不收）
+    [InlineData(0, 0, 0)]         // 都刚起算：0
+    public void InvisibleForDoesNotClampBrokenClocks(int hiddenSec, int occludedSec, int wantSec)
+        => Assert.Equal(TimeSpan.FromSeconds(wantSec),
+            WidgetReclaimPolicy.InvisibleFor(TimeSpan.FromSeconds(hiddenSec), TimeSpan.FromSeconds(occludedSec)));
+
+    /// <summary>遮挡满宽限照样收（可收类）：判据读的是"看不见"这根统一的尺，不是"隐藏"那一根。</summary>
+    [Fact]
+    public void AnOcclusionAloneCanOutlastTheGrace()
+    {
+        Assert.True(WidgetReclaimPolicy.ShouldReclaim(WidgetKind.Clock,
+            WidgetReclaimPolicy.InvisibleFor(TimeSpan.Zero, TimeSpan.FromMinutes(5))));
+        Assert.False(WidgetReclaimPolicy.ShouldReclaim(WidgetKind.Clock,
+            WidgetReclaimPolicy.InvisibleFor(TimeSpan.Zero, TimeSpan.FromMinutes(4))));
+    }
+
+    /// <summary>有在途内容的类，被盖住多久也不许收——遮挡那条腿同样越不过身份判据。</summary>
+    [Fact]
+    public void AnOcclusionDoesNotOverruleTheVerdictEither()
+        => Assert.False(WidgetReclaimPolicy.ShouldReclaim(WidgetKind.QuickNote,
+            WidgetReclaimPolicy.InvisibleFor(TimeSpan.FromDays(365), TimeSpan.FromDays(365))));
 }
 
 /// <summary>
@@ -197,14 +243,21 @@ public sealed class WidgetReclaimWiringGateTests
         Assert.Contains("timer.Start();", body, StringComparison.Ordinal);
     }
 
-    /// <summary>回收路径不许再写一趟整档：几何在隐藏那一刻已经整批落过盘（AU 收掉过的坑，别再引回来）。</summary>
+    /// <summary>
+    /// 收窗路径不许在巡查体里再写一趟整档（片281 起分两支）：隐藏腿的几何在隐藏那一刻已整批落盘
+    /// ——persist:false；被遮挡腿的几何从没落过盘（遮挡不动窗口）——persist:true，
+    /// 让 <c>CloseInternal</c> 里那一趟去写。两支都必须在，少一支就是有一条腿永远收不了；
+    /// 巡查体里仍不许出现 <c>PersistBoundsFor</c>（AU 收掉过的坑，别再引回来）。
+    /// </summary>
     [Fact]
     public void ReclaimingClosesWithoutAnotherWholeFileWrite()
     {
         var body = Body(Manager, "private void ReclaimHiddenWindows");
         Assert.Contains("CloseInternal(id, persist: false)", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("CloseInternal(id, persist: true)", body, StringComparison.Ordinal);
+        Assert.Contains("CloseInternal(id, persist: true)", body, StringComparison.Ordinal);
         Assert.DoesNotContain("PersistBoundsFor", body, StringComparison.Ordinal);
+        // 遮挡腿收完必须记下"收它那一刻所在的那块屏"——不记的话遮挡结束就没法按屏复原
+        Assert.Contains("_occludedReclaimed[id] = window.OccludedMonitorKey;", body, StringComparison.Ordinal);
     }
 
     /// <summary>哪一类能收只有一个出处：宿主里不许出现"自己判时间/自己判类别"的第二份。</summary>

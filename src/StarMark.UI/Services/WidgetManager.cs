@@ -29,6 +29,16 @@ public sealed partial class WidgetManager
     /// </summary>
     private DispatcherQueueTimer? _reclaimTimer;
 
+    /// <summary>
+    /// 整屏遮挡感知的<b>常转</b>轮询表（片281）。与 <see cref="_reclaimTimer"/> 的一次性不同：
+    /// 遮挡的开始/结束没有事件可听（P-302 之后不新增原生钩机器），只能每 2 秒问一次桌面
+    /// （粒度住在 <c>DesktopOcclusionPolicy.PollInterval</c>）。首颗组件窗显示时起表，之后不停。
+    /// </summary>
+    private DispatcherQueueTimer? _occlusionTimer;
+
+    /// <summary>被整屏遮挡收掉、等"那块屏重新露出来"时复原的实例：id → 收窗那一刻所在屏 key。</summary>
+    private readonly Dictionary<string, long> _occludedReclaimed = new();
+
     /// <summary>某实例的快捷入口数据变化（新增/删除/外部发送），携带实例 ID 供快捷启动格增量刷新。</summary>
     public event Action<string>? LinksChanged;
 

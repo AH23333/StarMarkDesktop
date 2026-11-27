@@ -265,6 +265,8 @@ public sealed partial class WidgetWindow : Window
     {
         // 一亮就清零：宽限期是"持续隐藏"的时长，漏清一次就会让下一次隐藏提前被收（年龄带着上一轮的）。
         HiddenSince = null;
+        // 片281：遮挡钟一并清——重新点亮就是"用户又看得见了"，两钟都得从零起算
+        SetOccluded(false);
         // 首装（样式/尺寸/外壳）与每次都要走的"点亮"分开量：PO-2 就是靠这条分段把"一颗组件 ≈100 ms"
         // 追到 <c>SetBorderAndTitleBar</c> 那一句（≈68 ms/颗），合并回去就只剩"就是慢"这一句可说。
         if (!_styled)
@@ -323,6 +325,41 @@ public sealed partial class WidgetWindow : Window
 
     /// <summary>已经持续藏了多久；没在藏时给 0，不返回 null（免得每个调用点各写一套兜底，写漏一个就永远不收）。</summary>
     public TimeSpan HiddenFor() => HiddenSince is { } at ? DateTimeOffset.UtcNow - at : TimeSpan.Zero;
+
+    // ── 整屏遮挡时钟（片281）：与隐藏钟各记各的，巡查时取两者 max（WidgetReclaimPolicy.InvisibleFor）──
+
+    /// <summary>从什么时候开始这颗窗所在屏被外来窗整屏盖住（没被盖＝null）。
+    /// 与 <see cref="HiddenSince"/> 分开记：先被盖住后来又藏起来的窗两钟并存，
+    /// "用户持续看不见"取更长的那支才是真时长。</summary>
+    public DateTimeOffset? OccludedSince { get; private set; }
+
+    /// <summary>被遮挡那一刻所在屏的 key（hMonitor.ToInt64()）。复原按它等"那块屏重新露出来"。</summary>
+    public long OccludedMonitorKey { get; private set; }
+
+    /// <summary>当前是否被整屏遮挡（只有可见窗会被标；隐藏窗的宽限由隐藏钟单独管，两钟并存不冲突）。</summary>
+    public bool IsOccluded => OccludedSince is not null;
+
+    /// <summary>已经持续被盖了多久；没被盖时给 0（与 <see cref="HiddenFor"/> 同款口径，调用点不写兜底）。</summary>
+    public TimeSpan OccludedFor() => OccludedSince is { } at ? DateTimeOffset.UtcNow - at : TimeSpan.Zero;
+
+    /// <summary>
+    /// 标记/解除整屏遮挡。<b>置 true 幂等</b>：遮挡轮询每 2 秒都来置一次，
+    /// 重记时刻等于宽限永远满不了；屏 key 每次都跟上——窗可能挪去另一块同样被盖住的屏，
+    /// 复原要按最后所在的那块算。
+    /// </summary>
+    public void SetOccluded(bool occluded, long monitorKey = 0)
+    {
+        if (occluded)
+        {
+            OccludedMonitorKey = monitorKey;
+            OccludedSince ??= DateTimeOffset.UtcNow;
+        }
+        else
+        {
+            OccludedSince = null;
+            OccludedMonitorKey = 0;
+        }
+    }
 
     /// <summary>临时隐藏（实例保留，托盘/设置可一键恢复）。
     /// <b>不负责落盘</b>：几何由调用侧整批写好（<c>WidgetManager.HideTemporaryAll</c>）——

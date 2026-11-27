@@ -44,6 +44,8 @@ public sealed partial class WidgetManager
                 InstancesChanged?.Invoke();   // 设置页立即移除该实例行
             }
             CloseInternal(id, persist: false);
+            // 片281：被遮挡收掉等复原的册子里也不许再有它——实例都删了，复原会把死人叫回来
+            _occludedReclaimed.Remove(id);
         });
 
     /// <summary>移除实例的别名（与旧 API 同名，便于调用处过渡）。</summary>
@@ -161,6 +163,8 @@ public sealed partial class WidgetManager
 
     public Task ShutdownAllAsync() => OnUiAsync(() =>
     {
+        // 片281：退出时清掉遮挡复原册——进程都要没了，残余的复原债只会误导下一次启动的日志
+        _occludedReclaimed.Clear();
         CloseAll(_windows.Keys.ToList(), persist: true);
     });
 
@@ -191,6 +195,8 @@ public sealed partial class WidgetManager
                 _windows[id] = window;
             }
             window.Reveal();
+            // 片281：有组件窗活着，遮挡轮询就得转（首显起表，之后幂等——表建过就不再建）
+            EnsureOcclusionPolling();
         }
         catch (Exception ex)
         {
@@ -233,6 +239,9 @@ public sealed partial class WidgetManager
         // 隐藏的窗口不释放＝12 颗 80 MB 私有／771 句柄的来源（真机量在报告 §二百零八）。
         // 这里起一次性定时器，而不是每颗挂一张表：一次巡查就能把整群做完。
         ArmHiddenWindowReclaim();
+        // 片281：用户亲手藏起的窗不欠遮挡复原的债——留着册子的话，"全部隐藏"之后一次遮挡结束
+        // 又会自动弹回几颗，与"我把它藏起来了"直接矛盾。整群动作压过自动复原。
+        _occludedReclaimed.Clear();
     }
 
     /// <summary>
@@ -249,6 +258,8 @@ public sealed partial class WidgetManager
         var ids = _windows.Keys.ToList();
         if (ids.Count == 0) return;
         CloseAll(ids, persist: true);
+        // 片281：与隐藏同款——用户整群收起压过遮挡复原债，否则收起后遮挡一结束又弹回几颗
+        _occludedReclaimed.Clear();
         StarLog.Info($"[内存] 开机自动加载已关：收起并释放 {ids.Count} 颗组件窗"
                      + $"（约 {WidgetStartupPolicy.EstimatedPrivateMb(ids.Count)} MB 私有），实例仍在档里，点亮即重建");
     });
@@ -276,7 +287,22 @@ public sealed partial class WidgetManager
     }
 
     /// <summary>
-    /// 关掉"持续隐藏满宽限期、且这一类被点名可收"的组件窗。
+    /// （遮挡腿）整屏遮挡开始时排一次巡查。<b>与隐藏腿共用同一张表</b>（<see cref="_reclaimTimer"/>）：
+    /// 两个宽限同一段时长，先到点的那次巡查会把两条腿一起看完；只有那张表<b>没在转</b>时才从这头起
+    /// ——已在转就让它按原节奏走（那边的钟可能比遮挡更早到点，重排反而把它拨慢）。
+    /// </summary>
+    private void ArmOcclusionReclaim()
+    {
+        var timer = _reclaimTimer ??= BuildReclaimTimer();
+        if (timer.IsRunning) return;
+        timer.Interval = WidgetReclaimPolicy.HiddenGrace;
+        timer.Start();
+    }
+
+    /// <summary>
+    /// 关掉"用户持续看不见满宽限期、且这一类被点名可收"的组件窗。看不见有两条腿（片281）：
+    /// 隐藏（SW_HIDE）与被整屏遮挡（可见但盖在底下）——两钟各记各的，这里取
+    /// <see cref="WidgetReclaimPolicy.InvisibleFor"/> 的 max 当"持续看不见"的时长。
     /// <para>哪一类能收<b>不写在这里</b>——判据只有 <see cref="WidgetReclaimPolicy"/> 一颗：
     /// 宿主这里再写一份"隐藏的都可以收"，就会在新增组件类型的那天悄悄丢掉用户的字。</para>
     /// <para>没收的每一颗都记一句原因。少了这句，"点了清理但内存没降"永远归不了因，
@@ -288,16 +314,31 @@ public sealed partial class WidgetManager
         TimeSpan? remaining = null;      // 还差多久才有下一轮可收的
         foreach (var (id, window) in _windows.ToList())
         {
-            if (window.IsVisible) continue;
-            var hiddenFor = window.HiddenFor();
-            if (!WidgetReclaimPolicy.ShouldReclaim(window.Kind, hiddenFor))
+            // 可见但被整屏遮挡的窗与隐藏窗走同一条判据——用户"看不见它"是同一件事；
+            // 纯可见又没被遮挡的窗不归这条链管：它就在用户眼皮底下。
+            if (window.IsVisible && !window.IsOccluded) continue;
+            var invisibleFor = WidgetReclaimPolicy.InvisibleFor(window.HiddenFor(), window.OccludedFor());
+            if (!WidgetReclaimPolicy.ShouldReclaim(window.Kind, invisibleFor))
             {
-                if (hiddenFor < WidgetReclaimPolicy.HiddenGrace)
+                if (invisibleFor < WidgetReclaimPolicy.HiddenGrace)
                 {
-                    var left = WidgetReclaimPolicy.HiddenGrace - hiddenFor;
+                    var left = WidgetReclaimPolicy.HiddenGrace - invisibleFor;
                     if (remaining is null || left < remaining) remaining = left;
                 }
-                StarLog.Info($"[内存] 不收 {WidgetStorage.KindTitle(window.Kind)}：{WidgetReclaimPolicy.Reason(window.Kind, hiddenFor)}");
+                StarLog.Info($"[内存] 不收 {WidgetStorage.KindTitle(window.Kind)}：{WidgetReclaimPolicy.Reason(window.Kind, invisibleFor)}");
+                continue;
+            }
+            if (window.IsVisible)
+            {
+                // 被遮挡的可见窗：几何从没因遮挡落过盘（遮挡不动窗口），收之前必须把摆位写进去，
+                // 否则复原时按旧档重建会跳回上一次落盘的位置。persist:true 让 CloseInternal 里那一趟去写。
+                CloseInternal(id, persist: true);
+                // 记下"收它那一刻它所在的那块屏"：遮挡结束、那块屏重新露出来时分帧复原
+                // （WidgetManager.Occlusion 段的 RestoreOccludedReclaimedAsync）。
+                _occludedReclaimed[id] = window.OccludedMonitorKey;
+                reclaimed++;
+                StarLog.Info($"[内存] 回收被遮挡的可见组件窗口 {WidgetStorage.KindTitle(window.Kind)}"
+                    + $"（用户看不见已 {WidgetReclaimPolicy.Format(invisibleFor)}，遮挡结束后将复原）");
                 continue;
             }
             // persist:false——几何在 HideTemporaryAll 那一刻已经整批落过盘，隐藏期间它不会自己变。
@@ -305,10 +346,10 @@ public sealed partial class WidgetManager
             CloseInternal(id, persist: false);
             reclaimed++;
             StarLog.Info($"[内存] 回收隐藏组件窗口 {WidgetStorage.KindTitle(window.Kind)}"
-                + $"（已隐藏 {WidgetReclaimPolicy.Format(hiddenFor)}，关闭后在册 {_windows.Count} 颗）");
+                + $"（已隐藏 {WidgetReclaimPolicy.Format(invisibleFor)}，关闭后在册 {_windows.Count} 颗）");
         }
         if (reclaimed > 0)
-            StarLog.Info($"[内存] 本轮回收 {reclaimed} 颗隐藏组件窗口，在册 {_windows.Count} 颗");
+            StarLog.Info($"[内存] 本轮回收 {reclaimed} 颗组件窗口，在册 {_windows.Count} 颗");
         // 还有"藏得还不够久"的：按剩下的时间再排一次（加 1 秒余量，免得差几十毫秒空转一轮）。
         if (remaining is { } wait)
         {
