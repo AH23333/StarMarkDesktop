@@ -1365,3 +1365,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 回滚路径：db-backup-276 备份——摘旧/应用分属两事务、UI 内撤销不复原旧标签，回滚只认备份。
 - 验证：AiProbe 0 警 0 错・docgates 26/26（落账后）・计数器 302/302/0 维持・全量 7078/7078 维持不重跑（零产品码）。本刀新坑 #1192（STARMARK_DB_PATH 重定向时 settings.json 跟 DB 目录走・彩排目录缺设置档报「AI 功能没有开启」假象）。
 - 下一刀候选：①真机观感（app 重开看标签栏/筛选/新模型分类入口・随用户）；②v1.0.8 发版（AI 稳健性链已装・发布说明提授权换轨〔zip/清单多一颗 LICENSE・551→552〕）；③DeskBox 1.6.x 思路级候选（更新器 UX・内存修剪节律・P2-2 进程外隔离触发参照）；④bin\sandbox＋V 系列旧刀目录另案清理（待议）；⑤C 盘清理报备（余量 0.2GB・根治归用户）。
+
+## 一百五十八、片276（续）：「选标签后无法清除且会崩溃」取证定案——0xc000027b mini dump 手工解析＋R2R v16 自研符号化——崩溃＝CoreMessaging/AppWindow 消息 E_FAIL×2（零托管帧）・「无法清除」＝云移位 UX bug（独立）
+- 复现结论：七轮 UI 自动化（含真鼠标真取消 chip）零崩溃——「点标签必崩」不成立；「无法清除」复现成立＝独立真 bug：筛选栏出现→标签云下移约 30-35px（376→411）→点偏落空；TagsPage 另缺 TryEnqueue 延迟（对照 SearchPage.xaml.cs:133-147/FolderTreePage.xaml.cs:76-84・坑 #36・未修）。
+- 崩溃栈定案（mini dump 手工解析・无 cdb/SOS——python 直解异常流/线程表/栈扫描）：主线程 0x557c：KERNELBASE RaiseFailFastException ← combase ← CoreMessagingXP+0x97de6×2（E_FAIL×2＝stowed×2）← Windowing.Core.dll（AppWindow 消息）← CoreMessagingXP+0x57d10×4（dispatcher 泵）← user32 泵 ← 启动链（XAML・WinUI）← **StarMark.UI.dll+0xad30f＝Program.Main**（自研符号化）← CoreLib ← coreclr/hostfxr——**消息处理段零托管帧零 XAML 控件帧**；时序＝09:42:15 刚关 12 组件窗→09:43:10 崩→指向窗口销毁后 CoreMessaging/WinAppSDK 层状态不一致（环境层）。
+- 自研 R2R v16 符号化（r2rmap_276.py・零现成工具）：NI 头→15 节表→MethodDefEntryPoints＝NativeArray（nativeformatreader.h 变长整数＋块位图树）→RUNTIME_FUNCTION[id].BeginAddress＋#~ 表解名——8,262/8,737 方法映射・rf 9,352 条覆盖 [0x9f810,0x1e4543)；×6「0x37fc04 嵌套帧」翻案＝#Blob 流签名指针栈残留（新坑 #1193 栈扫描假帧・#1194 hex 量级误读）。
+- 验证：零产品码零测试码・docgates 26/26（落账后）・计数器 **303/302/1 VERDICT OK（开放 P-302）**・全量 7078/7078 维持不重跑。
+- 下一刀候选：①P-302 裁决（云移位 UX 修复＋TagsPage 延迟补齐＋崩溃缓解〔退出链/窗口销毁顺序〕是否动产品码——待用户）；②「关主窗退出链」真鼠标复现候选（用户在用机器・待窗口期）；③真机观感（app 重开看标签栏/筛选・随用户）；④v1.0.8 发版（AI 稳健性链已装・发布说明提授权换轨）；⑤C 盘清理报备（余量 0.2GB・根治归用户）。
