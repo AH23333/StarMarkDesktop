@@ -1,7 +1,7 @@
 # DeskBox 桌面组件 · 借鉴与优化意见
 
-**文档版本：** v4
-**调研对象：** `DeskBox-ref/`（参考实现；v3 基线＝v1.5.2 源码，v4 增补＝v1.6.2 源码，2026-11-26 重新 clone）
+**文档版本：** v5
+**调研对象：** `DeskBox-ref/`（参考实现；v3 基线＝v1.5.2 源码，v4 增补＝v1.6.2 源码，2026-11-26 重新 clone；v5 增补＝同一 v1.6.2 的三主题源码级深挖，2026-11-27）
 **面向对象：** StarMarkDesktop 第八轮迭代后的桌面组件体系（Widgets 2.0）
 **配套文档：** [项目功能可行性分析.md](./项目功能可行性分析.md) · [项目开发技术文档.md](./项目开发技术文档.md) · [架构健壮性分析与演进.md](./架构健壮性分析与演进.md) · [开发进度报告.md](./开发进度报告.md)
 
@@ -63,6 +63,80 @@ v4 对应一次**上游更新拉取与学习**：`github.com/Tianyu199509/DeskBo
 ### 结构变化注记
 
 上游 `src/DeskBox` 已重组出 `Features/`（17 个特性目录）＋`Platform/`；仓库根新增 `native/`（Rust QuickJS 模块，产出静态链接的 `deskbox_qjs.dll`）与 `catalog/`。附录文档索引中 `docs/architecture/` 路径在 1.6.x 有过重组，按需检索时以现树为准。
+
+## v5 修订说明（1.6.2 三主题源码级深挖，2026-11-27）
+
+v5 对应一次**三主题源码级深挖**（用户指示「继续学习 DeskBox」・口径＝v4「值得学的」清单里三颗思路级候选全学）：更新器 UX、内存修剪节律、进程外隔离。上游仍读 `e7d35931`（v1.6.2・2026-11-25）——与 v4 学的是同一版，无新版本可追；v5 的增量是**从「值得学的」清单下探到机制与参数层**，并逐条对照 StarMark 现状给出「已等效 / 不适用 / 可借鉴候选」结论。v4 的授权红线节与派生面清单照旧有效（✅P-301 已收口）；v5 全部条目依旧思路级（学思路、不搬码）。
+
+### 主题一：更新器 UX——StarMark 已等效大半，真正的缺口是「更新完成自动弹更新日志」
+
+**DeskBox 机制（参数全数在手）：**
+
+- **节奏三档**（`BackgroundUpdateCheckPolicy.cs`）：定论答案（有新版/已最新）间隔 **24h**；非定论（失败/清单不可用/循环内异常崩溃）一律 **2h** 重试；启动冷却 **30min**（30 分钟内查过→推迟到冷却剩余）；时钟偏移容忍 5min；启动首次延迟＝启动模式 45s／常规 12s。设计动机自述：deskbox.fun 在个别机器上的 DNS 黑洞是已记录的现场现实，旧版「启动一次性检查失败就整个进程生命周期静默」是 bug。
+- **睡眠不漂移**（`App.xaml.cs:2880-2939`）：循环持有**墙钟截止时刻** `nextCheckAt`（不落盘），每次醒来重算剩余再 `Task.Delay(remaining)`——`Task.Delay` 在系统睡眠期间暂停，对着墙钟截止点重算就能唤醒后立即补查。落盘的是 `LastUpdateCheckAt`（设置导入时取较大者防回滚）。
+- **计费网络**（`UpdateNetworkCostPolicy.cs`）：WinRT `ConnectionCost`（Wwan/Roaming/OverDataLimit/Fixed/Variable），API 异常时**失败开放**（瞬态故障不禁用功能）；全仓唯一调用点＝**静默自动下载**的触发器——检查与手动下载不咨询（原话："an auto-download must never silently burn a cellular data plan"）。
+- **自动下载五条件门**（`UpdateAutoDownloadPolicy.cs`）：用户 opt-in && 直装渠道 && 非计费 && 无进行中下载（服务级单飞槽）&& 磁盘无现成安装器——五条全过才静默后台下载，下完 toast 提醒「可安装」。
+- **更新日志自动弹**（`ReleaseNotesAfterUpdatePolicy.cs`）：开关（默认开）&& 已完成 onboarding && `lastRunVersion ≠ currentVersion`（**版本号变化触发・非一次性旗标**）；`LastRunVersion` 在展示后 **finally 无条件盖章**（被抑制/离线失败/秒关窗都不会重弹）；非交互（登录自启）启动推迟且不盖章；内容解析链＝清单内嵌 Markdown → 本地缓存 → HTTPS。
+- **下载进度节流**（`AppUpdateDownloadProgressThrottle.cs`）：首条/末条必过＋跨整数百分点＋**100ms 地板**＋防倒退。
+- **完整性**：SHA-256 流式校验（清单缺哈希直接拒下载）；**无签名**，替代＝**源站钉死**（仅 HTTPS＋`deskbox.fun`/GitHub 精确路径前缀；自述「哈希只证完整性不证真实性，被篡改的 feed 可以连同自己的正确哈希一起投毒」）。
+
+**StarMark 现状对照：**
+
+| 机制 | DeskBox | StarMark | 结论 |
+|---|---|---|---|
+| 每日一查・睡眠不漂移 | 墙钟截止点＋醒后重算 | 巡查 Timer 1h tick＋墙钟判据 24h（UTC Unix 秒・绝对差值防调表）——Timer 睡眠同样暂停，唤醒后至多 1h 内 tick 补查・墙钟判据放行 | **已等效**（路数不同・效果一致；至多晚 1h・用户无感） |
+| 失败重试 | 非定论一律 2h | 「网络类失败不算问过」（CountsAsProbed 排除 NotReachable/TimedOut）→下轮巡查重试；限流/服务端算问过 | **StarMark 更细**（分失败类型）；1h 重试比 2h 密・代价一次轻量 API 调用・维持 |
+| 启动冷却 | 30min | 24h 墙钟判据天然涵盖（查过就不重复查）；启动让首屏 20s | **已等效** |
+| 计费网络 | ConnectionCost・失败开放・只拦静默自动下载 | 无——但拦截对象（静默自动下载）StarMark 还没有 | **不适用**（做自动下载时一并引入・连同「失败开放」「只拦静默」两条纪律） |
+| 自动下载 | 五条件门＋下完提醒 | 无（提示卡＋手动「立即更新」） | **可借鉴候选**（产品决策・随 v1.0.8+ 节奏议） |
+| 更新日志自动弹 | 版本号变化触发＋finally 盖章 | **无**——v1.0.7 刚走完「立即更新」真机实路，更新完成后用户不知道改了什么 | **最有价值的借鉴候选**：StarMark 六格 UpdateState＋发布说明链齐备・加一格 LastRunVersion 即可承载 |
+| 完整性 | SHA-256＋源站钉死（无签名） | manifest/signature 三件套＋完整验签链（UpdateIntegrity）＋URL 全部自拼（不读远端回的 URL） | **StarMark 更强**（有签名・源站钉死同款思想两侧各自成立） |
+| 防重弹 | LastRunVersion 盖章 | ShouldAnnounce 同 tag 只提醒一次（防「提醒同一新版」・与弹更新日志不同层） | **已等效**（若做更新日志弹窗・新加 LastRunVersion 格・两套防重弹并存不冲突） |
+
+### 主题二：内存修剪节律——两条不同的路；StarMark 不需要修剪，但四条教训通用
+
+**核心认知（v5 最重要的分野）：** DeskBox 与 StarMark 在「省内存」上走的是**两条不同的路**——
+
+- DeskBox＝**修剪进程工作集**（`SetProcessWorkingSetSize(-1,-1)` 进程级・一次调用整进程・页移 standby 可 refault 回来），整套节律（宽限/兜底/跳小额/零闪）全是为了防「trim→唤起 refault→再 trim」循环；
+- StarMark＝**真关窗**（`WidgetReclaimPolicy`・隐藏满 5 分钟按类型表态收窗・12 窗实测 80MB 私有字节/771 句柄几乎全在原生侧）＋托管参与者缓存 Trim（`MemoryReclaimer`・15s 超预算门禁・⛔强制 GC 已移除）。
+
+StarMark 的工作集 366-776MB 几乎全是 WebView2/WinUI 原生内存、托管堆仅 3-7MB。「修剪工作集」这条路对 StarMark **同样有收益空间**（真关窗是它的更彻底子集），且 StarMark 已选关窗路并已落地；修剪路的独特价值场景＝「**窗口不能关但内存要还**」（如常驻贴图组）——该场景 StarMark 暂无，**维持不引入**。
+
+**DeskBox 参数基线（若未来启用修剪路・直接照抄）：**
+
+- 隐藏后即修宽限 **30s**（`ImmediateHiddenWorkingSetTrimGracePeriodMs=30000`；3s 弃用原因自述＝修剪后唤起要付 250-296ms 批量动画（预算 16.7ms），`SetProcessWorkingSetSize` 不保留驻留下限——30s 让日常唤起节奏避开 trim/refault 循环）；宽限内任何可见转换 `CancelPending()`（generation++ 使旧请求失效）
+- 跨路径去重 **20s**（MinimumTrimInterval・`LastTrimWithin`）；同一未打断 episode 内二修退 **5 分钟**兜底（StaticBackgroundMinimumTrimInterval）
+- 小额跳过：隐藏/静默 floor **80MB**；可见空闲双门槛 WS **240MB**＋Private **260MB**；增长回跳 **clamp(baseline×25%, 32MB, 128MB)**（比固定阈值自适应）
+- 配套 API：`SetProcessInformation(ProcessMemoryPriority)` 降 **Low=2**（任何 UI 活动/取消立即恢复 Normal）；`HeapSetInformation(HeapOptimizeResources)` 归还 NT/LFH 堆 16MB 段
+- 静默分层：Hidden/VisibleBackground **30s**・VisibleForeground **60s**；判定输入＝交互中/视觉工作（动画・拖拽・快照过渡）/瞬态 UI（设置・搜索弹窗）三者任一即打断 idle episode
+
+**四条通用教训（与走哪条路无关）：**
+
+1. **「清理不推进 UI 重布局 Epoch」**：`SetProcessWorkingSetSize` 只把冷页移 standby・不失效 XAML Measure/Arrange；DeskBox 早年修剪后推进 `MemoryCleanupEpoch`，会让每个折叠胶囊立刻醒来全量 re-layout＋2 帧 DComp 预热，**直接回灌 ~60MB**——现改推进专用 `s_workingSetTrimEpoch`＋shell-first 延迟水合（`App.QuiescenceWorkingSetTrim.cs`）。**StarMark 任何「隐藏期清理」动作都要避免「清理后强制 UI 重布局」的回灌模式。**
+2. **遮挡感知**：被全屏遮挡的可见组件按隐藏层处理（`HasUnoccludedVisibleWidgets`）——StarMark 的 `WidgetReclaimPolicy` 判「隐藏」只认显式 SW_HIDE，用户全屏看视频时被盖住的可见组件不会收。**可借鉴候选（低优先）**。
+3. **稳态装饰 ≠ 瞬态工作**：跑马灯/唱片旋转等 ambient 循环动画刻意不算 transient（不打断 idle episode・只把该层 quiet 窗 30s 拉长到 60s）——判定「空闲」时要区分这两族。
+4. **两侧都有隐藏窗驱逐**：DeskBox `EvictExcessLongHiddenContentHosts`（超窗池驱逐・`MinRetainedHiddenWindowCount` 保底・保护 watcher/动画/拖拽中的窗口）与 StarMark `WidgetReclaimPolicy` 同族；StarMark 的「按内容类型表态」（HoldsDraftInput/RunningSession/NotAudited 保守不收）比 DeskBox 的「按池容量驱逐」更精细（防丢字丢会话），**维持**。
+
+### 主题三：进程外隔离——触发条件不变，但「进程内选择器的现实呼应」值得记录
+
+**DeskBox 架构一句话**：同一 NativeAOT 镜像多角色复用（`--settings`/`--studio`/`--mcp` 都是同 exe 第二实例・关窗即硬退・复用镜像的动因＝AOT 链入全部代码，独立 exe 等于多发布一份完整应用）＋一个 Rust 原生代理（`DeskBox.ThumbnailProxy.exe`：缩略图/文件对话框/文件夹选择）＋全部跨进程通道走「**当前用户 SID DACL＋中完整性 no-write-up 强制标签（内核级 `CreateNamedPipeW`・托管 ACL 带不了 SACL）＋pid/StartTime 身份门（±500ms 封 pid 复用洞・门在事件目标之前执行）**」的命名管道（单行 JSON 信封・有界读取 32MB/16MB 上限・超限按断管处理）＋每层降级与硬杀保底（宿主退出 2.6s 硬杀后备线程・双向看门狗・世代号忽略被取代宿主的迟到事件・启动 12s 无 boot-ready 切进程内降级）。
+
+**关键单点（选目录/选文件为何进程外）**：Shell/快速访问的 `ThreadingModel=Single` COM 组件可能跨线程 marshal 回 WinUI Main STA 造成 **AppHangB1 死锁**——所以文件对话框整个搬进 Rust 代理进程；契约＝退出码 0/2/3（picked/cancelled/failed）＋路径写 stdout＋**stdin EOF 看门狗**（父进程死→管道 EOF→代理自己关掉 `#32770` 对话框退出・防孤儿对话框）＋重复调用按记录 pid 枚举 `#32770` 激活已有对话框（单飞）。
+
+**StarMark 现状对照：**
+
+- P2-2 触发条件**不变**：StarMark 无第三方 native 依赖・无设置中心/工坊分进程需求・维持暂缓判断。
+- **现实呼应（v5 新记录）**：StarMark 有三处进程内 WinRT 选择器（QuickLaunchWidget 的 FileOpenPicker/FolderPicker・SettingsPage.Backup 的两组・BoardWindow 的 FileSavePicker），且**已在提权场景吃过稳定 E_FAIL**（提权 pid 内连挂 4 次・已有应用内输入框降级路）。DeskBox 的 Shell COM 跨线程 AppHangB1 是同族风险的另一种表现形态。**触发条件由此具象化**：一旦 StarMark 的选择器出现「挂死/AppHang/Shell 扩展卡死」类现场，参照 DeskBox 进程外模式做——形态＝独立代理进程＋退出码契约＋stdin EOF 看门狗＋`#32770` 单飞激活；在那之前维持进程内＋现有降级。
+- **更新器交棒互相印证**：StarMark 唯一的进程外先例（`UpdaterLauncher`「安装目录外整带复制再起进程」・`#189/#193` 能不算的账别两处算）与 DeskBox 的 `DeskBox.Updater.exe` 同构——两侧各自演化出同款「更新器必须跑在安装目录外」纪律。
+
+### v5 候选清单汇总（供裁决・学习刀不擅自立项）
+
+| 候选 | 优先级 | 依据 |
+|---|---|---|
+| 更新完成自动弹更新日志（版本号变化触发・加 LastRunVersion 格・finally 无条件盖章・开关默认开・非交互启动推迟不盖章） | **高** | 主题一；v1.0.7 实路刚验完・缺口真实（更新完不知道改了什么）・基础件齐备（UpdateState 六格＋发布说明链） |
+| 自动下载＋计费网络拦截（五条件门・失败开放・只拦静默） | 中（随发版节奏议） | 主题一；产品决策非技术缺口 |
+| 全屏遮挡感知收窗（HasUnoccludedVisibleWidgets 口径） | 低 | 主题二教训 2；用户场景＝全屏看视频时组件被盖住 |
+| 选择器进程外化（独立代理＋退出码契约＋stdin EOF 看门狗＋单飞激活） | **触发式**（挂死现场出现才做） | 主题三；三处进程内选择器＋提权 E_FAIL 史已记录在案 |
 
 ---
 
