@@ -1448,3 +1448,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 器械课四笔：①rejected 两支各问＝corpus 计 2 撞单句口径→回执收口一处翻译（ReceiptFor 先例）；②动 Locale 的门必须 [Collection("LocaleGlobal")]——没进＝并行互踩 98 红灾（Locale 是全局可变静态・xUnit 并行域里所有动它的门同 collection 串行）；③RssPlural Tight 正则咬英文 `({0} paths)`——计数句用 label 形（`{0} dropped paths` 收 d 不收 s）；④census B 侧读 HEAD 源＝少一行的对拍面・换号要选 HEAD 态与盘上态都落得住的行号（首尾端点两读都得非空行）。
 - 验证：build 0 错误（6 警告全既有测试档）・全量 **7216/7216 全绿新基线**（基线 7198＋新测试 18：ClipboardCaptureTests +5・新 ClipboardDropWiringGateTests 13）・docgates 26/26（正本 bin/WI37C/docgates_285.trx）・census 19/19 保平（正本 diffcensus285.txt・pre 本 diffcensus285-pre.txt・尺 census_285.py・一落零愈→换号重指 HideTemporary 368-377→复称 19/19 差集空）・计数器 308/308/0 VERDICT OK（P-306 翻牌后 marked 307・unmarked 1）。⛔ push（一事一授权）。
 - 下一刀候选：P-307 虚拟文件物化链（实现面随落地时议・第二个吃它的面〔剪贴板〕已成形）／v1.0.8 发版（用户暂缓中）。
+
+## 一百六十九、片286：P-307 实现面方案成形（零码・供裁决）——两消费面已成开议・B 案最小原生口推荐・决策点四颗待用户裁决
+- 开议依据：P-307 账本「实现面随 P-305/P-306 落地时议」——两消费面已成（P-305 待办行＋P-306 剪贴板）・零码轮只成形方案。
+- 方案六段（全录账本 P-307 段）：三面分级接入（待办行第一刀＝唯一有 per-item 托管目录・剪贴板第二刀〔落点随议〕・QuickLaunch 不吃〔只写索引立场〕）／接收口两案（A＝全接管三面门全重写・**B＝最小原生口推荐**：只处理 WinUI 看不见的 FileGroupDescriptorW/FileContents・先 spike 验 HWND 共存〔DeskBox 三千行级 NativeDropTarget 共存法要源码级确认〕）／稳健机器全套（预算 −512MB/64MB 底线/2GB 兜・MOTW ZoneId=3＋HostUrl 失败不断导入・十二格式魔数・count 钳制 4096・空壳治理）／切层三层（Core 判据／Integrations 互操作／UI COM 接收口——WindowInterop.GetHwnd 现成・全仓零 OLE 插座实证）／GPL 红线（互操作声明走 Microsoft 文档公开形状・⛔ 抄参考仓）／排期（spike 随时先行・主刀与发版先后待裁决）。
+- 零码轮纪律三笔：账本追加段零 `.cs:行号` 指针（LIVING 档口径）・叙述门射程先证后落（LedgerStatusNarrationGateTests 豁免②＝题行无 ✅ 本尺不碰・开放条目追加安全）・状态行改写不翻牌（方案已成＋决策点四颗待裁决・marked 307 unmarked 1 维持）。
+- 验证：零产品码零测试码（片276 先例）・基线 7216/7216 维持不重跑・docgates 26/26（落账后）・计数器 308/308/0 维持・census 19/19 维持（档尾追加不移指针行）。⛔ push（一事一授权）。
+- 下一刀候选：用户裁决决策点四颗（①接收口 A/B 案②稳健机器③切层④排期——B 案 spike 零产品码可随时先行）／v1.0.8 发版（用户暂缓中）。
