@@ -1,7 +1,7 @@
 # DeskBox 桌面组件 · 借鉴与优化意见
 
-**文档版本：** v5
-**调研对象：** `DeskBox-ref/`（参考实现；v3 基线＝v1.5.2 源码，v4 增补＝v1.6.2 源码，2026-11-26 重新 clone；v5 增补＝同一 v1.6.2 的三主题源码级深挖，2026-11-27）
+**文档版本：** v6
+**调研对象：** `DeskBox-ref/`（参考实现；v3 基线＝v1.5.2 源码，v4 增补＝v1.6.2 源码，2026-11-26 重新 clone；v5 增补＝同一 v1.6.2 的三主题源码级深挖，2026-11-27；v6 增补＝同一 v1.6.2 的「把文件放入组件」单主题源码级深挖，2026-11-27）
 **面向对象：** StarMarkDesktop 第八轮迭代后的桌面组件体系（Widgets 2.0）
 **配套文档：** [项目功能可行性分析.md](./项目功能可行性分析.md) · [项目开发技术文档.md](./项目开发技术文档.md) · [架构健壮性分析与演进.md](./架构健壮性分析与演进.md) · [开发进度报告.md](./开发进度报告.md)
 
@@ -137,6 +137,63 @@ StarMark 的工作集 366-776MB 几乎全是 WebView2/WinUI 原生内存、托�
 | 自动下载＋计费网络拦截（五条件门・失败开放・只拦静默） | 中（随发版节奏议） | 主题一；产品决策非技术缺口 |
 | 全屏遮挡感知收窗（HasUnoccludedVisibleWidgets 口径） | 低 | 主题二教训 2；用户场景＝全屏看视频时组件被盖住 |
 | 选择器进程外化（独立代理＋退出码契约＋stdin EOF 看门狗＋单飞激活） | **触发式**（挂死现场出现才做） | 主题三；三处进程内选择器＋提权 E_FAIL 史已记录在案 |
+
+## v6 修订说明（1.6.2「把文件放入组件」源码级深挖，2026-11-27）
+
+v6 对应一次**文件入件单主题源码级深挖**（用户指示「学习 DeskBox 把文件放入组件的功能・仔细对比一下」・口径＝v5 同一上游 v1.6.2〔`e7d35931`〕・无新版本可追）。v6 的增量是把「把文件放入组件」拆成**四条入件路线**逐条学：①文件盒子（FileWidget）整盒导入、②待办行附件（TodoWidget）、③剪贴板历史入件（ClipboardWidget）、④自定义组件投放区（CustomWidget）。授权红线与派生面清单照 v4（✅P-301 已收口）；v6 全部条目依旧思路级（学思路、不搬码）。
+
+**v5 候选清算（先记账）**：更新日志自动弹＝✅已落地（片280・真机验完）；全屏遮挡感知收窗＝✅已落地（片281・真机验完）；自动下载＋计费网络＝待议（随 v1.0.8+ 发版节奏）；选择器进程外化＝维持触发式。
+
+### 路线一：文件盒子（FileWidget）——整盒导入的全链机器（§7.1 已裁定不搬文件格，机器本身值得学）
+
+**DeskBox 机制（参数全数在手）：**
+
+- **意图引擎**（`TransferIntentEngine.cs`・442 行纯函数）：三域（ExternalInbound／InternalDeskBox／Outbound）×五靶（DirectorySurface／RecycleBinTile／ApplicationShortcutTile／AssociationOnlySurface／UnsupportedSurface）×七意图（None／Copy／Move／Shortcut／Reference／Reorder／Organize）。修饰键语义＝Ctrl 强制 Copy・Shift 强制 Move・Alt 或 Ctrl+Shift 强制 Shortcut・右键拖拽弹选择菜单（`DropChoiceFlyoutHelper`：MenuFlyout＋180ms 开窗看门狗＋宿主窗不可见即取消・完成 Task 保证必 resolve）。**Drop 时刻重算修饰键**——指针悬停期间按键会变・不信任 DragOver 缓存的结论。
+- **映射与引用双模式**：无映射文件夹 → `Reference` 意图（原位引用不搬文件）；有映射文件夹（托管存储根）→ Copy／Move 入库。`protectDefaultMoveAsCopy`（USB／网络源默认降为 Copy・防拔盘丢件）＋AppExecutionAlias 源只准 Shortcut（Shift 也拒绝）＋`prefersShortcutByDefault`（特定源默认建快捷方式）。
+- **虚拟文件物化**（`NativeDropTarget.VirtualFiles.cs`）：FILEGROUPDESCRIPTORW＋FileContents——浏览器（Chrome／Edge／Firefox）与 Outlook 拖来的文件只有流没有路径。**IStream 先试・HGLOBAL 兜底**（一把合并 mask 要 ISTREAM|HGLOBAL 会被部分源 DV_E_FORMATETC 拒掉・修复前浏览器拖放静默无效）；描述符 count 不信源（HGLOBAL 小而 count 大会越界读・按 buffer 实际容量钳制〔上限 4096〕）；FL-09 空壳治理（目录的子流全失败时不得留空目录壳・不得报成功；真空目录循环后才建）。
+- **暂存预算**（`DropStagingBudgetPolicy`）：盘感知动态预算＝可用空间 −**512MB** 安全保留（可用 ≤512MB 时改留 64MB 临界底线・≤64MB 直接归零拒收）・盘查询失败兜 **2GB**——单次拖放永远饿不死宿主盘。
+- **MOTW 标注**（`ZoneIdentifierWriter`）：物化出的文件写 `Zone.Identifier` ADS（ZoneId=3＋HostUrl・失败只记日志不断导入）。不做这步的后果自述＝「比浏览器下载同一文件少了 SmartScreen 审查」＝**安全降级**；虚拟拖放无原始 URL・用通用标记 `deskbox://drag-drop/virtual`。
+- **扩展名修复**（`VirtualDropFileNameResolver`）：浏览器拖图常只给 stem・按魔数补扩展（png／jpg／gif／bmp／ico／tif／webp／avif／heic／pdf 十二格式・未知内容保留原名不瞎猜・失败不得让已物化的载荷不可用）。
+- **入件管线**：`ImportDroppedFilesAsync` → `ViewModel.ImportPathsAsync(useShellProgress: true)`（IFileOperation 壳级进度 UI・owner 窗口句柄）＋进度回调＋可取消＋**落点保持**（拖到第 N 格就插第 N 格・manual index 随批递增）＋撤销历史 id。异常分类学三件：中途取消带已完成集（按部分成功报・不静默吞）、SourceCleanupException（拷贝完成只源删除被挡〔文件被占用〕→按「完成＋警告」报・防「啥都没导入」误读驱动重复重试〔上游反馈 316〕）、其余失败。
+- **格内行为单一分类**（`ItemDropBehaviorPolicy`）：格内条目收到拖放的四种行为——FolderImport（文件夹格）／StackImport（堆叠格）／RecycleBinDelete（回收站命名空间快捷方式・放在 Launch 判定之前因为其 .lnk 无文件系统目标）／Launch（应用快捷方式）——XAML DragOver、原生 OLE 命中、壳拖放描述**三路全走这一个分类**，「加新行为改类型与测试・不改调用点」。
+- **双路入口并存**：WinUI 路由 Drop（`FileSurfaceContent.xaml.cs`・8173 行主档）＋原生 OLE `IDropTarget`（`NativeDropTarget.cs`・3224 行）——后者是 Win10 壳拖图／提权拖拽／虚拟文件（FileContents 在 WinUI `DataPackageView` 里**根本不出现**）的必要条件；两路共享同一意图引擎与导入管线。`DropOperation` 分阶段日志（operation id 贯穿 Received→PayloadMaterialized→ImportCompleted→Canceled／Failed→DeferralReleased）；导入忙守卫＋传输会话冲突守卫（同一文件已在传＝拒绝重叠拖放）。
+
+**StarMark 现状对照：**
+
+| 机器 | DeskBox | StarMark | 结论 |
+|---|---|---|---|
+| 拖放入口 | WinUI 路由＋原生 OLE 双路 | 仅 WinUI 路由（全仓唯一拖放面＝QuickLaunch・`WidgetWindow.QuickLaunchDrop.cs`） | **暂够用**（无提权拖／壳拖图需求）；虚拟文件需要原生 OLE（见候选③） |
+| 意图判定 | 纯函数引擎＋修饰键＋右键选择菜单 | 无（一律 Copy） | 暂不搬（单组件单意图时引擎是屠龙刀・候选①落地后再议修饰键） |
+| 虚拟文件（浏览器内容字节／Outlook 附件） | 物化链全套 | **无**——浏览器拖图落进 Text 分支变「图片网址链接」（内容字节丢弃）；Outlook 附件（FILEGROUPDESCRIPTOR）在 WinUI 路由层无面可落 | **真缺口**（候选③・收益面＝QuickLaunch／剪贴板／待办附件都吃它） |
+| 暂存预算／MOTW／扩展名修复 | 全套 | 无 | 随候选③一并议 |
+| 整盒导入存储 | 托管根 Copy/Move＋Reference | 不适用——§7.1 已裁定不搬文件格（统一条目路线・注册表注释「StarMark 护城河」在案） | **维持不搬** |
+| 落点保持／撤销历史／部分失败分类学 | 全套 | 不适用（无导入管线） | 候选①若做・「按部分成功报」的异常分类学值得照搬思路 |
+
+### 路线二：待办行附件（TodoWidget）——「拖文件到待办上」的 AssociationOnly 模式（v6 最值得学的路线）
+
+**DeskBox 机制：** 待办**行**是拖放靶（`TodoWidgetContent.DragDrop.cs`・行级 DragOver/Drop＋`GetDeferral` 保事务）；文件落在行上＝`AddDroppedAttachmentsAsync(item.Id, batch.Files)`——**附件挂条目・不挂组件**。存储双模式由设置 `AttachmentStorageMode` 决定：`Linked`（原位引用）或 `Copy`（拷入 per-item 托管目录 `<AttachmentDirectory>\<itemId>\`・`AttachmentStorageService.ImportPathAsync`）；虚拟／暂存文件（`ForceManagedCopy`）无条件走 Copy（引用临时目录＝悬空引用）；按 FilePath 去重；删除附件只清**托管副本**（`IsManagedCopy && File.Exists` 且限定托管树内・走回收站内核）・Linked 原件永不动。**对源侧克制**：待办这类 AssociationOnlySurface 靶对 Explorer 源永远不报 Move（「附加或复制・不搬原位」・Shift 不得让源侧收到 DROPEFFECT_MOVE）。行内另有内部拖放两路：行序重排＋彩色标记拖到行上设色（ColorMarker・「同步取走标记再 yield」防事务在首个 await 后终结）。
+
+**StarMark 现状对照：** TodoWidget 无任何拖放面・无附件概念。但 StarMark 的底子比 DeskBox 更适合这条路——**待办已经走统一 items 表**（`TodoWidgetViewModel`：`IItemRepository.GetBySourceAsync(ItemSources.Local, ItemType.Todo)`・`UpsertLocalItemAsync`・`SourceId=LocalItemState.EncodeSourceId(_instanceId, …)`），附件天然可挂 items（extra_json 或附件表），与「统一条目」护城河零冲突。QuickLaunch 已示范拖入骨架（挂接一次／DragEnter 证词／P-93 回执／整批落库）可直接复用。**这是 v6 的头名候选（候选①）**。
+
+### 路线三：剪贴板历史入件（ClipboardWidget）——「拖进来＝一条历史＝可再贴出」
+
+**DeskBox 机制：** 文件／文本拖入剪贴板组件即记历史（`ClipboardWidgetContent` → `ClipboardWidgetViewModel.ImportDroppedFilesAsync` → `ClipboardHistoryService.ImportDroppedFilesAsync`・另有 `ImportDroppedTextAsync` 独口）——拖进来的东西变成历史条目・之后从历史正常贴出。
+
+**StarMark 现状对照：** StarMark 剪贴板组件（TagGrid／Clipboard／Activity／Pinned 四格同源的条目格）无拖入面。「拖文本／文件进剪贴板组件即记一条历史」与 StarMark 自有剪贴板源（ClipboardService）自然衔接・P-93 回执与 QuickLaunch 拖入骨架同款可复用。**可借鉴候选（候选②）**。
+
+### 路线四：自定义组件投放区（CustomWidget）——不适用
+
+声明式清单标投放区・拖入文件 `forceCopyToPortableStore` 拷入组件便携存储（`CustomWidgetDropZoneCoordinator`・819 行）。StarMark 无自定义组件平台（§依旧不跟）——**不适用**。
+
+### v6 候选清单汇总（供裁决・学习刀不擅自立项）
+
+| 候选 | 优先级 | 依据 |
+|---|---|---|
+| 待办行文件附件（附件挂条目・Linked/Copy 双模式・per-item 托管目录・删除只清托管副本・虚拟文件强制 Copy・按 FilePath 去重・对源侧不报 Move） | **高** | 路线二；与统一条目路线零冲突（待办已走 items 表・附件挂 items 不挂文件格）・TodoWidget 无附件是真缺口・QuickLaunch 拖入骨架可复用 |
+| 剪贴板组件拖入面（文件／文本拖入即记历史・P-93 回执复用） | 中 | 路线三；条目格同源・加一面拖入即可 |
+| 虚拟文件物化链（FILEGROUPDESCRIPTORW＋FileContents・IStream 先试 HGLOBAL 兜底・count 钳制・盘感知暂存预算・MOTW・魔数扩展名修复・需原生 OLE 接收口） | 中（随①②落地议） | 路线一；现状＝浏览器拖图内容字节丢弃（只留网址）、Outlook 附件无面可落——真缺口但工程面在原生 OLE・收益面跨三组件 |
+| 修饰键意图语义（Ctrl/Shift/Alt＋右键选择菜单＋Drop 时重算） | 低（触发式） | 路线一；单组件单意图时不需要・多意图入件落地后再议 |
+| 文件盒子整盒导入（托管存储 Copy/Move＋Reference） | **不立项** | 路线一；§7.1 立场维持（统一条目路线是护城河） |
 
 ---
 
