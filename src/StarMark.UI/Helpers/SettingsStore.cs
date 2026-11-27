@@ -58,6 +58,12 @@ public sealed partial class SettingsStore : IPerformanceSettingsSource
         /// </summary>
         public bool? WidgetsLoadOnStartup { get; set; }
         /// <summary>
+        /// 待办附件的「复制」开关（P-305）。<b>默认关＝Linked</b>：拖进待办行的文件默认只挂原路径，
+        /// 不复制用户的东西——最小惊讶。开了才把拖入的文件复制成 %LOCALAPPDATA% 下的托管副本；
+        /// 临时目录里的文件无论这颗开关如何都强制复制（源随时会被系统清掉，链接等于空头支票）。
+        /// </summary>
+        public bool? TodoAttachmentCopyEnabled { get; set; }
+        /// <summary>
         /// 内置剪贴板历史总开关。<b>默认关</b>：剪贴板是全机器敏感度最高的数据（密码、卡号、私钥都会路过它），
         /// 默认开等于在用户不知情时把这些抄进一个明文 SQLite 文件。开启后采集全自动，无需任何后续步骤。
         /// </summary>

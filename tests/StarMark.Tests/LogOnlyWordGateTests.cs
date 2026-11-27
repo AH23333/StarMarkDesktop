@@ -67,7 +67,7 @@ public sealed class LogOnlyWordGateTests
         ("启动刻度（StartupProfile）", new Regex(@"StartupProfile\.(Mark|Measure)\s*\("), 15),
         ("异常句（throw）", new Regex(@"throw new \w*Exception"), 2),
         ("设置回读兜底（Safe 的 what）", new Regex(@"\bSafe\s*\("), 39),
-        ("组件写兜底（GuardAsync 的 what）", new Regex(@"\bGuardAsync\s*\("), 7),
+        ("组件写兜底（GuardAsync 的 what）", new Regex(@"\bGuardAsync\s*\("), 8),
         ("拖放格式串厂（DropFormats）", new Regex(@"\b\w+\.Add\(|return \w+\.Count"), 5),
         ("贴图窗设备名（DeviceName）", new Regex(@"^\s*DeviceName\s*="), 1),
     };
@@ -128,7 +128,7 @@ public sealed class LogOnlyWordGateTests
     public void TheWordsLeftInTheTwelveHostsAreOnlyEverTakenByNamedNonScreenConsumers()
     {
         var rows = WordsOfHosts();
-        Assert.Equal(73, rows.Count);   // ✅WI-71 那把尺的 69（70 行汉字−1 行只含全角符号）＋WI-81 那颗主题色的 Safe 兜底标签＋片20 那颗画板的 Safe 兜底标签＋片273 那颗画板主题的 Safe 兜底标签＋片280 那颗更新说明卡开关的 Safe 回读兜底标签
+        Assert.Equal(74, rows.Count);   // ✅WI-71 那把尺的 69（70 行汉字−1 行只含全角符号）＋WI-81 那颗主题色的 Safe 兜底标签＋片20 那颗画板的 Safe 兜底标签＋片273 那颗画板主题的 Safe 兜底标签＋片280 那颗更新说明卡开关的 Safe 回读兜底标签＋片284 那颗待办附件移除的 GuardAsync what（移除待办附件失败）
 
         var counted = Roster.ToDictionary(r => r.Name, _ => 0);
         var homeless = new List<string>();
@@ -223,7 +223,7 @@ public sealed class LogOnlyWordGateTests
         var todo = CodeOf("src/StarMark.UI/ViewModels/TodoWidgetViewModel.cs");
         var guard = MethodBody(todo, "Task GuardAsync(string what");
         Assert.Equal(1, Count(guard, "StarLog.Error(what, ex)"));
-        Assert.Equal(7, Count(todo, "GuardAsync(\""));                    // 七颗实参全走这一条兜底出口
+        Assert.Equal(8, Count(todo, "GuardAsync(\""));                    // 八颗实参全走这一条兜底出口（片284 起含「移除待办附件失败」那一颗）
 
         var drop = CodeOf("src/StarMark.UI/Views/WidgetWindow.QuickLaunchDrop.cs");
         var dropLines = LinesOf(drop).Where(l => l.Contains("DropFormats", StringComparison.Ordinal)).ToList();

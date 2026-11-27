@@ -1,4 +1,6 @@
 #nullable enable
+using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using StarMark.Abstractions.I18n;
 
@@ -127,6 +129,59 @@ public static class LocalItemState
     {
         var node = ParseObject(item);
         node[OrderKey] = order;
+        item.ExtraJson = node.ToJsonString();
+    }
+
+    // ── 待办附件（P-305）：extra_json 的 attachments 数组，每行 { "n": 名字, "p": 路径 } ──
+
+    /// <summary>附件清单在 extra_json 的键。数组为空＝没有附件（键整个删掉，不留 "[]"）。</summary>
+    private const string AttachmentsKey = "attachments";
+
+    /// <summary>
+    /// 读待办附件清单。extra_json 没有该键、值不是数组、某一行缺 <c>p</c>（路径）时<b>跳过那一行</b>；
+    /// 整档解析失败返回空清单——corrupt 容错与 done/color/due 同一口径（坏数据不崩「打开组件」这条路）。
+    /// </summary>
+    public static IReadOnlyList<TodoAttachment> GetAttachments(Item item)
+    {
+        if (string.IsNullOrEmpty(item.ExtraJson)) return Array.Empty<TodoAttachment>();
+        try
+        {
+            if (JsonNode.Parse(item.ExtraJson)?[AttachmentsKey] is not JsonArray raw) return Array.Empty<TodoAttachment>();
+            var list = new List<TodoAttachment>(raw.Count);
+            foreach (var node in raw)
+            {
+                if (node is not JsonObject o) continue;
+                var path = o["p"]?.GetValue<string>();
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                var name = o["n"]?.GetValue<string>();
+                list.Add(new TodoAttachment(string.IsNullOrWhiteSpace(name) ? path : name!, path!));
+            }
+            return list;
+        }
+        catch
+        {
+            return Array.Empty<TodoAttachment>();
+        }
+    }
+
+    /// <summary>
+    /// 写待办附件清单（整表替换）。空清单＝删键：比写 "[]" 干净，旧版读取也天然回落「没有附件」，
+    /// 与 <see cref="SetDue"/> 清除那一臂同一口径。
+    /// </summary>
+    public static void SetAttachments(Item item, IReadOnlyList<TodoAttachment> attachments)
+    {
+        var node = ParseObject(item);
+        if (attachments.Count == 0)
+        {
+            node.Remove(AttachmentsKey);
+        }
+        else
+        {
+            var array = new JsonArray();
+            foreach (var a in attachments)
+                array.Add(new JsonObject { ["n"] = a.Name, ["p"] = a.Path });
+            node[AttachmentsKey] = array;
+        }
         item.ExtraJson = node.ToJsonString();
     }
 

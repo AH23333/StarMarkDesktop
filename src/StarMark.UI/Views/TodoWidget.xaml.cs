@@ -1,10 +1,12 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 using StarMark.Abstractions;
 using StarMark.Abstractions.I18n;
@@ -200,6 +202,114 @@ public sealed partial class TodoWidget : UserControl
     private async void Undo_Click(object sender, RoutedEventArgs e) => await ViewModel.UndoDeleteAsync();
 
     private void UndoDismiss_Click(object sender, RoutedEventArgs e) => ViewModel.DismissUndo();
+
+    // ── 附件（P-305）：行级拖放靶、回形针 flyout、回执槽 ──
+
+    /// <summary>
+    /// 行级拖放靶的 DragOver：<b>只认文件载荷</b>。ListView 内部重排（拖 TodoRow 换位置）不带
+    /// StorageItems——不碰事件、照旧冒泡给 <c>CanReorderItems</c>，行级靶既不偷走拖拽排序，
+    /// 也不会给重排手势乱亮「添加附件」的口风。
+    /// </summary>
+    private void Row_DragOver(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        e.AcceptedOperation = DataPackageOperation.Copy;
+        // 拖拽跟随光标的那句是系统画的，不是树里的元素：每次 DragOver 现取词（同菜单「每次右键重建」那一路）。
+        e.DragUIOverride.Caption = Locale.T("widget.todo.attachCaption");
+        e.DragUIOverride.IsCaptionVisible = true;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// 落在行上的文件 → 挂成这条待办的附件。与快捷启动的 Drop 同一形状：先收路径、整批交给 VM、
+    /// 结局走回执——「收到几项」与「真挂上几份」分开记，去重与失败在屏幕上不再长得一样。
+    /// </summary>
+    private async void Row_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+        if (!TryRowId(sender, out var id)) return;
+        var deferral = e.GetDeferral();
+        var paths = new List<string>();
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+            foreach (var storageItem in items)
+                if (!string.IsNullOrWhiteSpace(storageItem.Path)) paths.Add(storageItem.Path);
+            if (paths.Count == 0)
+            {
+                StarLog.Warn($"[待办] 拖放 Drop：收到 {items.Count} 项但都没有可用路径，未挂附件");
+                SayAttachmentReceipt(LocMessage.Of("widget.todo.attachNone"));
+                return;
+            }
+            var outcome = await ViewModel.AddDroppedFilesAsync(id, paths);
+            StarLog.Info($"[待办] 拖放挂附件：收到 {outcome.Offered} 项，挂上 {outcome.Added}，重复 {outcome.Duplicates}，失败 {outcome.Failed}");
+            SayAttachmentReceipt(AttachmentReceiptFor(outcome));
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("拖放添加待办附件失败", ex);
+            // 写盘失败也是「没挂上」的一种：按已收到的那几项报数，不编话。
+            SayAttachmentReceipt(paths.Count == 0
+                ? LocMessage.Of("widget.todo.attachNone")
+                : LocMessage.Of("widget.todo.attachFailed", paths.Count));
+        }
+        finally
+        {
+            deferral.Complete();
+        }
+    }
+
+    /// <summary>结局 → 回执那一句：<b>失败优先</b>（部分挂上时沉默那几份失败＝「拖了没反应」的近亲），
+    /// 挂上几份／全是重复／没有可用文件各一句。一处翻译，两个出口（拖放／打开失败）共用回执槽。</summary>
+    private static LocMessage AttachmentReceiptFor(TodoAttachmentOutcome outcome)
+    {
+        if (outcome.Failed > 0) return LocMessage.Of("widget.todo.attachFailed", outcome.Failed);
+        if (outcome.Added > 0) return LocMessage.Of("widget.todo.attachAdded", outcome.Added);
+        if (outcome.Duplicates > 0) return LocMessage.Of("widget.todo.attachDup");
+        return LocMessage.Of("widget.todo.attachNone");
+    }
+
+    /// <summary>回执槽：常驻、后一次结局覆盖前一次——与快捷启动的回执同一口径（不用秒表，不引定时器）。</summary>
+    private void SayAttachmentReceipt(LocMessage message)
+    {
+        LocText.SetMessage(DropReceipt, message);
+        DropReceipt.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// 点回形针 → <b>现建</b>附件菜单（与颜色／截止同一形状：行 id 与附件路径都是捕获变量，
+    /// ⛔ 从菜单项反查）。每份附件一颗子菜单：打开／移除。
+    /// </summary>
+    private void AttachButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!TryRowId(sender, out var id)) return;
+        var menu = new MenuFlyout();
+        foreach (var attachment in ViewModel.AttachmentsOf(id))
+        {
+            var entry = new MenuFlyoutSubItem { Text = attachment.Name };
+            var open = new MenuFlyoutItem { Text = Locale.T("widget.todo.attachOpen") };
+            open.Click += (_, _) => OpenAttachment(attachment.Path);
+            var remove = new MenuFlyoutItem { Text = Locale.T("widget.todo.attachRemove") };
+            remove.Click += (_, _) => _ = ViewModel.RemoveAttachmentAsync(id, attachment.Path);
+            entry.Items.Add(open);
+            entry.Items.Add(remove);
+            menu.Items.Add(entry);
+        }
+        menu.ShowAt((FrameworkElement)sender);
+    }
+
+    /// <summary>
+    /// 打开一份附件。裸磁盘路径 ⛔ 直接进 <see cref="LauncherEx"/>（P-236：裸路径进得了协议闸门、
+    /// 进不了还原那一问，最后被说成「这台机器上没有这个文件」还多开一颗主文件夹窗）——
+    /// 先经 <see cref="LocalFileIdentity.UriForPath"/> 拼成 file:// URI 再递。没开成的那句走回执槽，不吞。
+    /// </summary>
+    private async void OpenAttachment(string path)
+    {
+        var (kind, message) = await LauncherEx.TryOpenDetailedAsync(LocalFileIdentity.UriForPath(path));
+        if (kind == OpenFailure.None) return;
+        StarLog.Warn($"[待办] 打开附件没成（{kind}）：{message}");
+        if (message is { } said) SayAttachmentReceipt(LocMessage.Of("common.rawValue", said));
+    }
 }
 
 /// <summary>已完成待办的置灰透明度转换器（等价原 code-behind 的 0.45）。</summary>
@@ -261,6 +371,16 @@ public sealed class TextToVisibilityConverter : IValueConverter
 {
     public object? Convert(object? value, Type? targetType, object? parameter, string? language)
         => string.IsNullOrWhiteSpace(value as string) ? Visibility.Collapsed : Visibility.Visible;
+
+    public object? ConvertBack(object? value, Type? targetType, object? parameter, string? language)
+        => throw new NotSupportedException();
+}
+
+/// <summary>附件颗数 → 可见性：0 → Collapsed（不亮回形针），&gt; 0 → Visible（P-305）。</summary>
+public sealed class CountToVisibilityConverter : IValueConverter
+{
+    public object? Convert(object? value, Type? targetType, object? parameter, string? language)
+        => value is int count && count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
     public object? ConvertBack(object? value, Type? targetType, object? parameter, string? language)
         => throw new NotSupportedException();

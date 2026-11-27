@@ -1433,3 +1433,11 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 体例：三颗均无 ✅＝开放条目（计数器「开放→✅ 就地翻牌」生命周期首次整批启用）・无「本批落地」行（⛔ 进 LedgerStatusNarration 现时段射程）・追加段零 `.cs:行号` 指针（LIVING 档口径）。
 - 验证：零产品码・基线 7157/7157 维持・docgates 26/26（落账后）・计数器 305→308/308/0 VERDICT OK（marked 305・unmarked 3・状态不一 0）・census 19/19 保平。
 - 下一刀候选：P-305 实现刀（头名・待用户点名开工）／P-306（排其后）／P-307（随前两者落地议实现面）／v1.0.8 发版（用户暂缓中）。
+
+## 一百六十七、片284：P-305 待办行文件附件落地收口——行级拖放入件・Linked/Copy 双模式（设置开关）・回形针行内入口・七红全自造自收
+- 落法＝六件套：模型（TodoAttachment record＋LocalItemState extra_json・corrupt 容错・空清单删键）／判据（TodoAttachmentPolicy：NeedsForcedCopy 临时/缓存强制 Copy・IsUnder 托管树九脸）／存储（TodoAttachmentStorage：per-item 托管目录・RecycleManagedCopy 走回收站・护栏自带）／开关（SettingsStore.TodoAttachments＋设置页 widgets 页新卡 ToggleSwitch）／入件面（TodoWidget 行根拖放四件套＋回形针按钮＋DropReceipt 槽〔失败优先〕＋现建菜单）／VM（AttachCount・_attachments 字典〔明细不进 record〕・AddDroppedFilesAsync〔Linked 默认〕・RemoveAttachmentAsync〔双清〕）。
+- 关键口径：附件挂 items 不挂组件（「统一条目」护城河）・Linked 默认不动用户文件・开关切 Copy・对源侧不报 Move・回执失败优先（Failed>0 先报）・删除护栏在 RecycleManagedCopy 自身（IsUnder 本条目托管目录才动）・行标签代替 Note 键（躲 26 字/700 预算族）・UiStrings 10 新键三语（widget.todo.attach* 8＋settings.widgets.todoAttach* 2）。
+- SourceGate 器械课三坑当轮全收：①锚撞——锚须全文唯一（定义＋调用点撞锚→「void 方法名」前缀锚）；②表达式体截断——`=> GuardAsync(async () => { … })` 多行 MethodBody 截在 lambda 首语句（UndoReattaches 同因）→一律 Between 前后锚切；③ScreenWords 续行——多行 StarLog 合成续行无日志头被咬→多段消息必须单行；另 StarLog.Warn 无 2 参重载（Error(msg, ex) 有）。
+- 指针腿：全量首跑红 7 之一＝活档指针棘轮 20↔19——设置页插卡平移把 WI-67 片10 那颗 SettingsPage.xaml 旧号顶进空行（#1020 族・旧号早已漂到别处非空行上・本批只是让它现形）→复称尺对拍（HEAD 19/盘上 20・差集恰那颗）→换号重指 ScoreGradeText 绑定真身（现读 1419）→复称 19/19 差集空＝净±0 自造自收；正本 bin/WI37C/diffcensus284.txt（改前对拍 diffcensus284-pre.txt）・尺 census_284.py。
+- 验证：build 0/0・全量首跑 7198 红 7→修 7→**7198/7198 全绿新基线**（基线 7157＋新测试 41）・docgates 26/26・census 19/19・计数器 308/308/0 VERDICT OK（P-305 翻牌后 marked 306・unmarked 2）。⛔ push（一事一授权）。
+- 下一刀候选：P-306 剪贴板组件拖入面（待用户点名开工）／P-307 虚拟文件物化链（实现面随 P-305/P-306 落地时议・第一个吃它的面〔待办行〕已成形）／v1.0.8 发版（用户暂缓中）。

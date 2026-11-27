@@ -18,6 +18,8 @@
              漏声明会在**渲染该行时**抛 COMException 0x80004005（找不到资源），
              而它发生在 Measure 阶段、逃过业务 try/catch，直接把进程带崩（踩坑 #83）。 -->
         <local:TextToVisibilityConverter x:Key="TextToVisibility"/>
+        <!-- 附件颗数（int）→ 可见性：>0 才亮回形针（P-305）。 -->
+        <local:CountToVisibilityConverter x:Key="CountToVisibility"/>
     </UserControl.Resources>
 
     <StackPanel Padding="12,8,12,12" Spacing="4">
@@ -67,8 +69,15 @@
                          "TodoRow { Id = 9, Text = …, Done = False, DueTs = 1793462400, … }"）：读屏的人先听见
                          字段名与序号，才轮到这一行真正要说的那件事。名字交回条目自己——
                          换语言重算是"替换整颗行"（ViewModel.ReresolveDueTexts），所以这颗一次性绑定跟着换。 -->
-                    <Grid Margin="0,1,0,1" ColumnSpacing="2" AutomationProperties.Name="{x:Bind Text}">
+                    <!-- 行本体同时是附件的行级拖放靶（P-305）：只认文件载荷（StorageItems），
+                         ListView 自己的内部重排不带这个格式——不碰事件、照旧冒泡给 CanReorderItems，
+                         行级靶不会把拖拽排序偷走。行 id 从这颗 Grid 的 Tag 带（x:Bind 是这条链里
+                         唯一被证过带得出 id 的一环，与勾选/颜色/截止同一形状）。 -->
+                    <Grid Margin="0,1,0,1" ColumnSpacing="2" AutomationProperties.Name="{x:Bind Text}"
+                          Tag="{x:Bind Id}" AllowDrop="True"
+                          DragOver="Row_DragOver" Drop="Row_Drop">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -105,7 +114,22 @@
                             <FontIcon Glyph="&#xE787;" FontSize="11" Opacity="0.75"/>
                         </Button>
 
-                        <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,0,0">
+                        <!-- 附件（P-305）：有附件才亮回形针＋颗数；点开现建 flyout（打开/移除逐份列出）。
+                             文件从资源管理器拖到这一行即挂上（行根 Grid 是拖放靶）。 -->
+                        <Button Grid.Column="3" Padding="4,2,4,2" MinWidth="16" MinHeight="16"
+                                Background="Transparent" BorderThickness="0"
+                                VerticalAlignment="Center" Tag="{x:Bind Id}"
+                                Click="AttachButton_Click"
+                                i18n:LocText.ToolTipKey="widget.todo.attachTip"
+                                Visibility="{x:Bind AttachCount, Mode=OneTime, Converter={StaticResource CountToVisibility}}">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <FontIcon Glyph="&#xE723;" FontSize="11" Opacity="0.75"/>
+                                <TextBlock Text="{x:Bind AttachCount}" FontSize="10" Opacity="0.75"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="4,0,0,0">
                             <TextBlock Text="{x:Bind Text}" FontSize="12"
                                        TextTrimming="CharacterEllipsis"
                                        Opacity="{x:Bind Done, Mode=OneTime, Converter={StaticResource DoneOpacity}}"
@@ -116,7 +140,7 @@
                                        Visibility="{x:Bind DueText, Mode=OneTime, Converter={StaticResource TextToVisibility}}"/>
                         </StackPanel>
 
-                        <Button Grid.Column="4" Content="✕" FontSize="9" Padding="5,3,5,3"
+                        <Button Grid.Column="5" Content="✕" FontSize="9" Padding="5,3,5,3"
                                 Background="Transparent" BorderThickness="0"
                                 Click="DeleteTodo_Click" Tag="{x:Bind Id}"/>
                     </Grid>
@@ -125,6 +149,11 @@
         </ListView>
 
         <TextBlock x:Name="SummaryBlock" FontSize="10" Opacity="0.55" Margin="2,2,0,0"/>
+
+        <!-- 拖入附件的回执（P-305）：与快捷启动的回执槽同一口径——常驻槽、后一次结局覆盖前一次，
+             不用秒表判断「够不够短」，也就不为它引入任何定时器。 -->
+        <TextBlock x:Name="DropReceipt" FontSize="10" Opacity="0.8" Margin="2,2,0,0"
+                   TextWrapping="Wrap" Visibility="Collapsed"/>
 
         <!-- 删除撤销条（DeskBox Todo / QuickCapture 都有）：就地提供「撤销」，避免误删后找不到 -->
         <Grid x:Name="UndoBar" Visibility="Collapsed" Margin="0,4,0,0"

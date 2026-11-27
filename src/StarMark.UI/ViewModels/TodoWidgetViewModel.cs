@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,10 +12,12 @@ using StarMark.Abstractions;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
+using StarMark.UI.Services;
 
 namespace StarMark.UI.ViewModels;
 
-/// <summary>待办组件中的一行（数据来自统一 items 表，source = local）。</summary>
+/// <summary>待办组件中的一行（数据来自统一 items 表，source = local）。附件只带颗数——
+/// 值相等才不整行重画（SyncVisible 靠 record 相等性做最小差异），清单本体另查 <c>AttachmentsOf</c>。</summary>
 public sealed record TodoRow(
     long Id,
     string Text,
@@ -22,7 +25,8 @@ public sealed record TodoRow(
     int Color,
     long? DueTs,
     string DueText,
-    int? Order);
+    int? Order,
+    int AttachCount);
 
 /// <summary>待办列表筛选。</summary>
 public enum TodoFilter
@@ -60,6 +64,9 @@ public sealed class TodoWidgetViewModel : ObservableObject
 
     /// <summary>全部行（内部真源）；UI 绑的是筛选后的 <see cref="Visible"/>。</summary>
     private List<TodoRow> _all = new();
+
+    /// <summary>行 id → 该行附件清单（P-305）：行模型只带颗数（值相等才不重画），flyout 现建时来这里取明细。</summary>
+    private Dictionary<long, IReadOnlyList<TodoAttachment>> _attachments = new();
 
     private TodoFilter _filter = TodoFilter.All;
     private Item? _undoSnapshot;
@@ -128,8 +135,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
         {
             var items = await _repo.GetBySourceAsync(ItemSources.Local, ItemType.Todo, ct: CancellationToken.None);
             var now = DateTimeOffset.Now;
-            var rows = items
-                .Where(i => LocalItemState.DecodeInstanceId(i.SourceId) == _instanceId)
+            var mine = items.Where(i => LocalItemState.DecodeInstanceId(i.SourceId) == _instanceId).ToList();
+            var rows = mine
                 .Select(i => BuildRow(i, now))
                 // 手动排过序的按 order 升序走在最前；没排过的（老数据）落在后面，
                 // 组内再按「未完成优先 → 截止早的优先 → 新的优先」自动排。
@@ -138,10 +145,15 @@ public sealed class TodoWidgetViewModel : ObservableObject
                 .ThenBy(r => r.DueTs ?? long.MaxValue)
                 .ThenByDescending(r => r.Id)
                 .ToList();
+            // 附件明细索引：与 _all 同一份装载重建（装载闸门外只有一个入口改它们）。
+            var attachmentIndex = new Dictionary<long, IReadOnlyList<TodoAttachment>>(mine.Count);
+            foreach (var i in mine)
+                attachmentIndex[i.Id] = LocalItemState.GetAttachments(i);
 
             RunOnUi(() =>
             {
                 _all = rows;
+                _attachments = attachmentIndex;
                 ApplyFilter();
             });
         }
@@ -165,7 +177,8 @@ public sealed class TodoWidgetViewModel : ObservableObject
             LocalItemState.GetColor(i),
             due,
             LocalItemState.DescribeDue(due, now),
-            LocalItemState.GetOrder(i));
+            LocalItemState.GetOrder(i),
+            LocalItemState.GetAttachments(i).Count);
     }
 
     /// <summary>
@@ -370,6 +383,82 @@ public sealed class TodoWidgetViewModel : ObservableObject
             : LocalItemState.DayOffsetStartUnix(DateTimeOffset.Now, dayOffset.Value));
         it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         await _repo!.UpsertLocalItemAsync(it);
+        await LoadAsync();
+    });
+
+    // ── 附件（P-305）：挂上去 / 看清单 / 摘下来 ──
+
+    /// <summary>
+    /// 某条待办当前挂着的附件清单（回形针 flyout 现建现用）。行模型里只有颗数，
+    /// 明细走这份索引——record 值相等才不整行重画（SyncVisible 的最小差异靠它），
+    /// 清单本体塞进行模型会让每次装载都被 List 引用不等判成"行变了"。
+    /// </summary>
+    public IReadOnlyList<TodoAttachment> AttachmentsOf(long id)
+        => _attachments.TryGetValue(id, out var list) ? list : Array.Empty<TodoAttachment>();
+
+    /// <summary>
+    /// 往某条待办上挂一批拖进来的文件（P-305）。<b>Linked 默认</b>：只记原路径，不动用户的文件；
+    /// 开了「复制」开关、或源躺在临时目录里（源随时会被系统清掉，链接等于空头支票——强制复制）
+    /// 才复制成 %LOCALAPPDATA% 下的托管副本。同一路径（OrdinalIgnoreCase）已在清单里＝跳过，
+    /// 同一条待办不挂两份。返回的结局交给回执（「拖了没反应」不许伪装成「已经加好了」）。
+    /// </summary>
+    public async Task<TodoAttachmentOutcome> AddDroppedFilesAsync(long id, IReadOnlyList<string> paths)
+    {
+        var offered = paths.Count;
+        if (_repo is null || offered == 0) return new TodoAttachmentOutcome(offered, 0, 0, 0);
+        var it = await FindItemAsync(id);
+        if (it is null) return new TodoAttachmentOutcome(offered, 0, 0, offered);   // 行已不在（正被别处删掉）：全算没挂上
+        var list = LocalItemState.GetAttachments(it).ToList();
+        var added = 0;
+        var duplicates = 0;
+        var failed = 0;
+        var copy = TodoAttachmentStorage.CopyWanted();
+        var tempRoot = Path.GetTempPath();
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (!File.Exists(path)) { failed++; continue; }
+                if (list.Exists(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase))) { duplicates++; continue; }
+                var stored = path;
+                if (copy || TodoAttachmentPolicy.NeedsForcedCopy(path, tempRoot))
+                    stored = TodoAttachmentStorage.CopyIn(id, path);
+                list.Add(new TodoAttachment(Path.GetFileName(path), stored));
+                added++;
+            }
+            catch (Exception ex)
+            {
+                StarLog.Error($"[待办] 挂附件失败：{path}", ex);
+                failed++;
+            }
+        }
+        if (added > 0)
+        {
+            LocalItemState.SetAttachments(it, list);
+            it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            await _repo.UpsertLocalItemAsync(it);
+            await LoadAsync();
+        }
+        return new TodoAttachmentOutcome(offered, added, duplicates, failed);
+    }
+
+    /// <summary>
+    /// 把一份附件从待办上摘下来。托管副本送回收站（护栏在 <see cref="TodoAttachmentStorage.RecycleManagedCopy"/>
+    /// 自己身上：路径不在这条待办自己的托管目录里＝整步空操作）；Linked 只摘记录，<b>绝不碰用户原件</b>。
+    /// </summary>
+    public Task RemoveAttachmentAsync(long id, string path) => GuardAsync("移除待办附件失败", async () =>
+    {
+        var it = await FindItemAsync(id);
+        if (it is null) return;
+        var list = LocalItemState.GetAttachments(it).ToList();
+        var hit = list.FindIndex(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase));
+        if (hit < 0) return;
+        var removed = list[hit];
+        list.RemoveAt(hit);
+        LocalItemState.SetAttachments(it, list);
+        it.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        await _repo!.UpsertLocalItemAsync(it);
+        TodoAttachmentStorage.RecycleManagedCopy(removed.Path, id);
         await LoadAsync();
     });
 

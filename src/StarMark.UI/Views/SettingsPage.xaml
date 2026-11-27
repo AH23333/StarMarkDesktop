@@ -719,6 +719,18 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- 待办附件 -->
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel Spacing="8">
+                                <TextBlock i18n:LocText.Key="settings.widgets.todoAttachTitle" Style="{StaticResource SettingTitle}"/>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                                    <TextBlock Grid.Column="0" i18n:LocText.Key="settings.widgets.todoAttachCopyLabel" Style="{StaticResource SettingRowText}" VerticalAlignment="Center"/>
+                                    <ToggleSwitch Grid.Column="1" i18n:LocText.OnContentKey="toggle.on" i18n:LocText.OffContentKey="toggle.off" MinWidth="0"
+                                                  IsOn="{x:Bind ViewModel.TodoAttachmentCopyEnabled, Mode=TwoWay}"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 性能模式 / 内存门禁 -->
                         <Border Style="{StaticResource Card}">
                             <StackPanel Spacing="8">

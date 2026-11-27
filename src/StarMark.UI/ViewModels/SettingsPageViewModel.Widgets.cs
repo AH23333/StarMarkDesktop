@@ -41,4 +41,20 @@ public partial class SettingsPageViewModel
         if (load) _ = mgr.RestoreOnStartupAsync(loadOnStartup: true);
         else _ = mgr.CollapseAllAsync();
     }
+
+    /// <summary>
+    /// 待办行拖入文件时要不要复制成托管副本（片284 / P-305）。<b>默认关＝只建链接</b>：
+    /// 不动用户的原件是最小惊讶；开了之后 <c>TodoAttachmentStorage.CopyWanted()</c> 才会把拖入的文件收进托管目录。
+    /// <para>临时文件不走这颗开关——<c>TodoAttachmentPolicy.NeedsForcedCopy</c> 强制复制，免得关机就把附件晾成死链。</para>
+    /// </summary>
+    public bool TodoAttachmentCopyEnabled
+    {
+        get => _settings.LoadTodoAttachmentCopyEnabled();
+        set
+        {
+            if (value == _settings.LoadTodoAttachmentCopyEnabled()) return;
+            _settings.SaveTodoAttachmentCopyEnabled(value);
+            OnPropertyChanged();
+        }
+    }
 }

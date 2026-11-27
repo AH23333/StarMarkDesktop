@@ -262,6 +262,12 @@ public sealed class LivingSourcePointerGateTests
     /// （全量首跑现读 20↔基线 19）。差集由只读复称尺对 HEAD 与改后各跑一遍点到名
     /// （正本 <c>bin/WI37C/diffcensus254.txt</c>・一落零愈），按口径<b>换号重指</b>
     /// （<c>var applied = false;</c> 现读 121）⇒ 净颗数照旧 19。</para>
+    /// <para><b>片284 再对一颗（一落零愈・19 ↔ 19・净±0＝自造自收）・来历＝待办附件开关卡平移行号</b>：
+    /// 本批在 <c>SettingsPage.xaml</c> widgets 页磁吸卡后插附件 Copy 开关卡（P-305 落地）⇒ 那颗档 1298 行以下整体平移：
+    /// 账本 WI-67 片10 那颗念 <c>SettingsPage.xaml:1298</c> 的旧号被压进空行＝真落空（全量首跑现读 20↔基线 19）。
+    /// 差集由只读复称尺对 HEAD 与改后各跑一遍点到名（正本 <c>bin/WI37C/diffcensus284.txt</c>・一落零愈），
+    /// 按口径<b>换号重指</b>——那句正文念的「绑定改念那颗读数」真身＝<c>ScoreGradeText</c> 绑定行现读 1419
+    /// （旧号在本批之前早已漂到别处非空行上＝#1020 族・本批只是让它现形）⇒ 净颗数照旧 19。</para>
     private const int FallenPointerBaseline = 19;
 
     /// <summary>片88 第二颗棘轮（P-256 ④）：那颗 <see cref="Resolve"/> 对它交回空的「带目录前缀的简写」那一族。

@@ -148,6 +148,8 @@ public sealed class SettingsTaxonomyGateTests
             "UpdateAutoCheckEnabled",
             // 批次 WI-81：主题色两档（0＝随系统强调色，1＝自定义）。不登记的话"只有一个编辑入口"对它根本不成立。
             "AccentIndex",
+            // 片284 / P-305：待办附件的复制开关（住在「组件」页的待办附件卡里）。不登记的话"只有一个编辑入口"对它根本不成立。
+            "TodoAttachmentCopyEnabled",
         };
 
         foreach (var p in writable)

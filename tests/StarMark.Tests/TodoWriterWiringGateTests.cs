@@ -60,9 +60,11 @@ public sealed class TodoWriterWiringGateTests
             .Count(m => m.Value.Contains($"Click=\"{click}\"")
                         && m.Value.Contains(@"Tag=""{x:Bind Id}"""));
 
-    /// <summary>VM 公开写入方法的形状：<c>public [async] Task XxxAsync(</c>。</summary>
+    /// <summary>VM 公开写入方法的形状：<c>public [async] Task[&lt;T&gt;] XxxAsync(</c>。
+    /// 泛型返回（片284 起 <c>AddDroppedFilesAsync</c> 带着 <c>TodoAttachmentOutcome</c>）同样要被普查咬住——
+    /// 漏了它就是"结局回执那颗写入面永远没人查接线"。</summary>
     private static readonly Regex PublicWriter = new(
-        @"public\s+(?:async\s+)?Task\s+(\w+Async)\s*\(", RegexOptions.Compiled);
+        @"public\s+(?:async\s+)?Task(?:<[^>]+>)?\s+(\w+Async)\s*\(", RegexOptions.Compiled);
 
     /// <summary>
     /// 一颗方法算"接上了"，当且仅当：视图 code-behind 直接调它，<b>或</b>它在本类内还被别处调用
@@ -79,14 +81,16 @@ public sealed class TodoWriterWiringGateTests
         var behind = CodeBehind();
 
         var writers = PublicWriter.Matches(vm).Select(m => m.Groups[1].Value).Distinct().ToList();
-        Assert.True(writers.Count >= 7,
-            $"VM 里只认出 {writers.Count} 颗公开写入方法（HEAD 上有 7 颗）⇒ 先怀疑这颗正则，别改判据");
+        Assert.True(writers.Count >= 9,
+            $"VM 里只认出 {writers.Count} 颗公开写入方法（HEAD 上有 10 颗，其中 LoadAsync 是刷新不是入口）⇒ 先怀疑这颗正则，别改判据");
 
-        // 正对照：这七颗是 HEAD 上真在事的写入面，逐颗点名（SetDueAsync 就是当年漏接的那一颗）
+        // 正对照：这九颗是 HEAD 上真在事的写入面，逐颗点名（SetDueAsync 就是当年漏接的那一颗；
+        // AddDroppedFilesAsync／RemoveAttachmentAsync 是片284 附件那一对，回执与回形针菜单的入口）
         Assert.All(new[]
         {
             "AddAsync", "ToggleAsync", "SetColorAsync", "SetDueAsync",
             "DeleteAsync", "UndoDeleteAsync", "PersistVisibleOrderAsync",
+            "AddDroppedFilesAsync", "RemoveAttachmentAsync",
         }, name =>
         {
             Assert.True(writers.Contains(name), $"VM 里认不出 {name}：签名形状变了，普查那一半已经失效");
@@ -115,7 +119,7 @@ public sealed class TodoWriterWiringGateTests
         Assert.Equal(1, ButtonsWithRowIdAndClick(xaml, "ColorButton_Click"));
         Assert.Equal(1, ButtonsWithRowIdAndClick(xaml, "DueButton_Click"));
         Assert.Contains("StarLog.Warn", behind);
-        Assert.Equal(2, SourceGate.Count(behind, "TryRowId(sender, out var id)"));              // 两颗都过同一道认 id 的关口
+        Assert.Equal(4, SourceGate.Count(behind, "TryRowId(sender, out var id)"));              // 颜色/截止/回形针/行拖放四颗都过同一道认 id 的关口（片284 起后两颗也在册）
         Assert.Matches(@"sender is FrameworkElement \{ Tag: long \w+ \}", behind);              // id 只许来自被点那颗元素的 Tag
 
         // ② 那份"XAML 声明的 flyout ＋ 从菜单项反查 id/Parent"必须整条消失

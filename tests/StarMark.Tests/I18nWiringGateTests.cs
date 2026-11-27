@@ -932,10 +932,11 @@ public sealed class I18nWiringGateTests
         // 47：批次 WI-67 片9c 第四刀把「快捷启动可以拖」那句提示挂上标记（代码只在提权会话里换它，走同一颗门）。
         // ⚠ 音乐那两句<b>没</b>挂上去——那一行写的是当前曲目，代码要写同一颗属性（见下面那颗成对闸门）。
         Assert.Equal(47, Count(all, "i18n:LocText.Key=\""));
-        // 20 而不是 22：批次 WI-2n 收掉两颗<b>随状态变</b>的提示条（播放/暂停、置顶/取消置顶）。
+        // 21 而不是 22：批次 WI-2n 收掉两颗<b>随状态变</b>的提示条（播放/暂停、置顶/取消置顶）。
         // 它们在标记上挂静态键＝给同一颗按钮开第二个主人（代码那句带状态的会被静态那句盖掉），
         // 改由代码交键；判据见 <see cref="AWiredElementNeverGetsItsPropertyWrittenFromCodeToo"/>。
-        Assert.Equal(20, Count(all, "i18n:LocText.ToolTipKey=\""));
+        // 片284（P-305）＋1＝21：待办附件那颗回形针的 attachTip（固定话，挂标记正路）。
+        Assert.Equal(21, Count(all, "i18n:LocText.ToolTipKey=\""));
         Assert.Equal(9, Count(all, "i18n:LocText.PlaceholderKey=\""));
         // 用了键的文件必须自己声明那颗命名空间（缺了＝那一颗组件整个不翻，而编得过也跑得起来）。
         // ⛔ 不是"每个文件都要声明"：<c>ClockWidget.xaml</c> 面上只有数字与指针，一句可翻的话都没有，

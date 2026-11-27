@@ -429,4 +429,105 @@ public class LocalItemStateTests
         // 旧语义不漂：dayOffset=0 与 DayStartUnix 在本机同一时刻必须同值（写侧换了算法，读数不许变）
         Assert.Equal(LocalItemState.DayStartUnix(now), LocalItemState.DayOffsetStartUnix(now, 0));
     }
+
+    // ── 待办附件（片284 / P-305）：extra_json 的 attachments 数组，每行 { "n": 名字, "p": 路径 } ──
+    //     与 color/due/order 同一条 extra_json 通道，同一套纪律：旧数据没有键必须安全回落、
+    //     坏行跳过不崩、空清单删键不留 "[]"。
+
+    [Fact]
+    public void GetAttachments_NoExtraJson_ReturnsEmpty()
+        => Assert.Empty(LocalItemState.GetAttachments(NewTodo(extra: null)));
+
+    [Fact]
+    public void GetAttachments_OldDataWithoutKey_ReturnsEmpty()
+    {
+        // A-3 之前创建的待办：extra_json 里只有 done/color 这些旧键
+        var item = NewTodo();
+        LocalItemState.SetColor(item, 2);
+        LocalItemState.SetDone(item, true);
+        Assert.Empty(LocalItemState.GetAttachments(item));
+    }
+
+    [Fact]
+    public void SetAttachments_RoundTrips()
+    {
+        var item = NewTodo();
+        var list = new[]
+        {
+            new TodoAttachment("规格书.pdf", @"C:\Docs\规格书.pdf"),
+            new TodoAttachment(@"D:\ref\抓帧.exe", @"D:\ref\抓帧.exe"),
+        };
+        LocalItemState.SetAttachments(item, list);
+        var back = LocalItemState.GetAttachments(item);
+        Assert.Equal(2, back.Count);
+        Assert.Equal(list[0], back[0]);   // record 值相等：名字与路径都原样
+        Assert.Equal(list[1], back[1]);
+    }
+
+    [Fact]
+    public void SetAttachments_EmptyList_RemovesKey()
+    {
+        var item = NewTodo();
+        LocalItemState.SetAttachments(item, new[] { new TodoAttachment("a.txt", @"C:\a.txt") });
+        LocalItemState.SetAttachments(item, Array.Empty<TodoAttachment>());
+        Assert.Empty(LocalItemState.GetAttachments(item));
+        // 删的是键、不是写 "[]"：不留空数组在档里（旧版读到 "[]" 也该回落空，但档面干净是写侧的责任）
+        Assert.DoesNotContain("attachments", item.ExtraJson!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SetAttachments_EmptyListOnNeverTouchedItem_DoesNotThrow()
+    {
+        var item = NewTodo(extra: null);
+        var ex = Record.Exception(() => LocalItemState.SetAttachments(item, Array.Empty<TodoAttachment>()));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void SetAttachments_PreservesColorDueAndOrder()
+    {
+        var item = NewTodo();
+        LocalItemState.SetColor(item, 4);
+        LocalItemState.SetDue(item, LocalItemState.DayStartUnix(DateTimeOffset.Now));
+        LocalItemState.SetOrder(item, 9);
+
+        LocalItemState.SetAttachments(item, new[] { new TodoAttachment("b.md", @"C:\b.md") });
+
+        Assert.Equal(4, LocalItemState.GetColor(item));       // 写附件不能把同在 extra_json 的其它键冲掉
+        Assert.NotNull(LocalItemState.GetDue(item));
+        Assert.Equal(9, LocalItemState.GetOrder(item));
+    }
+
+    [Fact]
+    public void GetAttachments_MalformedJson_ReturnsEmptyNotThrows()
+        => Assert.Empty(LocalItemState.GetAttachments(NewTodo(extra: "{ not json")));
+
+    [Fact]
+    public void GetAttachments_KeyNotArray_ReturnsEmpty()
+        => Assert.Empty(LocalItemState.GetAttachments(NewTodo(extra: """{"attachments":"nope"}""")));
+
+    [Fact]
+    public void GetAttachments_MissingPath_SkipsRow()
+    {
+        // 缺 p（路径）的行整行跳过；带 p 的行照常返回
+        var item = NewTodo(extra: """{"attachments":[{"n":"只有名字"},{"n":"好.txt","p":"C:\\好.txt"}]}""");
+        var back = LocalItemState.GetAttachments(item);
+        var only = Assert.Single(back);
+        Assert.Equal("好.txt", only.Name);
+        Assert.Equal(@"C:\好.txt", only.Path);
+    }
+
+    [Fact]
+    public void GetAttachments_MissingName_FallsBackToPath()
+    {
+        // 缺 n（名字）用路径顶上——菜单里那行总得有字可显
+        var item = NewTodo(extra: """{"attachments":[{"p":"C:\\无名字.bin"}]}""");
+        var only = Assert.Single(LocalItemState.GetAttachments(item));
+        Assert.Equal(@"C:\无名字.bin", only.Name);
+        Assert.Equal(@"C:\无名字.bin", only.Path);
+    }
+
+    [Fact]
+    public void GetAttachments_NonObjectRow_Skips()
+        => Assert.Empty(LocalItemState.GetAttachments(NewTodo(extra: """{"attachments":["裸字符串",42]}""")));
 }
