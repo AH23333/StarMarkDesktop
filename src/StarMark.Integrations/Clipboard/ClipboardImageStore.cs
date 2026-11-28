@@ -217,6 +217,9 @@ public static class ClipboardImageStore
     /// <para><b>PNG 原样透传，不重新编码</b>：重编一次就换掉字节，而"粘出去的字节"与"登记回声的像素"
     /// 必须出自同一张。其余格式（bmp/jpg/gif/tiff）用 WinRT 解码后重编成 PNG——这里没有 System.Drawing，
     /// 也不为这一件事加 NuGet，用的就是 <see cref="EncodeThumbnailAsync"/> 那同一套成像栈。</para>
+    /// <para>解码/转码的本体在 <see cref="TryReadBytesAsPngAsync"/>（✅P-307 第二刀抽出）：
+    /// 右键那条腿读的是盘上的件，拖进格子里的虚拟文件只有一条流——两条腿最后都汇到同一份
+    /// "字节 → PNG"上，就是不让"拖进来的"长出第二套解码与第二套身份。</para>
     /// <para>回声像素一律取<b>这次交出去的那份 PNG</b> 解出来的，不取解码器当场交出的：<b>身份只有一种算法</b>，
     /// 两边各算一次就是"复制成功、历史多一条"（同 <see cref="TryReadEntryImage"/> 的理由）。</para>
     /// <para>这一份不写盘、不进历史，只是把用户已有的文件换成位图负载。失败必须带得出原因。</para>
@@ -228,25 +231,44 @@ public static class ClipboardImageStore
         try
         {
             if (!File.Exists(path!)) return (null, default, ClipboardPolicy.MissingFileClause);
+            // 先 stat 再整读：超帽的件不值得整块读进内存才拒（用户拖一张 2GB 的 psd 进来，这一句就是那道闸）。
             var size = new FileInfo(path!).Length;
             if (size > ClipboardPolicy.MaxImageBytes)
                 return (null, default,
                     LocMessage.Of("clip.img.overCap",
                         ClipAssets.DescribeBytes(size), ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)));
             var bytes = await File.ReadAllBytesAsync(path!, ct).ConfigureAwait(false);
-            if (TryHandOutPng(bytes, out var png, out var frame, out _)) return (png, frame, null);
-
-            // 到这里只剩两种可能：格式本来就不是 PNG（正常，走转码），或它带 PNG 头却解不开（坏文件）。
-            // 两种都由转码那一支给出最终说法——解不开的 PNG 重编也解不开，下面的失败原因cover住。
-            var transcoded = await EncodePngFromBytesAsync(bytes, ct).ConfigureAwait(false);
-            if (transcoded is null)
-                return (null, default, LocMessage.Of("clip.img.undecodable"));
-            return TryHandOutPng(transcoded, out png, out frame, out var why)
-                ? (png, frame, null)
-                : (null, default, why ?? LocMessage.Of("clip.img.pngStillBad"));
+            return await TryReadBytesAsPngAsync(bytes, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) { return (null, default, LocMessage.Of("clip.img.canceled")); }
         catch (Exception ex) { return (null, default, LocMessage.Of("clip.img.unreadableFile", ex.GetType().Name)); }
+    }
+
+    /// <summary>
+    /// 内存字节 → "能交出去的一份 PNG"（✅P-307 第二刀・甲：共用核心）。
+    /// <para>路径侧先 stat 后整读，字节帽那道闸开在读取<b>之前</b>；这里拿到手的是已经花掉内存的字节
+    /// （拖进格子的虚拟文件没有 stat 可言），于是只做<b>字节帽</b>这一道：<c>overCap</c> 拒收且<b>不试转码</b>
+    /// ——转码救不了超帽，白烧一次 WinRT 只会再多等几秒才说出同一句"太大"。</para>
+    /// <para>空字节、解不开的容器、没有对应编解码器，最终都汇到同一句 <c>undecodable</c>：
+    /// 用户分得清"太大"与"读不出来"，分不清"是解码器没有还是文件头坏了"，内部分支只进日志不进话。</para>
+    /// </summary>
+    public static async Task<(byte[]? Png, ClipboardPayload.ImageFrame Frame, LocMessage? Reason)>
+        TryReadBytesAsPngAsync(byte[] bytes, CancellationToken ct)
+    {
+        if (bytes.LongLength > ClipboardPolicy.MaxImageBytes)
+            return (null, default,
+                LocMessage.Of("clip.img.overCap",
+                    ClipAssets.DescribeBytes(bytes.LongLength), ClipAssets.DescribeBytes(ClipboardPolicy.MaxImageBytes)));
+        if (TryHandOutPng(bytes, out var png, out var frame, out _)) return (png, frame, null);
+
+        // 到这里只剩两种可能：格式本来就不是 PNG（正常，走转码），或它带 PNG 头却解不开（坏文件）。
+        // 两种都由转码那一支给出最终说法——解不开的 PNG 重编也解不开。
+        var transcoded = await EncodePngFromBytesAsync(bytes, ct).ConfigureAwait(false);
+        if (transcoded is null)
+            return (null, default, LocMessage.Of("clip.img.undecodable"));
+        return TryHandOutPng(transcoded, out png, out frame, out var why)
+            ? (png, frame, null)
+            : (null, default, why ?? LocMessage.Of("clip.img.pngStillBad"));
     }
 
     /// <summary>

@@ -2873,6 +2873,11 @@ public static class UiStrings
         new Entry("widget.clipdrop.receipt.files", "已记入剪贴板历史（共 {0} 个路径）", "Recorded the {0} dropped paths in Clipboard history", "クリップボード履歴に記録しました（{0} 件のパス）"),
         new Entry("widget.clipdrop.receipt.rejected", "这段内容没有记入历史：过短或属于敏感形状", "Not recorded: too short or a sensitive shape", "記録しませんでした：短すぎるか機密性のある内容です"),
         new Entry("widget.clipdrop.receipt.failed", "记入剪贴板历史失败：{0}", "Failed to record in Clipboard history: {0}", "クリップボード履歴への記録に失敗しました：{0}"),
+        // ✅P-307 第二刀：虚拟文件那一腿（只有流没有地址的件）。回执从此可能是几行——
+        // 没记成的先说、图片其次、路径最后（ComposeDropReceipt 那个行序），每行各自一颗键，
+        // 不许用一颗带两个填空的键拼：两行各自成句，空着的那行在键里就说不出来。
+        new Entry("widget.clipdrop.receipt.images", "已记入剪贴板历史（共 {0} 张图片）", "Recorded the {0} dropped images in Clipboard history", "クリップボード履歴に記録しました（{0} 枚の画像）"),
+        new Entry("widget.clipdrop.receipt.virtualFailed", "{0} 项拖入的内容未能记入", "Failed to record {0} of the dropped items", "ドロップされた {0} 項目を記録できませんでした"),
 
         // ===== 护眼 · 休息提醒整节（批次 WI-37-B）=====
         // 这一族过去住在 Core：`EyeRestPolicy.IntervalLabels`／`NoticeLabels`／`NoticeHint` 直接拼中文成品串，

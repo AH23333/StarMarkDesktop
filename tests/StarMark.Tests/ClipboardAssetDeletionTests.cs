@@ -30,6 +30,7 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
     private readonly string _db = Path.Combine(Path.GetTempPath(), $"starmark_clipdel_{Guid.NewGuid():N}.db");
     private readonly string _dir = Path.Combine(Path.GetTempPath(), $"starmark_clipdel_{Guid.NewGuid():N}");
     private readonly string _other = Path.Combine(Path.GetTempPath(), $"starmark_clipdel_other_{Guid.NewGuid():N}");
+    private readonly string _dropDir = Path.Combine(Path.GetTempPath(), $"starmark_clipdel_drops_{Guid.NewGuid():N}");
     private readonly ItemRepository _repo;
 
     public ClipboardAssetDeletionTests()
@@ -39,14 +40,18 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
         _repo = new ItemRepository(factory);
         Directory.CreateDirectory(_dir);
         ClipAssets.FolderOverride = _dir;
+        // ✅P-307 第二刀・乙：clip-drops 与 clip 是两个目录，改道也各改各的——只改一边，
+        // 带认领的删除测试就会把测试件写进用户真实的 clip-drops（ClipDropAssets.FolderOverride 的注释）。
+        ClipDropAssets.FolderOverride = _dropDir;
     }
 
     public void Dispose()
     {
         ClipAssets.FolderOverride = null;
+        ClipDropAssets.FolderOverride = null;
         foreach (var p in new[] { _db, _db + "-wal", _db + "-shm" })
             try { File.Delete(p); } catch { }
-        foreach (var d in new[] { _dir, _other })
+        foreach (var d in new[] { _dir, _other, _dropDir })
             try { Directory.Delete(d, true); } catch { }
     }
 
@@ -77,6 +82,23 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
         var draft = ClipboardEntry.Build(text, "Code", ClipboardEntry.FormatText, At(at));
         return await _repo.RecordClipboardAsync(draft, CancellationToken.None, maxEntries: textMax);
     }
+
+    /// <summary>
+    /// 记一条带 clip-drops 认领名单的文件列表历史，并把名单里的件摆进 clip-drops 目录
+    /// （模拟 UI 那条腿已物化成功——件与名单同时在，删除侧才有东西可收）。
+    /// </summary>
+    private async Task<Item> RecClaimedRow(string path, string[] claimedDrops, int textMax = 500, int at = 0)
+    {
+        var draft = ClipboardEntry.Build(path, "Code", ClipboardEntry.FormatFiles, At(at));
+        draft.ExtraJson = ClipboardEntry.WithDropFilesOf(draft.ExtraJson, claimedDrops);
+        var item = await _repo.RecordClipboardAsync(draft, CancellationToken.None, maxEntries: textMax);
+        Directory.CreateDirectory(_dropDir);
+        foreach (var name in claimedDrops)
+            File.WriteAllText(Path.Combine(_dropDir, name), "materialized");
+        return item;
+    }
+
+    private string DropPath(string name) => Path.Combine(_dropDir, name);
 
     private static void Touch(string? name)
         => File.WriteAllText(Path.Combine(ClipAssets.Folder, name!), "bytes");
@@ -416,5 +438,64 @@ public sealed class ClipboardAssetDeletionTests : IDisposable
             "public async Task<RestoreResult> RestoreAsync");
         Assert.DoesNotContain("File.Delete", service);
         Assert.DoesNotContain("ClipAssets", service);
+    }
+
+    // ────────── ✅P-307 第二刀・乙：认领的 clip-drops 件跟着行走 ──────────
+
+    [Fact]
+    public async Task DeletingOneClaimingRow_TakesItsDropFiles_LeavesUnclaimedOnes()
+    {
+        var keeper = "bbbbbbbbbbbb_没被认领的.pdf";
+        Directory.CreateDirectory(_dropDir);
+        File.WriteAllText(DropPath(keeper), "对账的数，不由这次点击收");
+        var row = await RecClaimedRow("C:\\批甲\\跟着走的.pdf", new[] { "9f2a3b8c4d5e_跟着走的.pdf" });
+
+        Assert.True(await _repo.DeleteClipboardEntryAsync(row.Id, CancellationToken.None));
+
+        Assert.False(File.Exists(DropPath("9f2a3b8c4d5e_跟着走的.pdf")));   // 认领名单照收
+        Assert.True(File.Exists(DropPath(keeper)));                          // 没认领的不牵连
+    }
+
+    [Fact]
+    public async Task TextRotation_TakesDropFilesOfTheRowsItPruned()
+    {
+        await RecClaimedRow("C:\\批\\最旧的.pdf", new[] { "9f2a3b8c4d5e_最旧的.pdf" }, textMax: 2, at: 0);
+        await RecClaimedRow("C:\\批\\居中的.pdf", new[] { "0123456789ab_居中的.pdf" }, textMax: 2, at: 10);
+        await RecClaimedRow("C:\\批\\最新的.pdf", new[] { "aaaaaaaaaaaa_最新的.pdf" }, textMax: 2, at: 20);
+
+        // 文本桶裁掉最旧那行时，它认领的 clip-drops 件跟着走——不然轮转就是孤儿制造机。
+        Assert.False(File.Exists(DropPath("9f2a3b8c4d5e_最旧的.pdf")));
+        Assert.True(File.Exists(DropPath("0123456789ab_居中的.pdf")));
+        Assert.True(File.Exists(DropPath("aaaaaaaaaaaa_最新的.pdf")));
+    }
+
+    [Fact]
+    public async Task ClearingHistory_TakesClaimedDropFiles_ButNotUnclaimedOnes()
+    {
+        await RecClaimedRow("C:\\批\\一件.pdf", new[] { "9f2a3b8c4d5e_一件.pdf" });
+        var orphan = "bbbbbbbbbbbb_没主的.docx";
+        File.WriteAllText(DropPath(orphan), "清空删行、不数孤儿");
+
+        var deleted = await _repo.ClearClipboardHistoryAsync(CancellationToken.None);
+
+        Assert.Equal(1, deleted);
+        Assert.False(File.Exists(DropPath("9f2a3b8c4d5e_一件.pdf")));       // 有主的跟着行走
+        Assert.True(File.Exists(DropPath(orphan)));                          // 没主的归对账数
+    }
+
+    [Fact]
+    public async Task UnsafeClaimedDropName_IsRefused_NothingOutsideIsDeleted()
+    {
+        Directory.CreateDirectory(_other);
+        var victim = Path.Combine(_other, "victim.txt");
+        File.WriteAllText(victim, "目录外的件");
+        var row = await RecClaimedRow("C:\\批\\名字被改过的.pdf", new[] { "9f2a3b8c4d5e_正常件.pdf" });
+        // 备份是文本：把认领名单手改成越界名字——删除侧拼路径前必须过 ClipDropAssets.FullPathOf 名册。
+        OverwriteExtra(row.Id, "{\"clipFormat\":\"files\",\"clipCopyCount\":1,\"clipDropFiles\":[\"../victim.txt\"]}");
+
+        Assert.True(await _repo.DeleteClipboardEntryAsync(row.Id, CancellationToken.None));
+
+        Assert.True(File.Exists(victim));                                    // 越界的名字一个都不许删出去
+        Assert.True(File.Exists(DropPath("9f2a3b8c4d5e_正常件.pdf")));       // 名单被改掉后没人认领：留给对账数
     }
 }

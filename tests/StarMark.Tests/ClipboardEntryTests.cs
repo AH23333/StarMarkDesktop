@@ -180,4 +180,77 @@ public sealed class ClipboardEntryTests
         Assert.True(item.Title.Length <= ClipboardPolicy.MaxTitleChars,
             $"标题 {item.Title.Length} 超出预算 {ClipboardPolicy.MaxTitleChars}");
     }
+
+    // ────────── ✅P-307 第二刀・乙：clipDropFiles 认领名单（行与物化件同生同死） ──────────
+
+    [Fact]
+    public void WithDropFilesOf_And_DropFileNamesOf_RoundTrip()
+    {
+        var extra = ClipboardEntry.WithDropFilesOf(Build("一段文字").ExtraJson,
+            new[] { "9f2a3b8c4d5e_报告.pdf", "0123456789ab_附注.txt" });
+
+        Assert.Equal(new[] { "9f2a3b8c4d5e_报告.pdf", "0123456789ab_附注.txt" },
+            ClipboardEntry.DropFileNamesOf(extra));
+    }
+
+    [Fact]
+    public void WithDropFilesOf_EmptyOrNullList_RemovesTheKeyEntirely()
+    {
+        // "认领了零件"与"没有这颗键"在删除侧是同一个行为：留空数组只是让 extra 里多一行没意义的括号。
+        var claimed = ClipboardEntry.WithDropFilesOf(Build("一段文字").ExtraJson, new[] { "9f2a3b8c4d5e_报告.pdf" });
+
+        Assert.DoesNotContain("clipDropFiles", ClipboardEntry.WithDropFilesOf(claimed, Array.Empty<string>()),
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("clipDropFiles", ClipboardEntry.WithDropFilesOf(claimed, null),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("{ not json")]
+    [InlineData("[]")]
+    [InlineData("{\"clipDropFiles\":\"9f2a3b8c4d5e_单数.pdf\"}")]     // 键不是数组
+    [InlineData("{\"clipDropFiles\":[]}")]                              // 空数组＝没有认领
+    public void DropFileNamesOf_UnreadableJson_ReadsAsNoClaims(string? json)
+        => Assert.Empty(ClipboardEntry.DropFileNamesOf(json));
+
+    [Fact]
+    public void DropFileNamesOf_MixedGarbageEntries_KeepsOnlyReadableStrings()
+    {
+        // 名单是备份文件里用户可改的文本：数组里混着数、布尔、空串、空白的一律跳过——
+        // 读崩了最多"少删几件"（归对账数），不能把删除链炸断。
+        var json = "{\"clipDropFiles\":[42, true, \"9f2a3b8c4d5e_报告.pdf\", \"\", \"   \"]}";
+
+        Assert.Equal(new[] { "9f2a3b8c4d5e_报告.pdf" }, ClipboardEntry.DropFileNamesOf(json));
+    }
+
+    [Fact]
+    public void MergeForReplay_UnionsOldAndNewClaims_WithoutDuplicates()
+    {
+        var old = Build("同一批拖进来的路径");
+        old.ExtraJson = ClipboardEntry.WithDropFilesOf(old.ExtraJson, new[] { "9f2a3b8c4d5e_旧件.pdf" });
+
+        var fresh = Build("同一批拖进来的路径", app: "edge");
+        fresh.ExtraJson = ClipboardEntry.WithDropFilesOf(fresh.ExtraJson,
+            new[] { "0123456789ab_新件.docx", "9f2a3b8c4d5e_旧件.pdf" });   // 旧件又认领了一遍＝重复
+
+        var merged = ClipboardEntry.MergeForReplay(old.ExtraJson, fresh, copyCount: 2);
+
+        // 旧行先、新认领后、重复不并两次：名单丢掉任何一边，物化出去的件当场变孤儿，
+        // 而"名单还在"的那半句谎话会一路带到删除侧。
+        Assert.Equal(new[] { "9f2a3b8c4d5e_旧件.pdf", "0123456789ab_新件.docx" },
+            ClipboardEntry.DropFileNamesOf(merged));
+    }
+
+    [Fact]
+    public void MergeForReplay_WithoutNewClaims_KeepsTheOldOnes()
+    {
+        var old = Build("只认领过一次的路径");
+        old.ExtraJson = ClipboardEntry.WithDropFilesOf(old.ExtraJson, new[] { "9f2a3b8c4d5e_件.pdf" });
+
+        var merged = ClipboardEntry.MergeForReplay(old.ExtraJson, Build("只认领过一次的路径"), copyCount: 2);
+
+        Assert.Equal(new[] { "9f2a3b8c4d5e_件.pdf" }, ClipboardEntry.DropFileNamesOf(merged));
+    }
 }

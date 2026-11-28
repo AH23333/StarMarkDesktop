@@ -65,18 +65,22 @@ public sealed class ClipboardDropWiringGateTests : IDisposable
     {
         var drop = SourceGate.MethodBody(Win(), "private async void ClipboardGrid_Drop(");
 
-        // 两条进路各交给那一口（⛔ 在 handler 里另起一份判据＝两处各写一遍策略门）
-        Assert.Contains("ClipboardCapture.ImportDroppedFilesAsync(repo, paths, maxEntries)", drop);
+        // 两条进路各交给那一口（⛔ 在 handler 里另起一份判据＝两处各写一遍策略门）；
+        // 乙的认领名单跟着文件那一口递进去：行落上那一刻起，这次物化的件就有主了。
+        Assert.Contains("ClipboardCapture.ImportDroppedFilesAsync(repo, paths, maxEntries,", drop);
+        Assert.Contains("claimedDropNames: outcome.ClaimedNames)", drop);
         Assert.Contains("ClipboardCapture.ImportDroppedTextAsync(repo, raw, maxEntries)", drop);
-        // 上限落库这一刻现读（与采集那一路同口径，设置页改完下一条就生效）
+        // 上限落库这一刻现读（与采集那一路同口径，设置页改完下一条就生效）——文本与图片两个桶各读各的。
         Assert.Contains("LoadClipboardTextMaxEntries();", drop);
+        Assert.Contains("LoadClipboardImageMaxEntries();", drop);
 
-        // 五种结局各说一句：没有可用路径（与快捷启动共用那句，一句一行多主）／被门拒（一处翻译，
+        // 结局各说一句：没有可用路径（与快捷启动共用那句，一句一行多主）／文件那条腿可能几行
+        // （ComposeDropReceipt 排行序：没记成的先说、图片其次、路径最后）／被门拒（一处翻译，
         // 两条进路共用 ClipDropReceipt——被拒那句再在支里各问一遍＝换词漏一半）／
-        // 记上了（文件带数、文本不带）／写库失败（原因走数据门，不编话）。
+        // 文本不带数／写库失败（原因走数据门，不编话）。
         Assert.Contains("SayDropReceipt(LocMessage.Of(\"widget.drop.receipt.noPaths\", items.Count));", drop);
+        Assert.Contains("SayDropReceipt(ComposeDropReceipt(recorded is not null, paths.Count, outcome));", drop);
         Assert.Contains("SayDropReceipt(ClipDropReceipt(recorded is not null,", drop);
-        Assert.Contains("LocMessage.Of(\"widget.clipdrop.receipt.files\", paths.Count)));", drop);
         Assert.Contains("LocMessage.Of(\"widget.clipdrop.receipt.text\")));", drop);
         Assert.Contains("SayDropReceipt(LocMessage.Of(\"widget.clipdrop.receipt.failed\", LocMessage.Of(\"common.rawValue\", ex.Message)));", drop);
 
@@ -87,6 +91,47 @@ public sealed class ClipboardDropWiringGateTests : IDisposable
         Assert.Contains("项都没有可用路径，未落库。", drop);
         Assert.Contains("被策略门挡下（过短或敏感形状），未落库。", drop);
         Assert.Contains("已记入历史：{recorded.Title}", drop);
+    }
+
+    /// <summary>
+    /// 分流（✅P-307 第二刀）：同一份 StorageItems 里，只有流没有盘上地址的件必须被认出来
+    /// 交给物化那一腿——不分流的话，虚拟件（Outlook 附件、浏览器拖出的件）会被
+    /// 「没有可用路径」一句话打发掉，而用户看到的是"拖了、没反应"。
+    /// </summary>
+    [Fact]
+    public void VirtualFilesAreSplitOffToTheirOwnLegBeforeTheFilesExit()
+    {
+        var drop = SourceGate.MethodBody(Win(), "private async void ClipboardGrid_Drop(");
+        Assert.Contains("if (item is StorageFile file && string.IsNullOrWhiteSpace(file.Path))", drop);
+        Assert.Contains("virtualFiles.Add(file);", drop);
+        Assert.Contains("await ImportVirtualFilesAsync(repo, virtualFiles, imageMaxEntries)", drop);
+        // 行没落上＝这次物化的件没人认领：当场收回，不留孤儿（§3-Q6 第二类不由我们自己制造）。
+        Assert.Contains("if (recorded is null && outcome.ClaimedNames.Count > 0)", drop);
+        Assert.Contains("ClipboardDropFileStore.TryDelete(name);", drop);
+    }
+
+    /// <summary>
+    /// MOTW 尽力标（✅P-307 第二刀）：安全加固不是记录链的一环——标不成不许让拖放失败，
+    /// 返回值也<b>刻意丢弃</b>（`_ =`）：读了它就会有人想"失败时该报给谁"，那一报就报进了记录链，
+    /// 于是"记没记上"与"标没标上"从两件事绞成了一件。
+    /// </summary>
+    [Fact]
+    public void ZoneMarkingIsBestEffortAndItsFailureIsNotTheDropsFailure()
+    {
+        var body = SourceGate.MethodBody(Win(), "private static async Task<VirtualDropOutcome> ImportVirtualFilesAsync(");
+        Assert.Contains("_ = TodoAttachmentStorage.TryMarkInternetZone(dropPath);", body);
+    }
+
+    /// <summary>
+    /// 同源同目录（✅P-307 第二刀）：物化路径必须从 <c>ClipDropAssets.Folder</c> 那棵树拼——
+    /// 写是 <c>ClipboardDropFileStore</c> 写的，目录、改道都问同一份。两处各 Combine 一遍，
+    /// 改道（<c>FolderOverride</c>）只改一处时，路径就指不到刚写的那个件：收回与记行都会静默地对空气做事。
+    /// </summary>
+    [Fact]
+    public void MaterializedPathsComeFromTheSameFolderTheStoreWritesTo()
+    {
+        var body = SourceGate.MethodBody(Win(), "private static async Task<VirtualDropOutcome> ImportVirtualFilesAsync(");
+        Assert.Contains("Path.Combine(ClipDropAssets.Folder, name)", body);
     }
 
     [Fact]
@@ -132,6 +177,8 @@ public sealed class ClipboardDropWiringGateTests : IDisposable
     [InlineData("widget.clipdrop.receipt.files")]
     [InlineData("widget.clipdrop.receipt.rejected")]
     [InlineData("widget.clipdrop.receipt.failed")]
+    [InlineData("widget.clipdrop.receipt.images")]
+    [InlineData("widget.clipdrop.receipt.virtualFailed")]
     public void EveryClipDropWordIsAskedForOnceAndSaysItDifferentlyInEachLanguage(string key)
     {
         // 一颗键一个主人：语料里恰好一次（⛔ 一句字两个主人，也⛔ 没人问的死键）

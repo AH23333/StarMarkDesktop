@@ -279,12 +279,24 @@ public sealed class ClipboardImageCaptureTests : IDisposable
         // 先落库再写盘：仓储会告诉我们这一条其实早就在历史里、该沿用哪个文件名。
         // 反过来（先写盘）每次回放都落一个新名字，旧文件当场变孤儿——而"用户目录里不许攒没人认领的东西"
         // 正是 §3-Q6 把存储做成可见之后必须一起兑现的那一半。
-        var cap = SourceGate.MethodBody(
-            SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs"),
-            "internal static async Task<Item?> CaptureImageAsync");
-        Assert.True(cap.IndexOf("RecordClipboardAsync", StringComparison.Ordinal)
-                    < cap.IndexOf("WritePairAsync", StringComparison.Ordinal),
+        var watcher = SourceGate.ReadRepoFile("src/StarMark.Integrations/Clipboard/ClipboardWatcher.cs");
+        // ✅P-307 第二刀抽出共享尾段（WriteImageEntryAsync）之后，这条纪律只住在尾段里；
+        // 两条进路（采集/拖入）各自再写一份落库或写盘，就又长出第二套身份与名字。
+        var tail = SourceGate.MethodBody(watcher, "private static async Task<Item?> WriteImageEntryAsync");
+        Assert.True(tail.IndexOf("RecordClipboardAsync", StringComparison.Ordinal)
+                    < tail.IndexOf("WritePairAsync", StringComparison.Ordinal),
             "顺序倒了：写盘在落库之前，回放就会留下孤儿文件");
+        foreach (var entry in new[]
+                 {
+                     "internal static async Task<Item?> CaptureImageAsync",
+                     "public static async Task<Item?> ImportDroppedImageAsync",
+                 })
+        {
+            var body = SourceGate.MethodBody(watcher, entry);
+            Assert.Contains("WriteImageEntryAsync(", body);
+            Assert.DoesNotContain("WritePairAsync", body);            // 直写盘＝绕开尾段的旧路
+            Assert.DoesNotContain("RecordClipboardAsync", body);      // 直落库＝第二套名字口径
+        }
     }
 
     [Fact]
@@ -311,4 +323,84 @@ public sealed class ClipboardImageCaptureTests : IDisposable
 
 
     private static string ThumbPath(Item item) => Path.Combine(ClipboardImageStore.Folder, ClipboardEntry.ThumbFileName(item)!);
+
+    // ────────── ✅P-307 第二刀・甲：拖入的图片字节（显式路，与采集同一套口径） ──────────
+
+    /// <summary>
+    /// 造一份"拖源交上来的材料"：PNG 字节 + 与之同源的归一像素——
+    /// UI 那条腿先 <c>TryReadBytesAsPngAsync</c> 解出这两样再调 <c>ImportDroppedImageAsync</c>，
+    /// 测试也按同一形状喂。
+    /// </summary>
+    private static async Task<(byte[] Png, ClipboardPayload.ImageFrame Frame)> DroppedMaterialAsync(int width, int height)
+    {
+        var bgra = new byte[width * height * 4];
+        for (var i = 0; i < width * height; i++)
+        {
+            bgra[i * 4] = (byte)(i * 7 % 251);
+            bgra[i * 4 + 1] = (byte)(i * 13 % 251);
+            bgra[i * 4 + 2] = (byte)(i * 29 % 251);
+            bgra[i * 4 + 3] = 255;
+        }
+        var png = await ClipboardImageStore.EncodePngAsync(bgra, width, height, CancellationToken.None);
+        Assert.NotNull(png);
+        return (png!, new ClipboardPayload.ImageFrame(width, height, bgra));
+    }
+
+    private Task<Item?> DropImage(byte[] png, ClipboardPayload.ImageFrame frame, string? originalName)
+        => ClipboardCapture.ImportDroppedImageAsync(_repo, png, frame, originalName, ct: CancellationToken.None);
+
+    [Fact]
+    public async Task DroppedImage_IsRecordedWithBothFilesOnDisk()
+    {
+        var (png, frame) = await DroppedMaterialAsync(24, 16);
+
+        var item = await DropImage(png, frame, "截图 2026.png");
+
+        Assert.NotNull(item);
+        Assert.Equal(ClipboardEntry.FormatImage, ClipboardEntry.Format(item!));
+        Assert.Equal(1, ClipboardEntry.CopyCount(item!));
+        Assert.Equal(1, await Rows());
+        // 共享尾段（WriteImageEntryAsync）把采集那条腿的全套都带过来了：行落库、两张文件写盘。
+        Assert.Equal(2, Files().Length);
+        Assert.True(File.Exists(MainPath(item!)));
+        Assert.True(File.Exists(ThumbPath(item!)));
+    }
+
+    [Fact]
+    public async Task DroppedImage_SameBytesTwice_MergesIntoOneRowWithoutNewFiles()
+    {
+        var (png, frame) = await DroppedMaterialAsync(24, 16);
+        var first = await DropImage(png, frame, "第一次拖入.png");
+        Assert.NotNull(first);
+        var filesAfterFirst = Files().Length;
+        Assert.Equal(2, filesAfterFirst);
+
+        var second = await DropImage((byte[])png.Clone(), frame, "第二次拖入.png");
+
+        Assert.NotNull(second);
+        Assert.Equal(first!.Id, second!.Id);                            // 同像素＝同身份＝同一行
+        Assert.Equal(2, ClipboardEntry.CopyCount(second));
+        Assert.Equal(1, await Rows());
+        Assert.Equal(filesAfterFirst, Files().Length);                  // 不落新文件（名字沿用旧行那份）
+    }
+
+    [Fact]
+    public async Task DroppedImage_TooSmallForTheGate_IsRefused()
+    {
+        var (png, frame) = await DroppedMaterialAsync(8, 8);            // 门禁 16×16 起步
+
+        Assert.Null(await DropImage(png, frame, "小图标.png"));
+
+        Assert.Equal(0, await Rows());
+        Assert.Empty(Files());                                          // 行没落上，件也没写出去
+    }
+
+    [Fact]
+    public async Task DroppedImage_NullPng_ThrowsInsteadOfSwallowing()
+    {
+        var (_, frame) = await DroppedMaterialAsync(24, 16);
+
+        await Assert.ThrowsAsync<ArgumentNullException>(() =>
+            DropImage(null!, frame, "空字节.png"));
+    }
 }

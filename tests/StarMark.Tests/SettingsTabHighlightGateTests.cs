@@ -63,9 +63,8 @@ public sealed class SettingsTabHighlightGateTests
         Assert.Empty(doc.Descendants()
             .Where(e => names.Contains((string?)e.Attribute(x + "Name") ?? string.Empty))
             .Select(e => (string?)e.Attribute(x + "Name")!));
-        Assert.Empty(doc.Descendants(ui + "Setter")
-            .Select(e => ((string?)e.Attribute("Target") ?? string.Empty).Split('.')[0])
-            .Where(head => names.Contains(head)));
+        Assert.DoesNotContain(doc.Descendants(ui + "Setter"),
+            e => names.Contains(((string?)e.Attribute("Target") ?? string.Empty).Split('.')[0]));
 
         Assert.Contains("<Style TargetType=\"TabViewItem\">", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Template\">", xaml, StringComparison.Ordinal);

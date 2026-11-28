@@ -266,15 +266,14 @@ public sealed class BoardBackupChainGateTests : IDisposable
 
     /// <summary><c>.json</c> 载体恒 0、⛔ 抛：老备份与"开关关着导出的那一份"都走这一档。</summary>
     [Fact]
-    public void PlainManifestCarriesNoBoardsAndSaysSoWithoutThrowing()
+    public async Task PlainManifestCarriesNoBoardsAndSaysSoWithoutThrowing()
     {
         var plain = PackagePath("plain.json");
         File.WriteAllText(plain, "{}");
         Assert.Equal(0, BackupContainer.CountBoardEntries(plain));
-        var task = BackupContainer.ExtractBoardsAsync(plain, CancellationToken.None);
-        Assert.True(task.Wait(2000));
-        Assert.Equal(0, task.Result.Carried);
-        Assert.True(task.Result.Opened);     // "没带"与"打不开"是两档，那颗布尔只管后者
+        var boards = await BackupContainer.ExtractBoardsAsync(plain, CancellationToken.None);
+        Assert.Equal(0, boards.Carried);
+        Assert.True(boards.Opened);     // "没带"与"打不开"是两档，那颗布尔只管后者
     }
 
     // ─────────── ③ 接线与开关（⛔ 新键，复用"含图片"那一颗） ───────────

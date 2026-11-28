@@ -91,12 +91,12 @@ public sealed class ClipboardMissingImageTextGateTests
         Assert.Equal(1, Count(cardPolicy, "LocMessage.Of(\"card.missRow\""));
 
         // 宿主侧：读取那两处现在把政策那颗 <c>LocMessage</c> 原样交出去（⛔ 就地取词），
-        // 十句"为什么读不出来"也全部交表——解码器那句原话改交日志（<c>StarLog.Warn</c>），见 TryHandOutPng。
+        // 十一句"为什么读不出来"也全部交表——解码器那句原话改交日志（<c>StarLog.Warn</c>），见 TryHandOutPng。
         var store = Code(ReadRepoFile(Store));
         Assert.Equal(2, Count(store, "ClipboardPolicy.MissingFileClause"));
         Assert.Equal(0, Count(store, "ClipboardPolicy.MissingFileClause.Render()"));   // 旧形状不许回来
         Assert.Equal(0, Count(store, ".Render()"));                                     // 整档都不许就地念
-        Assert.Equal(10, Count(store, "LocMessage.Of(\"clip.img."));
+        Assert.Equal(11, Count(store, "LocMessage.Of(\"clip.img."));
         Assert.Equal(0, Count(store, "string? reason"));                                 // 载体回到 string ＝话又归代码决定
         // ✅WI-67 片9c 第二刀：那一页的状态行升成 LocMessage ⇒ 宿主⛔ 再当场念（射程已经兑现，本格改口钉"⛔ 就地取词"）。
         Assert.DoesNotContain(".Render()", Code(ReadRepoFile(PageVm)), StringComparison.Ordinal);

@@ -31,6 +31,7 @@ public static class ClipboardEntry
     private const string FileKey = "clipFile";
     private const string ThumbKey = "clipThumb";
     private const string MissingKey = "clipMissing";
+    private const string DropFilesKey = "clipDropFiles";
 
     /// <summary>条目格式：纯文本。与 <see cref="FormatFiles"/> 一起构成此前的两种负载。</summary>
     public const string FormatText = "text";
@@ -126,7 +127,8 @@ public static class ClipboardEntry
     public static string UriOfMerged(string? mergedExtraJson) => UriOf(NameOf(mergedExtraJson, FileKey));
 
     private static string Write(string? existingJson, string? sourceApp, string format, long copyCount,
-        bool truncated, int fullLength, int fullLines, ImageMeta? image = null)
+        bool truncated, int fullLength, int fullLines, ImageMeta? image = null,
+        IReadOnlyList<string>? dropFiles = null)
     {
         var node = Parse(existingJson);
         if (!string.IsNullOrWhiteSpace(sourceApp)) node[AppKey] = ClipboardPolicy.CollapseControlChars(sourceApp!);
@@ -158,6 +160,17 @@ public static class ClipboardEntry
             node[HeightKey] = m.Height;
             node[BytesKey] = m.Bytes;
             node.Remove(MissingKey);
+        }
+        if (dropFiles is { Count: > 0 })
+        {
+            // 乙的认领名单只并不减（去重）：回放合并时旧行已认领的、这次草稿新认领的都得在——
+            // 丢掉任何一边，物化出去的件当场变孤儿，而"名单还在"的那半句谎话会一路带到删除侧。
+            var names = new List<string>(DropFileNamesOf(existingJson));
+            foreach (var name in dropFiles)
+                if (!string.IsNullOrEmpty(name) && !names.Contains(name)) names.Add(name);
+            var array = new JsonArray();
+            foreach (var name in names) array.Add(name);
+            node[DropFilesKey] = array;
         }
         return node.ToJsonString();
     }
@@ -203,7 +216,7 @@ public static class ClipboardEntry
     /// </summary>
     public static string MergeForReplay(string? existingExtraJson, Item draft, long copyCount)
         => Write(existingExtraJson, App(draft), Format(draft), copyCount, IsTruncated(draft), FullLength(draft),
-            FullLines(draft), ImageOf(draft));
+            FullLines(draft), ImageOf(draft), DropFileNamesOf(draft.ExtraJson));
 
     /// <summary>条目格式（<see cref="FormatText"/> / <see cref="FormatFiles"/> / <see cref="FormatImage"/>；未知旧数据按文本）。</summary>
     public static string Format(Item item) => FormatOf(item.ExtraJson);
@@ -356,6 +369,49 @@ public static class ClipboardEntry
     /// </summary>
     public static (string? Main, string? Thumb) ClipFileNamesOf(string? extraJson)
         => (NameOf(extraJson, FileKey), NameOf(extraJson, ThumbKey));
+
+    // ==================== clip-drops 认领名单（✅P-307 第二刀・乙） ====================
+
+    /// <summary>
+    /// 这一行认领的 clip-drops 件名（<c>clipDropFiles</c> 数组）——<b>删除侧的名单</b>：
+    /// 行没了（轮转/清空/删单条）那一刻，名单里的件跟着没。
+    /// <b>防御解析</b>：坏 JSON、键不是数组、数组里混着非字符串/空串的一律跳过——
+    /// 名单是备份文件里用户可改的文本，读崩了最多"少删几件"（归对账数），不能把删除链炸断。
+    /// </summary>
+    public static IReadOnlyList<string> DropFileNamesOf(string? extraJson)
+    {
+        var names = new List<string>();
+        try
+        {
+            if (Parse(extraJson)?[DropFilesKey] is JsonArray array)
+                foreach (var entry in array)
+                {
+                    if (entry is not JsonValue value || !value.TryGetValue<string>(out var name)) continue;
+                    if (!string.IsNullOrWhiteSpace(name)) names.Add(name);
+                }
+        }
+        catch { /* 坏数据按"没有认领"处理 */ }
+        return names;
+    }
+
+    /// <summary>
+    /// 置/换这一行的认领名单。<paramref name="names"/> 空（或 null）＝移除那颗键：
+    /// "认领了零件"与"没有这颗键"在删除侧是同一个行为，留着空数组只是让 extra 里多一行没意义的括号。
+    /// </summary>
+    public static string WithDropFilesOf(string? extraJson, IReadOnlyList<string>? names)
+    {
+        var node = Parse(extraJson);
+        if (names is { Count: > 0 })
+        {
+            var array = new JsonArray();
+            foreach (var name in names)
+                if (!string.IsNullOrWhiteSpace(name)) array.Add(name);
+            if (array.Count > 0) node[DropFilesKey] = array;
+            else node.Remove(DropFilesKey);
+        }
+        else node.Remove(DropFilesKey);
+        return node.ToJsonString();
+    }
 
     /// <summary>格式的字符串入口（<see cref="Format(Item)"/> 的同一份判据，缺字段/坏数据按文本）。</summary>
     public static string FormatOf(string? extraJson)

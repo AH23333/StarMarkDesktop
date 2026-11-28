@@ -333,4 +333,58 @@ public sealed class ClipboardCopyImageTests : IDisposable
         }
         return all;
     }
+
+    // ────────── ✅P-307 第二刀・甲：字节入口（盘上文件与拖进格子的流汇到同一份核心） ──────────
+
+    [Fact]
+    public async Task PngBytesFromMemory_AreHandedOverByteForByte()
+    {
+        var bgra = Screenshot(9, 5);
+        var png = await ClipboardImageStore.EncodePngAsync(bgra, 9, 5, CancellationToken.None);
+        Assert.NotNull(png);
+
+        var (got, frame, why) = await ClipboardImageStore.TryReadBytesAsPngAsync(png!, CancellationToken.None);
+
+        Assert.True(ClipboardPayload.IsPng(got), why?.Render() ?? "交出来的不是 PNG");
+        Assert.Equal(png, got);                                    // 透传：内存路与文件路一样不重编
+        Assert.Equal((9, 5), (frame.Width, frame.Height));
+        Assert.Equal(bgra, frame.Bgra);
+    }
+
+    [Fact]
+    public async Task BmpBytesFromMemory_AreTranscodedToTheExactSamePixels()
+    {
+        var (w, h) = (7, 5);
+        var bytes = Bmp24(w, h, (x, y) => ((byte)(x * 11), (byte)(y * 31), (byte)(x * 5 + y * 7)));
+
+        var (png, frame, why) = await ClipboardImageStore.TryReadBytesAsPngAsync(bytes, CancellationToken.None);
+
+        Assert.True(ClipboardPayload.IsPng(png), why?.Render() ?? "BMP 字节没能转成 PNG");
+        Assert.Equal((w, h), (frame.Width, frame.Height));
+        Assert.Equal(ExpectedBgra(w, h, (x, y) => ((byte)(x * 11), (byte)(y * 31), (byte)(x * 5 + y * 7))), frame.Bgra);
+    }
+
+    [Fact]
+    public async Task OversizedBytesFromMemory_AreRefusedBeforeAnyTranscode()
+    {
+        // 与采集侧同一道上限（20MB）：拖进格子的虚拟文件没有 stat 可言，这道闸只能开在拿到字节之后。
+        var bytes = new byte[ClipboardPolicy.MaxImageBytes + 1];
+
+        var (png, _, why) = await ClipboardImageStore.TryReadBytesAsPngAsync(bytes, CancellationToken.None);
+
+        Assert.Null(png);
+        Assert.Contains("超过", why!.Render(), StringComparison.Ordinal);
+        Assert.Contains("MB", why!.Render(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UndecodableBytesFromMemory_GetTheSameRefusalAsLyingFiles()
+    {
+        // 不是位图的字节（拖源谎报/半截流）最终汇到同一句"解不开"——与文件路那侧同一句话、同一颗键。
+        var (png, _, why) = await ClipboardImageStore.TryReadBytesAsPngAsync(
+            System.Text.Encoding.UTF8.GetBytes("这不是一张图"), CancellationToken.None);
+
+        Assert.Null(png);
+        Assert.Contains("解不开", why!.Render(), StringComparison.Ordinal);
+    }
 }

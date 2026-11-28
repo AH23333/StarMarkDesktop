@@ -135,8 +135,8 @@ public sealed class SyncTriStateGateTests : IDisposable
         Assert.Equal(1, summary.FailedCount);
 
         // 两份名单各挑各的行：跳过名单里只有 off，失败名单里只有 bad——串门＝灰卡替坏源道歉／红卡替闲源讨功。
-        Assert.Equal(1, summary.SkippedLines()!.Render().Split('\n').Length);
-        Assert.Equal(1, summary.FailureLines()!.Render().Split('\n').Length);
+        Assert.Single(summary.SkippedLines()!.Render().Split('\n'));
+        Assert.Single(summary.FailureLines()!.Render().Split('\n'));
         Assert.Contains("boom", summary.FailureLines()!.Render(), StringComparison.Ordinal);
         Assert.DoesNotContain("boom", summary.SkippedLines()!.Render(), StringComparison.Ordinal);
     }

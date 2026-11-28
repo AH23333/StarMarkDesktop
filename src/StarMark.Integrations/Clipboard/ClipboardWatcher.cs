@@ -68,10 +68,18 @@ public static class ClipboardCapture
     /// 首行＝标题、正文＝全部路径，与真实 CF_HDROP 采集完全同形：两条进路在库里只是同一种历史，
     /// 没有"拖的"与"复的"两副面孔。返回被记录/更新的条目；
     /// 一条可用路径都没有、或被策略门挡掉时返回 null。
+    /// <para>
+    /// ✅P-307 第二刀・乙：<paramref name="claimedDropNames"/> 是这次拖放<b>刚物化进 clip-drops 目录</b>的
+    /// 那些件的名字——行落库那一刻起它们就有主了（行在、名字在 extra 里，删除侧照名单收）。
+    /// 名单<b>带在草稿上</b>而不是落库后再补写：RecordClipboardAsync 内部既有"新行"也有
+    /// "同源合并"两条路，草稿上的 extra 两边都保得住；落库后补写则要在合并过的行上再动一次 extra，
+    /// 多一次读写就多一处"补写失败＝件在、名字不在"的孤儿窗口。
+    /// </para>
     /// </summary>
     public static async Task<Item?> ImportDroppedFilesAsync(
         IItemRepository repo, IReadOnlyList<string> paths,
-        int maxEntries = ClipboardPolicy.MaxEntries, CancellationToken ct = default)
+        int maxEntries = ClipboardPolicy.MaxEntries, IReadOnlyList<string>? claimedDropNames = null,
+        CancellationToken ct = default)
     {
         if (repo is null) throw new ArgumentNullException(nameof(repo));
         if (paths is null) throw new ArgumentNullException(nameof(paths));
@@ -83,6 +91,10 @@ public static class ClipboardCapture
         if (!ClipboardPolicy.ShouldRecord(raw, null, out var text)) return null;
 
         var draft = ClipboardEntry.Build(text, null, ClipboardEntry.FormatFiles, DateTimeOffset.UtcNow);
+        // 落库没成（门拒/异常）时调用方按"没人认领"收回物化件（drop 体里那句 TryDelete）；
+        // 成了则这行 extra 里的名单就是删除侧的唯一事实。
+        if (claimedDropNames is { Count: > 0 })
+            draft.ExtraJson = ClipboardEntry.WithDropFilesOf(draft.ExtraJson, claimedDropNames);
         return await repo.RecordClipboardAsync(draft, ct, maxEntries: maxEntries);
     }
 
@@ -138,9 +150,59 @@ public static class ClipboardCapture
             return null;
         }
 
+        return await WriteImageEntryAsync(repo, sourceId, pngBytes, f, foregroundApp, now,
+            imageMaxEntries, frame.Container, ct);
+    }
+
+    /// <summary>
+    /// ✅P-307 第二刀・甲：拖进剪贴板格的<b>图片字节</b>那一口。拖进来是显式动作：不走去抖/回声
+    /// （那是"系统广播"那一路的防重），只过同一道图片策略门——安全闸门集中在策略层，这条显式路
+    /// 没有绕过它的能力。前台排除清单不适用（同 <see cref="ImportDroppedTextAsync"/> 的理由：
+    /// 拖进来是用户亲手指定要记的那一下）。
+    /// <para>
+    /// 字节与像素来自 <see cref="ClipboardImageStore.TryReadBytesAsPngAsync"/>（PNG 透传/其余转码的
+    /// 共用核心），于是"拖进来的图"与"复制来的图"在门禁、身份、落盘上是同一套口径——
+    /// 两套口径就是"拖进来一条、复制进来又一条"的自回声配方。
+    /// </para>
+    /// <para>返回被记录/更新的条目；被门挡掉（尺寸、超限）时返回 null——调用方据此收回物化件。</para>
+    /// </summary>
+    /// <param name="originalName">拖源报的文件名（进日志与回执；null＝拖源没给）。</param>
+    public static async Task<Item?> ImportDroppedImageAsync(
+        IItemRepository repo, byte[] png, ClipboardPayload.ImageFrame frame, string? originalName,
+        int imageMaxEntries = ClipboardPolicy.DefaultImageMaxEntries, CancellationToken ct = default)
+    {
+        if (repo is null) throw new ArgumentNullException(nameof(repo));
+        if (png is null) throw new ArgumentNullException(nameof(png));
+        // 门禁吃"将要落盘的那份"字节数（与采集路 ImageMeta 里那句同一口径）：用户分得清"太小/太大"，
+        // 分不清 DIB 与 PNG 差的三倍体积该算谁的。
+        if (!ClipboardPolicy.ShouldRecordImage(frame.Width, frame.Height, png.LongLength, null, out var why))
+        {
+            StarLog.Info($"[剪贴板] 拖入图片未记录：{why}");
+            return null;
+        }
+        var sourceId = ClipboardPolicy.BuildImageSourceId(frame.Bgra);
+        return await WriteImageEntryAsync(repo, sourceId, png, frame, null, DateTimeOffset.UtcNow,
+            imageMaxEntries, originalName ?? "拖入图片", ct);
+    }
+
+    /// <summary>
+    /// 图片条目的<b>共享落库尾段</b>（✅P-307 第二刀抽出）：建条 → 落库 → 名字以合并后的行为准 →
+    /// 缩略图 → 写盘。采集（<see cref="CaptureImageAsync"/>）与拖入
+    /// （<see cref="ImportDroppedImageAsync"/>）两条路汇到这里，<b>身份、名字、写盘只有这一份</b>。
+    /// <para>写盘放最后，是因为落库会告诉我们"这一条其实早就在历史里、该用哪个文件名"
+    /// （<see cref="ClipboardEntry.MergeForReplay"/> 保住旧名字）——先写文件就会每次回放都落一个新名字，
+    /// 旧文件立刻变孤儿（§3-Q6）。</para>
+    /// <para><paramref name="logOrigin"/> 只进日志（"这一帧从哪来"：采集路传容器名，拖入路传拖源文件名）——
+    /// 同一句日志两条进路都能说清出处，而库里不存它：行与行之间只有内容身份，没有"来路"这回事。</para>
+    /// </summary>
+    private static async Task<Item?> WriteImageEntryAsync(
+        IItemRepository repo, string sourceId, byte[] pngBytes, ClipboardPayload.ImageFrame frame,
+        string? foregroundApp, DateTimeOffset now, int imageMaxEntries,
+        string? logOrigin, CancellationToken ct)
+    {
         var draft = ClipboardEntry.BuildImage(sourceId,
             new ClipboardEntry.ImageMeta(ClipAssets.MainNameOf(sourceId, now), ClipAssets.ThumbNameOf(sourceId, now),
-                f.Width, f.Height, pngBytes.LongLength),
+                frame.Width, frame.Height, pngBytes.LongLength),
             foregroundApp, now);
         // 上限按具名参数递进去（写成位置参数＝把它交给了文本桶，图片桶照旧吃默认值）：
         // 仓储层是按"这一行的 clipFormat"选桶的，两个上限各归各的，串了位不会报错、只会少留或多留。
@@ -151,14 +213,14 @@ public static class ClipboardCapture
         if (main is null || ClipboardImageStore.MainExists(main)) return item;
 
         var thumb = ClipboardEntry.ThumbFileName(item);
-        var jpeg = await ClipboardImageStore.EncodeThumbnailAsync(f.Bgra, f.Width, f.Height, ct);
+        var jpeg = await ClipboardImageStore.EncodeThumbnailAsync(frame.Bgra, frame.Width, frame.Height, ct);
         var (ok, error) = await ClipboardImageStore.WritePairAsync(main, thumb ?? main, pngBytes, jpeg);
         if (!ok)
             // 行已经在了、文件没写成：这是 §3-Q6 第一类的另一半来源。不静默——下一轮对账会打上
             // clipMissing，而此刻的日志是唯一能说清"为什么库里多了一行打不开的图"的东西。
             StarLog.Warn($"[剪贴板] 图片行已记录但文件写失败（{error}）：{main}");
         else if (jpeg is null)
-            StarLog.Info($"[剪贴板] 缩略图没编出来（{frame.Container}），列表将回退解码主图：{main}");
+            StarLog.Info($"[剪贴板] 缩略图没编出来（{logOrigin}），列表将回退解码主图：{main}");
         return item;
     }
 }

@@ -85,6 +85,21 @@ public sealed record LocJoin(IReadOnlyList<object?> Items, string JoinKey)
 }
 
 /// <summary>
+/// 「几行话＋行与行之间那根换行」（批次 片291）：换行是<b>布局</b>不是语言——
+/// 规则 #100，表里不许收控制字符，所以这根 <c>\n</c> 住在代码里，几行话只在被贴上去那一刻逐行取词。
+/// <para>
+/// 与 <see cref="LocMessage.ToString"/> 同一颗理由的另一半：实参若在<b>算出</b>那一刻就
+/// <c>string.Join</c> 成成品字，嵌套那几句就被定死在算出它们的语言里，换语言重贴只会重贴外层那颗骨架
+/// ——屏幕上剩半中半英。挂在 <c>string.Format</c> 的实参位上，<c>ToString</c> 在格式化那一刻才被调，
+/// 逐行取词于是与外层同一时机（<see cref="LocJoin"/> 是"连接符在表里"的那一型，这一颗是"换行在布局里"的镜像）。
+/// </para>
+/// </summary>
+public sealed record LocLines(IReadOnlyList<object?> Lines)
+{
+    public override string ToString() => string.Join("\n", Lines);
+}
+
+/// <summary>
 /// 当前界面语言＋取词的唯一入口（批次 WI-1）。
 /// <para>进程里<b>只有这一颗可变状态</b>：谁要按语言取词都从这里走，于是"换语言"这一件事
 /// 只有一个要重画的时刻，而不是每个控件自己记得去读一遍。</para>

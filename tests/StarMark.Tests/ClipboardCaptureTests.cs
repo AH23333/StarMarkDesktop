@@ -212,4 +212,45 @@ public sealed class ClipboardCaptureTests : IDisposable
         await Assert.ThrowsAsync<ArgumentNullException>(() => ClipboardCapture.ImportDroppedFilesAsync(null!, new[] { "C:\\a" }));
         await Assert.ThrowsAsync<ArgumentNullException>(() => ClipboardCapture.ImportDroppedFilesAsync(_repo, null!));
     }
+
+    // ────────── ✅P-307 第二刀・乙：认领名单跟着行走 ──────────
+
+    [Fact]
+    public async Task DroppedFiles_ClaimedDropNamesLandInTheRecordedRow()
+    {
+        var item = await ClipboardCapture.ImportDroppedFilesAsync(_repo, new[] { "C:\\报告 v1.pdf" },
+            claimedDropNames: new[] { "9f2a3b8c4d5e_报告 v1.pdf" });
+
+        Assert.NotNull(item);
+        Assert.Equal(ClipboardEntry.FormatFiles, ClipboardEntry.Format(item!));
+        // 名单带在草稿上（不是落库后补写）：行落库那一刻起件就有主了——
+        // 补写要在合并过的行上再动一次 extra，多一次读写就多一处"件在、名字不在"的孤儿窗口。
+        Assert.Equal(new[] { "9f2a3b8c4d5e_报告 v1.pdf" }, ClipboardEntry.DropFileNamesOf(item!.ExtraJson));
+    }
+
+    [Fact]
+    public async Task DroppedFiles_SameSourceAgain_UnionsOldAndNewClaims()
+    {
+        var first = await ClipboardCapture.ImportDroppedFilesAsync(_repo, new[] { "C:\\同一批.pdf" },
+            claimedDropNames: new[] { "9f2a3b8c4d5e_第一件.pdf" });
+        var second = await ClipboardCapture.ImportDroppedFilesAsync(_repo, new[] { "C:\\同一批.pdf" },
+            claimedDropNames: new[] { "0123456789ab_第二件.docx" });
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(first!.Id, second!.Id);                                   // 同源合并成同一行
+        Assert.Equal(2, ClipboardEntry.CopyCount(second));
+        // 旧认领没丢、新认领并进来：丢任何一边，物化出去的件当场变孤儿。
+        Assert.Equal(new[] { "9f2a3b8c4d5e_第一件.pdf", "0123456789ab_第二件.docx" },
+            ClipboardEntry.DropFileNamesOf(second!.ExtraJson));
+    }
+
+    [Fact]
+    public async Task DroppedFiles_WithoutClaims_LeavesNoClaimKeyBehind()
+    {
+        var item = await ClipboardCapture.ImportDroppedFilesAsync(_repo, new[] { "C:\\普通的本机件.txt" });
+
+        Assert.NotNull(item);
+        Assert.Empty(ClipboardEntry.DropFileNamesOf(item!.ExtraJson));        // 本机件没有物化，就没有认领
+    }
 }
