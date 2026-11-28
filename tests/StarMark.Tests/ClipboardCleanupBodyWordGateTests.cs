@@ -125,8 +125,11 @@ public sealed class ClipboardCleanupBodyWordGateTests : IDisposable
             Assert.Equal(0, Count(body, banned));
 
         var vm = MethodBody(CodeOf(ViewModel), "private async Task CleanClipboardAssetsAsync()");
-        Assert.Equal(1, Count(vm, "LocText.SetMessage(body, ClipAssets.CleanupConfirmBody("));
-        Assert.Equal(1, Count(vm, ".CleanupConfirmBody("));   // 一位宿主：两个出口就会两份措辞、两张贴法
+        // 片292 起两族（图片与拖入文件）各拼各的正文、各报各的目录，再叠进同一张确认框——
+        // 变的只是"正文"这颗身份可能是两族叠起来的那棵：哪一族没东西可清，那一族整段不出现。
+        // 贴的那一拍没变：还是那一颗宿主、还是递身份（⛔ 先 .Render()），只是改递中间那颗变量。
+        Assert.Equal(1, Count(vm, "LocText.SetMessage(dialogBody, body!)"));
+        Assert.Equal(2, Count(vm, ".CleanupConfirmBody("));   // 同一位工厂、两个目录各拼一份（片292 两族）；贴的出口仍只有一处
         Assert.Equal(0, Count(vm, "Text = "));                // ⛔ 构造时就把成品字塞进 TextBlock
         foreach (var banned in new[] { "Locale.T(", "Locale.Fmt(", ".Render()" })
             Assert.Equal(0, Count(vm, banned));
@@ -151,8 +154,14 @@ public sealed class ClipboardCleanupBodyWordGateTests : IDisposable
         foreach (var key in Keys)
         {
             Assert.Single(UiStrings.All, e => e.Key == key);
-            Assert.Equal(1, Count(codes, Quoted(key)));       // 一键一处主人（与④那条 watched==7 同口径）
+            // 片292 起那颗胶水行有两位主人：工厂里把行连成块（行与行之间那根换行），
+            // 宿主里把两族的两块叠进同一张确认框（块与块之间那颗空行）——还是同一颗键、
+            // 同一份"⛔ 在 C# 里拼 +"的判断，⛔ 为此立第二颗 join 键。
+            if (key == "clip.clean.lineJoin") continue;
+            Assert.Equal(1, Count(codes, Quoted(key)));       // 一键一处主人（与④那条 watched 同口径）
         }
+        // 那颗胶水行的两位主人单钉（判据同上，只是数不同）：工厂连行一次＋宿主叠两族一次（片292 现读）。
+        Assert.Equal(2, Count(codes, Quoted("clip.clean.lineJoin")));
 
         var asked = Keys.ToHashSet(StringComparer.Ordinal);
         var unasked = UiStrings.All.Select(e => e.Key)
@@ -198,7 +207,7 @@ public sealed class ClipboardCleanupBodyWordGateTests : IDisposable
             }
         }
         Assert.Empty(offenders);
-        Assert.Equal(7, watched);     // 七颗键各唯一一位主人：那颗胶水行也在工厂里被点名一次
+        Assert.Equal(8, watched);     // 七颗键各唯一一位主人；那颗胶水行两位（工厂连行＋宿主叠两族，片292）
     }
 
     // ────────── ⑤ 每一行三语答话、槽填满 ──────────

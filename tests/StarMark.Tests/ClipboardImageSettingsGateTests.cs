@@ -209,11 +209,13 @@ public sealed class ClipboardImageSettingsGateTests
         var card = Between(DataTab(), "i18n:LocText.Key=\"settings.data.backupTitle\"", "Click=\"ExportBackup_Click\"");
         Assert.Contains("ViewModel.BackupClipboardImagesEnabled, Mode=TwoWay", card);
         // 关掉它的代价（图片条目要靠本机还留着文件才打得开）写在卡上，而不是只写在 tooltip 里：
-        // 于是①这颗开关旁边挂的就是那句说明的键，②那一行的两列都还在说"不带图会付出什么"。
+        // 于是①这颗开关旁边挂的就是那句说明的键，②那一行的两列都还在说"不带附件会付出什么"。
+        // 片292 起这颗开关同时管拖入文件（复用同一颗，见 P-307）：说明的措辞从"图片/文件名"改成
+        // "附件/名字"，这里两根针跟着挪——钉的仍是"代价的前半句＋后半句都在"，不是钉某段文案。
         Assert.Contains("i18n:LocText.Key=\"settings.data.includeImagesNote\"", card);
         Assert.True(UiStrings.TryGet("settings.data.includeImagesNote", out var note), "表里没这颗键");
-        AssertBothHalves(note.Zh, "只带条目与文件名", "文件缺失", "includeImagesNote 中文列");
-        AssertBothHalves(note.En, "file names only", "file missing", "includeImagesNote 英文列");
+        AssertBothHalves(note.Zh, "只带条目与名字", "文件缺失", "includeImagesNote 中文列");
+        AssertBothHalves(note.En, "items and names only", "file missing", "includeImagesNote 英文列");
     }
 
     [Fact]

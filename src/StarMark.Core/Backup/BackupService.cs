@@ -115,12 +115,13 @@ public sealed class BackupService
     {
         var env = await ExportAsync(ct);
         var (names, missing, plannedFailed) = ClipboardImageStore.PlanBackup(env.Payload.Items);
+        var (dropNames, dropMissing, dropPlannedFailed) = ClipboardDropFileStore.PlanBackup(env.Payload.Items);
         var sceneNames = PlanBoardScenes();
         var json = SerializeEnvelope(env);
         // 载体跟着内容走这件事从此<b>一次判定</b>而不是两遍：改前那句 <c>names.Count > 0</c> 在两处各问一次，
         // 片146 加进画板这一族后，任何一处漏改都会写出一颗"叫 .json 的 zip"或"叫 .zip 的纯清单"——
         // 而这两个坏法档头那句注释已经各自定性过一次。
-        var carries = names.Count > 0 || sceneNames.Count > 0;
+        var carries = names.Count > 0 || sceneNames.Count > 0 || dropNames.Count > 0;
         var target = AgreeExtensionWithContent(path, carries);
         if (!carries)
         {
@@ -137,16 +138,18 @@ public sealed class BackupService
                 TryDeletePartial(target);   // 写已经开始＝旧档已被 FileMode.Create 截断，半截文件既打不开又占名字
                 throw;
             }
-            return new BackupExport(target, env.Payload.Items.Count, 0, 0, 0, 0, missing, plannedFailed);
+            return new BackupExport(target, env.Payload.Items.Count, 0, 0, 0, 0, missing, plannedFailed,
+                0, 0, dropMissing, dropPlannedFailed);
         }
         try
         {
-            var (carried, carriedBytes, boards, boardBytes) =
-                await BackupContainer.WriteAsync(target, json, names, sceneNames, ct);
+            var (carried, carriedBytes, boards, boardBytes, dropCarried, dropCarriedBytes) =
+                await BackupContainer.WriteAsync(target, json, names, sceneNames, dropNames, ct);
             // 计划要带、结果没进包的那些（此刻正被别的程序独占、或刚被删掉）并进"没能带上"这一档：
-            // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。
+            // 报出去的张数与字节都只算真在包里的，两个数说的是同一份东西。drops 那一族同一口径（片292）。
             return new BackupExport(target, env.Payload.Items.Count, carried, carriedBytes, boards, boardBytes, missing,
-                plannedFailed + names.Count - carried);
+                plannedFailed + names.Count - carried, dropCarried, dropCarriedBytes,
+                dropMissing, dropPlannedFailed + dropNames.Count - dropCarried);
         }
         catch (OperationCanceledException)
         {
@@ -209,11 +212,12 @@ public sealed class BackupService
     /// <summary>
     /// 一次带附件导出的事实：实际写到哪儿、装了多少条、带了几张图／多少字节、带了几块板／多少字节、几张没带上。
     /// <para>画板那两颗数<b>单独成对</b>而⛔ 并进图片那一对：那两族是不同的东西，一句"带了 7 个附件"
-    /// 会把"三块板四张图"说成一件用户没法核对的事。</para>
+    /// 会把"三块板四张图"说成一件用户没法核对的事。拖入文件那一对（片292）同理——它连内容都不是同一族。</para>
     /// </summary>
     public sealed record BackupExport(
         string Path, int ItemCount, int ClipImages, long ClipImageBytes,
-        int Boards, long BoardBytes, int MissingImages, int FailedImages);
+        int Boards, long BoardBytes, int MissingImages, int FailedImages,
+        int DropFiles, long DropFileBytes, int MissingDrops, int FailedDrops);
 
     /// <summary>
     /// 写<b>不带附件</b>的备份（恢复前快照、每日自动件、以及"开关关着导出的那一份"）。
@@ -408,6 +412,12 @@ public sealed class BackupService
                 ? (Written: 0, Skipped: 0, Failed: 0, Carried: 0, Opened: true)
                 : await BackupContainer.ExtractBoardsAsync(attachmentSourcePath, ct);
 
+            // 拖入文件那一族（片292）与 clip 那一族同一拍、同一条"条目落库之后才解"的规矩：
+            // 白名单是"这一份备份里的条目认领哪些文件名"，而条目刚刚才写进库。
+            var drops = attachmentSourcePath is null
+                ? (Written: 0, Skipped: 0, Failed: 0, PackageEntries: 0, RowsWithoutFiles: 0, Opened: true)
+                : await ExtractDropFilesAsync(p.Items, attachmentSourcePath, ct);
+
             // 还原走的是批量 DELETE + INSERT（绕开 ItemRepository 各写方法的 Notify），
 
             // 而 ReindexAllSearchTextAsync 的注释约定「调用方收尾统一刷新」——
@@ -458,12 +468,23 @@ public sealed class BackupService
                     boards.Failed > 0 ? LocMessage.Of("settings.data.backup.restoredBoardsFailed", boards.Failed) : null)
                 : (LocMessage?)null;
 
+            // 拖入文件那一句（片292）也只按<b>这份包里到底带没带</b>来说，三档与图片那句同构：
+            // ① 包里确实有 drops 条目 → 四个数分开报；② 包里一条都没有而有历史行认领着拖入文件
+            // → 说清"这份没带、认领还在"（那是"清单在、本体不在"，删行解不了，得重导带附件的那份）；
+            // ③ 没有任何行认领（包没开成，或压根没人认领）→ 一句不提——"这份备份不带拖入文件本体"
+            // 是对包内容的断言，包没打开就没资格说（图片那句的 clipNotOpened 同一条理由）。
+            var dropNote = drops.PackageEntries > 0
+                ? DropPackageSentence(drops)
+                : drops.RowsWithoutFiles > 0 && drops.Opened
+                    ? LocMessage.Of("settings.data.backup.dropManifestOnly", drops.RowsWithoutFiles)
+                    : (LocMessage?)null;
+
             return new RestoreResult
             {
                 Success = true,
                 Message = LocMessage.Of(
                     mode == RestoreMode.Replace ? "settings.data.backup.restoredReplace" : "settings.data.backup.restoredMerge",
-                    p.Items.Count, widgetsNote, clipImageNote, boardsNote),
+                    p.Items.Count, widgetsNote, clipImageNote, boardsNote, dropNote),
                 SnapshotPath = snapshotPath,
                 ItemsRestored = p.Items.Count,
                 // P-9：按实命中数汇报，0 命中不再冒充「已恢复」
@@ -477,6 +498,9 @@ public sealed class BackupService
                 BoardsRestored = boards.Written,
                 BoardsSkipped = boards.Skipped,
                 BoardsFailed = boards.Failed,
+                DropFilesRestored = drops.Written,
+                DropFilesSkipped = drops.Skipped,
+                DropFilesFailed = drops.Failed,
             };
         }
         catch (OperationCanceledException)
@@ -742,6 +766,51 @@ public sealed class BackupService
             clip.Failed > 0 ? LocMessage.Of("settings.data.backup.clipFailed", clip.Failed) : null,
             clip.RowsWithoutPicture > 0
                 ? LocMessage.Of("settings.data.backup.clipRowsMissing", clip.RowsWithoutPicture)
+                : null);
+
+    /// <summary>
+    /// 把拖入文件解回 clip-drops 目录（片292）。白名单<b>由这一份备份的条目现算</b>——与
+    /// <see cref="ExtractClipImagesAsync"/> 同一条理由：下一个动作是往用户的拖入文件目录里写文件，
+    /// "哪些名字属于这次恢复"只有看着刚落库的那批条目才说得清。
+    /// <para>RowsWithoutFiles（认领着拖入文件、却在这份包里没有对应条目的行数）<b>照抄图片那族的算法</b>：
+    /// 按行认领的名字与包内条目名取交集——条目与行是两种量纲（一行认 N 件），减法算不出来。</para>
+    /// </summary>
+    private static async Task<(int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutFiles, bool Opened)>
+        ExtractDropFilesAsync(List<Item> items, string sourcePath, CancellationToken ct)
+    {
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rows = new List<IReadOnlyList<string>>();
+        foreach (var item in items)
+        {
+            var names = ClipboardEntry.DropFileNamesOf(item.ExtraJson);
+            if (names.Count == 0) continue;
+            rows.Add(names);
+            foreach (var name in names) claimed.Add(name);
+        }
+
+        var (written, skipped, failed, packageNames, opened) =
+            await BackupContainer.ExtractDropsAsync(sourcePath, claimed, ct);
+        if (packageNames.Count == 0) return (0, skipped, failed, 0, rows.Count, opened);
+
+        var inPackage = new HashSet<string>(packageNames, StringComparer.OrdinalIgnoreCase);
+        var covered = rows.Count(names => names.Any(inPackage.Contains));
+        return (written, skipped, failed, packageNames.Count, rows.Count - covered, opened);
+    }
+
+    /// <summary>
+    /// "这份包到底把拖入文件带回来了没有"那句话（片292）。四个数分四档说、没出现的档交 null——
+    /// 与 <see cref="ClipPackageSentence"/> 同一口径，连接号由表里那三行自己带。
+    /// </summary>
+    private static LocMessage DropPackageSentence(
+        (int Written, int Skipped, int Failed, int PackageEntries, int RowsWithoutFiles, bool Opened) drops)
+        => LocMessage.Of(
+            "settings.data.backup.dropCarried",
+            drops.PackageEntries,
+            drops.Written,
+            drops.Skipped > 0 ? LocMessage.Of("settings.data.backup.dropSkipped", drops.Skipped) : null,
+            drops.Failed > 0 ? LocMessage.Of("settings.data.backup.dropFailed", drops.Failed) : null,
+            drops.RowsWithoutFiles > 0
+                ? LocMessage.Of("settings.data.backup.dropRowsMissing", drops.RowsWithoutFiles)
                 : null);
 
     /// <summary>

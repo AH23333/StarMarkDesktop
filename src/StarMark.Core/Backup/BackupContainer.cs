@@ -50,8 +50,23 @@ public static class BackupContainer
     /// </summary>
     public const string BoardsPrefix = "boards/";
 
+    /// <summary>
+    /// 拖入文件（clip-drops）那一条前缀（片292）。与 <see cref="ClipPrefix"/> 同住第一层、各认各的整颗——
+    /// 两族条目互不吃到对方，认前缀的地方全部按整颗 <c>drops/</c> 判。
+    /// </summary>
+    public const string DropPrefix = "drops/";
+
     /// <summary>单条附件的体积上限：与采集侧同一道线（<see cref="ClipboardPolicy.MaxImageBytes"/>）。</summary>
     public const long MaxEntryBytes = ClipboardPolicy.MaxImageBytes;
+
+    /// <summary>
+    /// 单条<b>拖入文件</b>附件的体积上限（片292）。<b>与拖放侧的兜底预算同值、同一颗出处</b>
+    /// （<see cref="StarMark.Core.Widgets.TodoVirtualFilePolicy.FallbackBudgetBytes"/>＝2 GB）而不照抄图片那 20 MB：
+    /// 拖放采集时的预算是动态查盘的，一件拖入文件可以远超一张截图——照抄图片的上限，
+    /// 恢复侧就会把"当初带得走的件"拒之门外，而那句"有些文件没能恢复"说不出为什么。
+    /// zip 炸弹的防御因此靠三道闸：名册＋白名单＋这颗单条上限。
+    /// </summary>
+    public const long MaxDropEntryBytes = StarMark.Core.Widgets.TodoVirtualFilePolicy.FallbackBudgetBytes;
 
     /// <summary>是否 zip 载体（按扩展名，大小写不敏感）。</summary>
     public static bool IsContainer(string path)
@@ -96,18 +111,20 @@ public static class BackupContainer
     }
 
     /// <summary>
-    /// 写出<b>带附件</b>的备份：清单 + 逐张 <c>clip/&lt;name&gt;</c> + 逐块 <c>boards/&lt;档名&gt;</c>（都不压缩）。
-    /// 交回<b>真进了包</b>的两族条数与字节（以写完之后那份文件为准，而不是以"计划带几张"为准）。
+    /// 写出<b>带附件</b>的备份：清单 + 逐张 <c>clip/&lt;name&gt;</c> + 逐块 <c>boards/&lt;档名&gt;</c> + 逐件
+    /// <c>drops/&lt;name&gt;</c>（都不压缩）。交回<b>真进了包</b>的几族条数与字节（以写完之后那份文件为准，
+    /// 而不是以"计划带几张"为准）。
     /// <para>原子性沿用导出侧一贯做法：先写 <c>*.tmp</c> 再同卷改名。半份 zip 留在磁盘上只会让人
     /// 以为"备份成功了"——而 zip 没有"条目不全"这种可见信号，读它的人只看到一份能打开的包。</para>
     /// <para>某一张读不到（被占用/被删）只意味着那一张不进包：笔记、标签、组件数据才是不可重建的部分。
-    /// 画板那一族同理——那块板还在用户盘上，只是这一次没跟过去。</para>
+    /// 画板那一族同理——那块板还在用户盘上，只是这一次没跟过去。拖入文件那一族也同理（片292）。</para>
     /// <para><paramref name="sceneFileNames"/> 里的每一颗都先过 <see cref="StarMark.Core.Boards.BoardPolicy.IsSceneFileName"/>：
     /// <c>.bak</c> 与 <c>*.tmp</c> 不进包（退路那份归退路，半途那一颗根本不算一块板），名字过不了形状判据的一颗也不进。</para>
     /// </summary>
-    public static async Task<(int Clips, long ClipBytes, int Boards, long BoardBytes)> WriteAsync(
+    public static async Task<(int Clips, long ClipBytes, int Boards, long BoardBytes, int Drops, long DropBytes)> WriteAsync(
         string path, string manifestJson,
-        IReadOnlyList<string> clipNames, IReadOnlyList<string> sceneFileNames, CancellationToken ct)
+        IReadOnlyList<string> clipNames, IReadOnlyList<string> sceneFileNames,
+        IReadOnlyList<string> dropNames, CancellationToken ct)
     {
         var temp = path + ".tmp";
         var dir = Path.GetDirectoryName(path);
@@ -141,10 +158,21 @@ public static class BackupContainer
                     await using var es = entry.Open();
                     await source.CopyToAsync(es, ct);
                 }
+                foreach (var name in dropNames)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    // 与 clip 那一段同一条规矩：先开流、后建条目——带不走的件不留零字节成员在包里冒充"这件有"。
+                    await using var source = ClipboardDropFileStore.TryOpenForPackage(name);
+                    if (source is null) continue;
+                    var entry = zip.CreateEntry(DropPrefix + name, CompressionLevel.NoCompression);
+                    await using var es = entry.Open();
+                    await source.CopyToAsync(es, ct);
+                }
             }
             File.Move(temp, path, overwrite: true);
-            var (clips, clipBytes, boards, boardBytes) = ReadBackStats(path, clipNames.Count, sceneFileNames.Count);
-            return (clips, clipBytes, boards, boardBytes);
+            var (clips, clipBytes, boards, boardBytes, drops, dropBytes)
+                = ReadBackStats(path, clipNames.Count, sceneFileNames.Count, dropNames.Count);
+            return (clips, clipBytes, boards, boardBytes, drops, dropBytes);
         }
         catch
         {
@@ -165,27 +193,29 @@ public static class BackupContainer
     }
 
     /// <summary>
-    /// 写完之后再从<b>那份文件本身</b>数一次两族附件（条数与字节）。两个 <paramref name="planned"/> 只在重读失败时兜底。
+    /// 写完之后再从<b>那份文件本身</b>数一次几族附件（条数与字节）。三个 <paramref name="planned"/> 只在重读失败时兜底。
     /// <para>为什么不直接报"计划几张就是几张"：报出去的数字要说的是"这个包里到底有什么"，
-    /// 用户拿它判断"换机之后图与板到底跟没跟过去"。</para>
+    /// 用户拿它判断"换机之后图、板、拖入的文件到底跟没跟过去"。</para>
     /// </summary>
-    private static (int Clips, long ClipBytes, int Boards, long BoardBytes) ReadBackStats(
-        string path, int plannedClips, int plannedBoards)
+    private static (int Clips, long ClipBytes, int Boards, long BoardBytes, int Drops, long DropBytes) ReadBackStats(
+        string path, int plannedClips, int plannedBoards, int plannedDrops)
     {
         try
         {
             using var zip = ZipFile.OpenRead(path);
             var clips = 0;
-            long clipBytes = 0, boardBytes = 0;
+            var drops = 0;
+            long clipBytes = 0, boardBytes = 0, dropBytes = 0;
             var boards = 0;
             foreach (var e in zip.Entries)
             {
                 if (e.FullName.StartsWith(ClipPrefix, StringComparison.Ordinal)) { clips++; clipBytes += e.Length; }
                 else if (e.FullName.StartsWith(BoardsPrefix, StringComparison.Ordinal)) { boards++; boardBytes += e.Length; }
+                else if (e.FullName.StartsWith(DropPrefix, StringComparison.Ordinal)) { drops++; dropBytes += e.Length; }
             }
-            return (clips, clipBytes, boards, boardBytes);
+            return (clips, clipBytes, boards, boardBytes, drops, dropBytes);
         }
-        catch (Exception) { return (plannedClips, 0L, plannedBoards, 0L); }   // 刚写完就读不出只是计数不准，不该让导出失败
+        catch (Exception) { return (plannedClips, 0L, plannedBoards, 0L, plannedDrops, 0L); }   // 刚写完就读不出只是计数不准，不该让导出失败
     }
 
     /// <summary>
@@ -237,6 +267,62 @@ public static class BackupContainer
         catch (Exception ex)
         {
             StarLog.Error("备份恢复：附件包打不开（条目本体已按无附件处理）", ex);
+        }
+        return (written, skipped, failed, names, opened);
+    }
+
+    /// <summary>
+    /// 把包里的 <c>drops/</c> 条目写回 clip-drops 目录（<b>恢复</b>用，片292）。返回 (写出, 跳过, 失败, 包里的条目名, 包开没开成)。
+    /// 三道闸与 <see cref="ExtractClipsAsync"/> 同构，只是每一道的"线"换成 drops 那一族自己的：
+    /// 白名单（这份备份的条目认领哪些名字）、<see cref="ClipDropAssets"/> 名册（前 13 位必须是
+    /// "12 位小写哈希＋下划线"，构造上写不到目录之外）、单条体积上限 <see cref="MaxDropEntryBytes"/>
+    /// ——那颗与拖放侧的兜底预算同值（2 GB）而不照抄图片那 20 MB：一件拖入文件本来就可以远超一张截图，
+    /// 照抄图片的上限就会把"当初带得走的件"拒之门外。zip 炸弹的防御因此靠三道闸，不靠把线画错地方。
+    /// <para><b>已存在的同名文件不覆盖</b>：与图片侧同一条裁决——用户自己放回来的那件不该被旧备份顶掉。</para>
+    /// <para>"跳过"与"失败"的分量同 <see cref="ExtractClipsAsync"/> 那条注释：能算清的就别报成失败。</para>
+    /// </summary>
+    public static async Task<(int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames, bool Opened)>
+        ExtractDropsAsync(string path, HashSet<string> claimedNames, CancellationToken ct)
+    {
+        if (!IsContainer(path) || claimedNames.Count == 0)
+            return (0, 0, 0, Array.Empty<string>(), true);     // 没东西可开＝没有失败：.json 与"条目不认领任何名字"都是这一档
+        int written = 0, skipped = 0, failed = 0;
+        var names = new List<string>();
+        var opened = false;
+        try
+        {
+            using var zip = ZipFile.OpenRead(path);
+            opened = true;                                      // 打开成功了才有资格说"这份包里没带拖入文件"
+            foreach (var entry in zip.Entries)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (!entry.FullName.StartsWith(DropPrefix, StringComparison.Ordinal)) continue;
+                var name = entry.FullName[DropPrefix.Length..];
+                names.Add(name);        // "包里到底有哪几件"要交给调用方：只有它能算出"哪几条历史没被这份包覆盖"
+                if (name.Length == 0 || entry.Length > MaxDropEntryBytes) { skipped++; continue; }
+                bool ok;
+                try
+                {
+                    await using var es = entry.Open();
+                    ok = await ClipboardDropFileStore.WriteBackFromBackupAsync(name, es, claimedNames, ct);
+                }
+                catch (Exception ex)
+                {
+                    StarLog.Warn($"备份恢复：解出一件拖入文件时出错（{name}）：{ex.GetType().Name} {ex.Message}");
+                    failed++;
+                    continue;
+                }
+                // WriteBackFromBackupAsync 对"不认领/名册不过/已存在"与"写失败"都回 false，
+                // 所以这里按名册自己再过一遍来分箱：能算清的就别说成失败。
+                if (ok) written++;
+                else if (!claimedNames.Contains(name) || ClipDropAssets.FullPathOf(name) is null) skipped++;
+                else if (File.Exists(ClipDropAssets.FullPathOf(name)!)) skipped++;
+                else failed++;
+            }
+        }
+        catch (Exception ex)
+        {
+            StarLog.Error("备份恢复：拖入文件附件包打不开（条目本体已按无附件处理）", ex);
         }
         return (written, skipped, failed, names, opened);
     }
@@ -314,10 +400,13 @@ public static class BackupContainer
     }
 
     /// <summary>这个载体里带了几张图片本体（0＝没带；<c>.json</c> 恒 0）。只读目录区，不解压。</summary>
-    public static int CountClipEntries(string path) => IsContainer(path) ? ReadBackStats(path, 0, 0).Clips : 0;
+    public static int CountClipEntries(string path) => IsContainer(path) ? ReadBackStats(path, 0, 0, 0).Clips : 0;
 
     /// <summary>这个载体里带了几块画板（0＝没带；<c>.json</c> 恒 0）。与上面那颗同一条路：只读目录区。</summary>
-    public static int CountBoardEntries(string path) => IsContainer(path) ? ReadBackStats(path, 0, 0).Boards : 0;
+    public static int CountBoardEntries(string path) => IsContainer(path) ? ReadBackStats(path, 0, 0, 0).Boards : 0;
+
+    /// <summary>这个载体里带了几件拖入文件（0＝没带；<c>.json</c> 恒 0）。与上面两颗同一条路：只读目录区（片292）。</summary>
+    public static int CountDropEntries(string path) => IsContainer(path) ? ReadBackStats(path, 0, 0, 0).Drops : 0;
 
     private static void TryDeleteTemp(string path)
     {

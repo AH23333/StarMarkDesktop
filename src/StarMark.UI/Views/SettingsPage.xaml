@@ -1326,6 +1326,10 @@
                                 -->
                                 <TextBlock x:Name="ClipboardUsageText"
                                            Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
+                                <!-- 拖入文件（clip-drops）那一行的占用读数（片292）：与上面图片那一行同一张卡片，
+                                     共用下面两颗钮（重新统计 / 清理孤儿）——两族各说各的数，不并成一个"附件 N 个"。 -->
+                                <TextBlock x:Name="ClipboardDropUsageText"
+                                           Style="{StaticResource SettingRowText}" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
                                 <Button i18n:LocText.Key="settings.data.recount" Command="{x:Bind ViewModel.RefreshClipboardUsageCommand}"
                                         Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left"/>
                                 <!-- §3-Q6 的第二类（图有行无）：只数不删，但必须给得出出口。

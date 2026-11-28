@@ -320,6 +320,10 @@ public sealed class I18nContractTests : IDisposable
             ["settings.ai.dashboard.rowTokens"] = "纯骨架「{0} + {1} token」中日同形：进／出两颗 token 读数用「+」相连，"
                 + "token 是哪一列都照写的记号词（en 列走 label 形 \"tokens in {0} · out {1}\"——数量词 label 形家法），这一行没有词可翻"
                 + "（✅片225／P-294 设置页 AI 仪表盘；同副骨架的 rowTokensEstimated「（估算）／（推定）」有词所以三列各异）",
+            ["drop.usage.full"] = "纯胶水行「{0}{1}」三列同形：把「拖入文件占用」那两段（件数·体积／没写完的临时件）收在一颗键里，"
+                + "语序由那一行自己决定而⛔ 在 C# 里拼 +（✅片292·P-307 乙遗留四件，与 clip.usage.full／autoBackupSentence 同形）",
+            ["drop.usage.line"] = "纯胶水行「{0}{1}{2}」三列同形：拖入文件占用／存放路径／孤儿计数三段的拼接位"
+                + "（✅片292·P-307 乙遗留四件，与 clip.usage.line 同形——图片那一行同一颗骨架的拖入文件版）",
         };
 
         var actual = UiStrings.All

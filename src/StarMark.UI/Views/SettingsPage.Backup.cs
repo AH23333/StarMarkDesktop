@@ -187,7 +187,7 @@ public sealed partial class SettingsPage
                 : null;
             if (written is not null)
             {
-                // 那一行的五颗读数各是一句独立的话（外层句子留四颗可选槽，没出现的那一档交 null＝格式化时那一格自己变空）；
+                // 那一行的六颗读数各是一句独立的话（外层句子留五颗可选槽，没出现的那一档交 null＝格式化时那一格自己变空）；
                 // 字节数与路径都是<b>数据</b> ⇒ 走实参（✅P-178 口径，⛔ 抄进句子）。
                 ViewModel.BackupStatus = LocMessage.Of(
                     "settings.data.backup.exportedWith", written.Path, written.ItemCount,
@@ -201,6 +201,14 @@ public sealed partial class SettingsPage
                     written.Boards > 0
                         ? LocMessage.Of("settings.data.backup.exportedBoards", written.Boards,
                             StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(written.BoardBytes))
+                        : null,
+                    // 拖入文件那一族又是一颗槽（片292）：连内容都不是同一族，并进哪一族都说不清。
+                    // "有认领但件不在"与"读不出来"两小段是这一句自己的嵌套槽，没出现的那一档交 null。
+                    written.DropFiles > 0
+                        ? LocMessage.Of("settings.data.backup.exportedDrops", written.DropFiles,
+                            StarMark.Abstractions.Clipboard.ClipAssets.DescribeBytes(written.DropFileBytes),
+                            written.MissingDrops > 0 ? LocMessage.Of("settings.data.backup.exportedDropsMissing", written.MissingDrops) : null,
+                            written.FailedDrops > 0 ? LocMessage.Of("settings.data.backup.exportedDropsFailed", written.FailedDrops) : null)
                         : null);
             }
             else
@@ -356,15 +364,19 @@ public sealed partial class SettingsPage
             // 三选一场景（合并导入 / 覆盖导入 / 取消）用 ShowContentAsync 的 primary+secondary 双按钮。
             // 附件张数：确认框上那句"这份还带 N 张图"必须来自包本身，而不是清单里的条目数——
             // 后者会说"带了"而其实一张都没进包。只读中央目录，不解压，故留在 UI 线程上是几毫秒的事。
-            // 画板那一族（片146）另起一句、各报各的数：把"三块板四张图"并成"七个附件"，
-            // 用户就没法在点下去之前核对自己那几块板跟没跟过去；而"没带图片"那句在只带板时照旧是真话。
+            // 画板那一族（片146）与拖入文件那一族（片292）各起各的句、各报各的数：
+            // 把"三块板四张图两件拖入"并成"九个附件"，用户就没法在点下去之前核对自己那几块板跟没跟过去；
+            // 而"没带图片"那句在只带板/只带拖入件时照旧是真话。
             var clipCount = BackupContainer.CountClipEntries(source);
             var boardCount = BackupContainer.CountBoardEntries(source);
+            var dropCount = BackupContainer.CountDropEntries(source);
+            var boardsNote = boardCount > 0 ? LocMessage.Of("settings.data.backup.carriesBoards", boardCount) : null;
+            var dropsNote = dropCount > 0 ? LocMessage.Of("settings.data.backup.carriesDrops", dropCount) : null;
             var attachmentsNote = Stack(
                 clipCount > 0
                     ? LocMessage.Of("settings.data.backup.carriesImages", clipCount)
                     : LocMessage.Of("settings.data.backup.noImages"),
-                boardCount > 0 ? LocMessage.Of("settings.data.backup.carriesBoards", boardCount) : null);
+                boardsNote is null ? dropsNote : Stack(boardsNote, dropsNote));
             var guideBlock = Stack(
                 LocMessage.Of("settings.data.backup.mergeLine"),
                 Stack(LocMessage.Of("settings.data.backup.replaceLine"), LocMessage.Of("settings.data.backup.snapshotLine")));

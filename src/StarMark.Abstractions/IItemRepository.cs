@@ -201,6 +201,14 @@ public interface IItemRepository
     Task<IReadOnlyList<Clipboard.ClipboardEntry.ClipAssetRow>> GetClipboardImageAssetsAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// 列出<b>所有</b>认领着拖入文件的行、各自的认领名单（片292・clip-drops 对账用）。
+    /// <para>实现必须无行数窗口——理由与 <see cref="GetClipboardImageAssetsAsync"/> 同一条：
+    /// 窗口外的行会让完好的 clip-drops 目录被报成一堆孤儿。只交名字不交 id：drops 对账是纯读，
+    /// 没有"打标记"那一类，id 在这条路上没有用途。</para>
+    /// </summary>
+    Task<IReadOnlyList<IReadOnlyList<string>>> GetClipboardDropClaimsAsync(CancellationToken ct = default);
+
+    /// <summary>
     /// 批量置 / 清 <c>clipMissing</c>，返回<b>真正改动</b>的行数（已经标着的 / 坏 JSON 的行都不算，
     /// 所以调用方可以用"要改的条数 − 返回条数"发现有一批行标不上去）。
     /// <para>置标记是<b>唯一</b>允许因文件缺失而写回这些行的动作；<b>清库与删行都不许反过来删文件</b>，

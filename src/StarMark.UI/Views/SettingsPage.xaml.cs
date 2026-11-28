@@ -192,6 +192,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
                          or nameof(SettingsPageViewModel.ClipboardCleanupStatus)
                          or nameof(SettingsPageViewModel.ClipboardImageStatus)
                          or nameof(SettingsPageViewModel.ClipboardUsage)
+                         or nameof(SettingsPageViewModel.ClipboardDropUsage)
                          or nameof(SettingsPageViewModel.SaveErrorMessage))
             ApplyDataStatuses();
         // 「关于与更新」那一行同理（批次 WI-65 片1）：它一句话里装着节奏、上次检查的时刻与上一次问出的结局，
@@ -280,6 +281,7 @@ public sealed partial class SettingsPage : Page, INotifyPropertyChanged
         LocText.SetMessage(ClipboardCleanupStatusText, ViewModel.ClipboardCleanupStatus);
         LocText.SetMessage(ClipboardImageStatusText, ViewModel.ClipboardImageStatus);
         LocText.SetMessage(ClipboardUsageText, ViewModel.ClipboardUsage);
+        LocText.SetMessage(ClipboardDropUsageText, ViewModel.ClipboardDropUsage);
         LocText.SetMessage(SaveErrorMessageText, ViewModel.SaveErrorMessage);
     }
 

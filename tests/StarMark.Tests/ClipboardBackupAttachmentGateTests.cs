@@ -69,11 +69,23 @@ public sealed class ClipboardBackupAttachmentGateTests
         // 前缀与"能不能落盘"是分开的两件事：包这边只认 clip/ 这一层，路径一律交回
         // ClipboardImageStore.WriteBackFromBackupAsync（它内部问 ClipAssets.FullPathOf 那道名册）。
         // 这里若能自己拼路径，Zip Slip 的防线就从"名册 + 白名单"退化成"字符串拼接"。
-        var extract = MethodBody(ReadRepoFile(Container), "int Written, int Skipped, int Failed, IReadOnlyList<string> PackageNames, bool Opened");
+        // 片292 起锚点改钉方法名：clip/ 与 drops/ 两颗解包方法共用同一串返回元组，那串已经分不开它们了。
+        var extract = MethodBody(ReadRepoFile(Container),
+            "ExtractClipsAsync(string path, HashSet<string> claimedNames, CancellationToken ct)");
         Assert.Contains("ClipboardImageStore.WriteBackFromBackupAsync", extract);
         Assert.Contains("MaxEntryBytes", extract);
         Assert.DoesNotContain("Path.Combine", extract);
         Assert.Equal(1, Count(ReadRepoFile(Container), "ClipPrefix = \"clip/\""));
+
+        // 片292 起拖入文件那一族同一条规矩：包只认 drops/ 这一层，路径一律交回
+        // ClipboardDropFileStore.WriteBackFromBackupAsync（名册在 ClipDropAssets.FullPathOf）——
+        // 这里若能自己拼路径，同一条 Zip Slip 防线就在新的一族上退化成"字符串拼接"。
+        var extractDrops = MethodBody(ReadRepoFile(Container),
+            "ExtractDropsAsync(string path, HashSet<string> claimedNames, CancellationToken ct)");
+        Assert.Contains("ClipboardDropFileStore.WriteBackFromBackupAsync", extractDrops);
+        Assert.Contains("MaxDropEntryBytes", extractDrops);
+        Assert.DoesNotContain("Path.Combine", extractDrops);
+        Assert.Equal(1, Count(ReadRepoFile(Container), "DropPrefix = \"drops/\""));
     }
 
     [Fact]
@@ -99,11 +111,11 @@ public sealed class ClipboardBackupAttachmentGateTests
         // 决议写的是 zip(store)。这里钉"每一处建条目都显式写了 NoCompression"：
         // 漏一处就退化成默认 Optimal——功能一样、看不出来，只是导出变成一场 CPU 活。
         // 片146 起包里有两族附件（clip/ 与 boards/），建条目的地方因此是三处：漏写第三颗＝那块板被 deflate 一遍，
-        // 而那颗⛔ 报错，只是导出变慢。
+        // 而那颗⛔ 报错，只是导出变慢。片292 起又多一族（drops/），所以是四处——同一条坏法。
         var write = MethodBody(ReadRepoFile(Container),
-            "public static async Task<(int Clips, long ClipBytes, int Boards, long BoardBytes)> WriteAsync");
-        Assert.Equal(3, Count(write, "CompressionLevel.NoCompression"));   // 清单一条 + 两族附件各一条
-        Assert.Equal(3, Count(write, "CreateEntry"));                       // 建条目的地方只有这三处，没有第三张清单
+            "public static async Task<(int Clips, long ClipBytes, int Boards, long BoardBytes, int Drops, long DropBytes)> WriteAsync");
+        Assert.Equal(4, Count(write, "CompressionLevel.NoCompression"));   // 清单一条 + 三族附件各一条
+        Assert.Equal(4, Count(write, "CreateEntry"));                       // 建条目的地方只有这四处，没有第四张清单
         Assert.DoesNotContain("CompressionLevel.Optimal", ReadRepoFile(Container));
         Assert.DoesNotContain("CompressionLevel.Fastest", ReadRepoFile(Container));
     }

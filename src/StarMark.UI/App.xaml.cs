@@ -387,10 +387,14 @@ public partial class App : Application
             // 3.2b 剪贴板图片对账（§4：默认开、<b>不设关</b>——安全护栏留一个"可以关掉不看"的口子就没护栏了）。
             // 放在池线程、并让出首屏那几秒：它要读一次目录、最多改几条标记，
             // 而这些写恰好会与首屏的读抢那把库写锁（"启动后 1.5–3 秒 UI 冻结"正在被量，别再给它添一份）。
+            // 片292 起 clip-drops（拖入文件）对账顺在同一拍跑：同样只读目录、只数只记日志
+            // （零类动库、零类动文件），两族一前一后各自失败各自兜——一族对不上不该连累另一族。
             _ = Task.Run(async () =>
             {
                 await Task.Delay(3000);
                 await StarMark.Integrations.Clipboard.ClipboardAssetAudit
+                    .RunAsync(Services.GetRequiredService<IItemRepository>(), CancellationToken.None);
+                await StarMark.Integrations.Clipboard.ClipboardDropAudit
                     .RunAsync(Services.GetRequiredService<IItemRepository>(), CancellationToken.None);
             });
 

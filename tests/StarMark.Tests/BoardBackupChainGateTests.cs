@@ -69,14 +69,17 @@ public sealed class BoardBackupChainGateTests : IDisposable
         const string manifest = """{"app":"StarMark","version":4,"checksum":"deadbeef"}""";
         var package = PackagePath("carry.zip");
 
-        var (clips, clipBytes, boards, boardBytes) = await BackupContainer.WriteAsync(
+        var (clips, clipBytes, boards, boardBytes, drops, dropBytes) = await BackupContainer.WriteAsync(
             package, manifest, Array.Empty<string>(),
-            new[] { BoardPolicy.SceneFileName(id1), BoardPolicy.SceneFileName(id2) }, CancellationToken.None);
+            new[] { BoardPolicy.SceneFileName(id1), BoardPolicy.SceneFileName(id2) },
+            Array.Empty<string>(), CancellationToken.None);
 
         Assert.Equal(0, clips);
         Assert.Equal(2, boards);
         Assert.True(boardBytes > 0);
         Assert.True(clipBytes == 0);
+        Assert.Equal(0, drops);                 // 片292：drops 那一族零条时恒零，与前两族互不串味
+        Assert.Equal(0, dropBytes);
 
         using var zip = ZipFile.OpenRead(package);
         Assert.Equal(manifest, new StreamReader(zip.GetEntry(BackupContainer.ManifestEntryName)!.Open()).ReadToEnd());
@@ -105,7 +108,7 @@ public sealed class BoardBackupChainGateTests : IDisposable
         _mine.Add(tmp);
 
         var package = PackagePath("cleaned.zip");
-        var (_, _, boards, _) = await BackupContainer.WriteAsync(package, "{}",
+        var (_, _, boards, _, _, _) = await BackupContainer.WriteAsync(package, "{}",
             Array.Empty<string>(),
             new[]
             {
@@ -113,7 +116,7 @@ public sealed class BoardBackupChainGateTests : IDisposable
                 BoardPolicy.BackupFileName(id),
                 BoardPolicy.SceneFileName(id) + BoardPolicy.SceneTempSuffix,
                 "not-a-scene.txt",
-            }, CancellationToken.None);
+            }, Array.Empty<string>(), CancellationToken.None);
 
         Assert.Equal(1, boards);
         using var zip = ZipFile.OpenRead(package);
@@ -132,8 +135,9 @@ public sealed class BoardBackupChainGateTests : IDisposable
         PutScene(here);
         // 那颗档压根没造（正被删掉／同步工具抽走的形状）
         var package = PackagePath("partial.zip");
-        var (_, _, boards, _) = await BackupContainer.WriteAsync(package, "{}", Array.Empty<string>(),
-            new[] { BoardPolicy.SceneFileName(here), BoardPolicy.SceneFileName(gone) }, CancellationToken.None);
+        var (_, _, boards, _, _, _) = await BackupContainer.WriteAsync(package, "{}", Array.Empty<string>(),
+            new[] { BoardPolicy.SceneFileName(here), BoardPolicy.SceneFileName(gone) },
+            Array.Empty<string>(), CancellationToken.None);
 
         Assert.Equal(1, boards);
         Assert.Equal(1, BackupContainer.CountBoardEntries(package));
@@ -237,7 +241,7 @@ public sealed class BoardBackupChainGateTests : IDisposable
         PutScene(id);
         var boardsOnly = PackagePath("boards-only.zip");
         await BackupContainer.WriteAsync(boardsOnly, "{}", Array.Empty<string>(),
-            new[] { BoardPolicy.SceneFileName(id) }, CancellationToken.None);
+            new[] { BoardPolicy.SceneFileName(id) }, Array.Empty<string>(), CancellationToken.None);
 
         Assert.Equal(1, BackupContainer.CountBoardEntries(boardsOnly));
         Assert.Equal(0, BackupContainer.CountClipEntries(boardsOnly));
@@ -286,7 +290,9 @@ public sealed class BoardBackupChainGateTests : IDisposable
         Assert.Contains("PlanBoardScenes()", export, StringComparison.Ordinal);
         // 载体跟着内容走只问一次：两处各问一遍＝改一处漏一处（一个叫 .json 的 zip）
         Assert.Equal(1, SourceGate.Count(export, "AgreeExtensionWithContent"));
-        Assert.Contains("var carries = names.Count > 0 || sceneNames.Count > 0;", export, StringComparison.Ordinal);
+        // 片292 起多一族：drops 目录里有认领件时同样要把载体判成"带附件"——漏了它，第一次拖过文件的机器
+        // 导出的就是"叫 .zip 的纯清单"（或反过来），与上面画板那族同一条坏法。
+        Assert.Contains("var carries = names.Count > 0 || sceneNames.Count > 0 || dropNames.Count > 0;", export, StringComparison.Ordinal);
         Assert.DoesNotContain("carriesImages", svc, StringComparison.Ordinal);
 
         // §坑23 那句"别加新键"落到盘上：全库不许出现第二颗"带不带画板"的开关
@@ -301,8 +307,9 @@ public sealed class BoardBackupChainGateTests : IDisposable
     public void TheRestoreReportsThreeBoardCounts_AndTheSentencesCarryTheSlots()
     {
         var table = SourceGate.ReadRepoFile("src/StarMark.Abstractions/I18n/UiStrings.cs");
-        // 外层句子多出来的那颗槽必须真有槽位（写了一半＝那一档的话永远念不出来）
-        Assert.Contains("settings.data.backup.exportedWith\", \"已导出备份到：{0}（条目 {1} 条{2}{3}{4}{5}）",
+        // 外层句子多出来的那颗槽必须真有槽位（写了一半＝那一档的话永远念不出来）。
+        // 片292 起多一颗 {6}＝拖入文件那一族的段（与画板／图片各自一颗槽，⛔ 并成"附件 N 个"）。
+        Assert.Contains("settings.data.backup.exportedWith\", \"已导出备份到：{0}（条目 {1} 条{2}{3}{4}{5}{6}）",
             table, StringComparison.Ordinal);
         foreach (var head in new[] { "restoredMerge\", \"已合并恢复 {0} 条条目。{1}{2}{3}",
                                      "restoredReplace\", \"已覆盖恢复 {0} 条条目。{1}{2}{3}" })

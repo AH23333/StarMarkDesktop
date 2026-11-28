@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using StarMark.Abstractions.I18n;
 
 namespace StarMark.Abstractions.Clipboard;
 
@@ -148,4 +149,122 @@ public static class ClipDropAssets
     /// <summary>Windows 文件名不许出现的字符（含控制符）。洗名与名册共用同一份——两处各写一遍就会分出两种"安全"。</summary>
     private static bool IsBadNameChar(char c)
         => c is '/' or '\\' or ':' or '*' or '?' or '"' or '<' or '>' or '|' || char.IsControl(c);
+
+    // ==================== 占用与对账（片292・照 clip-images house pattern 配齐四件） ====================
+
+    /// <summary>
+    /// 占用统计的口径：<b>一族一种件</b>（没有主图/缩略图那对儿，所以只有件数与字节两项）。
+    /// 与 <see cref="ClipAssets.Footprint"/> 同一颗职责：设置页那句"占了多少"只有这一份算法。
+    /// </summary>
+    public readonly record struct DropFootprint(int FileCount, long FileBytes);
+
+    /// <summary>
+    /// 目录内容 → <see cref="DropFootprint"/>。<paramref name="files"/> 由调用方枚举（这里不碰文件系统，
+    /// 才可能在单测里逐值钉住分派规则）；含 <c>.tmp</c> 的按临时件计入 <paramref name="tempBytes"/>/<paramref name="tempCount"/>，
+    /// 不算正式件。临时件<b>件数与字节分开交</b>：那句话要说"另有 N 个（约 X）"，两个数各是各的量纲。
+    /// </summary>
+    public static DropFootprint Summarize(IEnumerable<(string Name, long Bytes)> files,
+        out long tempBytes, out int tempCount)
+    {
+        var count = 0; var bytes = (long)0; var tmp = (long)0; var tmpCount = 0;
+        foreach (var (name, size) in files)
+        {
+            if (IsTempName(name)) { tmp += size; tmpCount++; continue; }
+            count++;
+            bytes += size;
+        }
+        tempBytes = tmp;
+        tempCount = tmpCount;
+        return new DropFootprint(count, bytes);
+    }
+
+    /// <summary>写盘用的临时名判据（对账只按这一条认"这是我们自己的半件"）。名册口径见 <see cref="IsSafeFileName"/>。</summary>
+    public static bool IsTempName(string fileName) => fileName.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 对账结果。<b>三类全是"只数"的事实，零类动数据库、零类动文件</b>（片292・分叉一甲）：
+    /// <list type="bullet">
+    /// <item><description><c>MissingNames</c>：行认领了、件不在（用户手删 / 旧备份恢复过来）。<b>不打标记</b>——
+    /// drops 的认领是"一行认 N 件"，行级缺失标记语义不清（一行三件缺一件，标谁？），而且没有 UI 读那颗标记；
+    /// 无状态＝天然幂等，用户把件放回来，这一类自动归零（§3-Q6 第三类反向免费得到）。</description></item>
+    /// <item><description><c>OrphanNames</c>：件在、无人认领（删行时文件删失败 / 用户自己拷进来）⇒ 只数不删，
+    /// 出口在设置页确认框后的 <c>CleanAsync</c>。</description></item>
+    /// <item><description><c>TempNames</c>：临时件（<c>*.tmp</c>）——出现即说明有一次物化没写完。</description></item>
+    /// </list>
+    /// </summary>
+    public readonly record struct ReconcileDropResult(
+        IReadOnlyList<string> MissingNames,
+        IReadOnlyList<string> OrphanNames,
+        IReadOnlyList<string> TempNames)
+    {
+        public static readonly ReconcileDropResult Empty = new(
+            Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>());
+        public bool NothingToDo => MissingNames.Count == 0 && OrphanNames.Count == 0 && TempNames.Count == 0;
+    }
+
+    /// <summary>
+    /// 把"库里的认领名单"与"目录里的文件"对一次账。<paramref name="rowClaims"/> 一项＝一行的认领名单
+    /// （<see cref="ClipboardEntry.DropFileNamesOf"/>；空行＝那行什么都没认领，跳过）。
+    /// <para><b>比对一律 OrdinalIgnoreCase</b>：NTFS 大小写不敏感（与 <see cref="ClipAssets.Reconcile"/> 同一条理由）。</para>
+    /// <para>同一个名字被多行认领、或一行名单里出现两次，都只算<b>一件</b>：对账数的是"磁盘上有几个名字对不上"，
+    /// 不是"名单里出现几次"。</para>
+    /// </summary>
+    public static ReconcileDropResult Reconcile(
+        IEnumerable<IReadOnlyList<string>> rowClaims, IEnumerable<string> fileNames)
+    {
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var missing = new List<string>();
+        var seenMissing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var claims in rowClaims)
+        {
+            if (claims is null) continue;
+            foreach (var name in claims)
+            {
+                if (string.IsNullOrWhiteSpace(name) || !claimed.Add(name)) continue;
+                missing.Add(name);                 // 先按"认领了就未必在"收着，下面再按盘上事实分箱
+            }
+        }
+
+        var orphans = new List<string>();
+        var temps = new List<string>();
+        var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in fileNames)
+        {
+            onDisk.Add(name);
+            if (IsTempName(name)) temps.Add(name);
+        }
+
+        // 分箱第二遍：认领的名字真在盘上＝不是缺失。两遍而不是一遍，是因为"盘上有什么"要全枚举完才说得清。
+        missing.RemoveAll(n => onDisk.Contains(n));
+        foreach (var name in onDisk)
+        {
+            if (IsTempName(name)) continue;        // 临时件是自己的类，不冒充孤儿
+            if (!claimed.Contains(name)) orphans.Add(name);
+        }
+        return new ReconcileDropResult(missing, orphans, temps);
+    }
+
+    /// <summary>
+    /// 占用那句话（与 <see cref="ClipAssets.DescribeUsage"/> 同一颗职责：交<b>没取词的</b>「键＋实参」，
+    /// 取词发生在宿主贴上屏那一刻）。没件时如实说空，不编一个 0 KB。
+    /// 这里交的只是<b>占用那一段</b>；整行（占用＋路径＋孤儿计数）由宿主拿 <c>drop.usage.line</c> 收。
+    /// </summary>
+    public static LocMessage DescribeUsage(DropFootprint footprint, long tempBytes, int tempCount)
+    {
+        if (footprint.FileCount == 0 && tempBytes == 0) return LocMessage.Of("drop.usage.empty");
+        return LocMessage.Of("drop.usage.full",
+            LocMessage.Of("drop.usage.files", footprint.FileCount, ClipAssets.DescribeBytes(footprint.FileBytes)),
+            tempCount > 0
+                ? LocMessage.Of("drop.usage.temps", tempCount, ClipAssets.DescribeBytes(tempBytes))
+                : null);
+    }
+
+    /// <summary>
+    /// 孤儿那一类的计数句（§3-Q6 第二类：只数不删，但数出来的必须看得见）。
+    /// 0 时交 <c>null</c>：没有孤儿不是一条需要占一行才能读到的事实
+    /// （与 <see cref="ClipAssets.DescribeOrphans"/> 同一口径）。
+    /// </summary>
+    public static LocMessage? DescribeOrphans(int count, long bytes) => count <= 0
+        ? null
+        : LocMessage.Of("drop.orphans.some", count, ClipAssets.DescribeBytes(bytes));
 }

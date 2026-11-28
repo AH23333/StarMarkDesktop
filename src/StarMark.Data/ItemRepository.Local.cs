@@ -676,6 +676,23 @@ public sealed partial class ItemRepository
     }
 
     /// <summary>
+    /// 对账要的"所有认领"（片292）：每一项＝一行的 clip-drops 认领名单（<see cref="ClipboardEntry.DropFileNamesOf"/>）。
+    /// <b>刻意不带行数窗口</b>（同 <see cref="GetClipboardImageAssetsAsync"/> 那条理由）：借带 limit 的查询来对账，
+    /// 窗口之外的行会被当成"没人认领的文件"，一个完好的目录被报成一堆孤儿。
+    /// <para>只交名字不交 id：drops 对账是<b>纯读</b>（没有"打标记"那一类，见 <c>ClipboardDropAudit</c>），
+    /// id 在那一条路上没有用途——多读一列就是白付的代价。</para>
+    /// </summary>
+    public async Task<IReadOnlyList<IReadOnlyList<string>>> GetClipboardDropClaimsAsync(CancellationToken ct = default)
+    {
+        using var conn = _factory.Open();
+        var extras = await ReadClipDropExtrasAsync(conn, ct);
+        var list = new List<IReadOnlyList<string>>(extras.Count);
+        foreach (var extra in extras)
+            list.Add(ClipboardEntry.DropFileNamesOf(extra));
+        return list;
+    }
+
+    /// <summary>
     /// 批量置 / 清 <c>clipMissing</c>，返回<b>真正改动</b>的行数。
     /// <para>用 <c>json_set</c>/<c>json_remove</c> 就地改一个键，而不是"读出来—反序列化—整列写回"：
     /// 后者会为改一个布尔把 extra 里其它键一起过一遍手，任何一处读写口径不一致都会静默丢字段。</para>

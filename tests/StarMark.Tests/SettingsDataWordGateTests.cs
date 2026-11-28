@@ -48,20 +48,23 @@ public sealed class SettingsDataWordGateTests : IDisposable
     private const string HostCs = "src/StarMark.UI/Views/SettingsPage.xaml.cs";
     private const string PageXaml = "src/StarMark.UI/Views/SettingsPage.xaml";
 
-    /// <summary>这九行里的状态属性：每一颗都⛔ 再收一句成品字（第七、八行＝✅WI-64「图片占用」与「图片采集状态」；
-    /// 第九行＝✅WI-65 片1「更新」那一行，它的话的一半住在 <c>UpdatePolicy.Describe*</c>）。</summary>
+    /// <summary>这十行里的状态属性：每一颗都⛔ 再收一句成品字（第七、八行＝✅WI-64「图片占用」与「图片采集状态」；
+    /// 第九行＝✅WI-65 片1「更新」那一行，它的话的一半住在 <c>UpdatePolicy.Describe*</c>；
+    /// 第十行＝✅片292「拖入文件占用」，整句由 <c>ClipDropAssets.DescribeUsage</c> 那半边供，宿主照这一门贴）。</summary>
     private static readonly string[] Rows =
     {
         "SaveErrorMessage", "AutoBackupStatus", "BackupsHeader", "BackupStatus",
         "ClipboardHistoryStatus", "ClipboardCleanupStatus", "ClipboardImageStatus", "ClipboardUsage",
+        "ClipboardDropUsage",
         "UpdateStatus",
     };
 
-    /// <summary>宿主贴上去的那九颗元素名（XAML 里 <c>x:Name</c> 与 <c>SetMessage</c> 的第一实参逐颗同名）。</summary>
+    /// <summary>宿主贴上去的那十颗元素名（XAML 里 <c>x:Name</c> 与 <c>SetMessage</c> 的第一实参逐颗同名）。</summary>
     private static readonly string[] Names =
     {
         "SaveErrorMessageText", "AutoBackupStatusText", "BackupsHeaderText", "BackupStatusText",
         "ClipboardHistoryStatusText", "ClipboardCleanupStatusText", "ClipboardImageStatusText", "ClipboardUsageText",
+        "ClipboardDropUsageText",
         "UpdateStatusText",
     };
 
@@ -133,9 +136,11 @@ public sealed class SettingsDataWordGateTests : IDisposable
         // ✅WI-64 那两行：声明本身就是判据——回型一旦退成 <c>string</c>，屏幕上那两行就又冻在取词那一刻了。
         Assert.Contains("[ObservableProperty] private LocMessage? _clipboardImageStatus;", CodeOf(ClipboardCs));
         Assert.Contains("[ObservableProperty] private LocMessage? _clipboardUsage;", CodeOf(ClipboardCs));
+        // ✅片292「拖入文件占用」那一行：同一口径——交进槽的是身份，⛔ 先 <c>.Render()</c> 成一句定稿的字。
+        Assert.Contains("[ObservableProperty] private LocMessage? _clipboardDropUsage;", CodeOf(ClipboardCs));
         foreach (var field in new[]
                  { "_saveErrorMessage", "_autoBackupStatus", "_backupStatus", "_clipboardHistoryStatus", "_clipboardCleanupStatus",
-                   "_clipboardImageStatus", "_clipboardUsage" })
+                   "_clipboardImageStatus", "_clipboardUsage", "_clipboardDropUsage" })
             Assert.Equal(0, Times(all, "private string " + field));
 
         // "这一屏到底有没有一句要给人看"是另一件事：可见性⛔ 拿一句给人看的话做字符串判空（✅VQ 那条"两件事两颗 bool"）。
@@ -279,9 +284,10 @@ public sealed class SettingsDataWordGateTests : IDisposable
         Assert.Equal(2, Times(host, "ApplyDataStatuses();"));
         foreach (var row in Rows) Assert.Equal(1, Times(host, "nameof(SettingsPageViewModel." + row + ")"));
         // 全仓计数型钉：这颗档里挂着的宿主贴字段数（✅WI-64 加那两行＝16；✅WI-65 片1 加「更新」那一行＝17；
-        // ✅WI-67 片8 加「开机自动加载组件」那行取舍说明＝18；片215·P-5B 拓展功能屏加「失联书签」状态行＝19）。
-        // ⚠ 改这颗数⛔ 只改数：分配要一起写下来，下一批只看得到"19 ＝ 拓展功能 9 ＋数据屏 8 ＋更新那一行 1 ＋组件开机那行 1"这一条口径。
-        Assert.Equal(19, Times(host, "LocText.SetMessage("));         // 拓展功能那 9 ＋这一屏 8 ＋「更新」那一行 1 ＋「开机自动加载」那一行 1
+        // ✅WI-67 片8 加「开机自动加载组件」那行取舍说明＝18；片215·P-5B 拓展功能屏加「失联书签」状态行＝19；
+        // 片292·P-307 数据屏加「拖入文件占用」那一行＝20）。
+        // ⚠ 改这颗数⛔ 只改数：分配要一起写下来，下一批只看得到"20 ＝ 拓展功能 9 ＋数据屏 9 ＋更新那一行 1 ＋组件开机那行 1"这一条口径。
+        Assert.Equal(20, Times(host, "LocText.SetMessage("));         // 拓展功能那 9 ＋这一屏 9 ＋「更新」那一行 1 ＋「开机自动加载」那一行 1
         // 这一档的 <c>Locale.Changed +=</c> 颗数⛔ 写死成"一颗"：设置页早就是这条事件的一位主人，
         // 而这一族真正的失效是<b>挂了没人摘</b>（坑表 #386），不是"订阅多了"——批次 WI-40-3b 给「快捷键」那一栏
         // 的重贴加进同一个成对块时，这里就红过一次（定向筛选器⛔ 覆盖邻族，只有全量揪得出来）。

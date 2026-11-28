@@ -125,6 +125,15 @@ public sealed class RestoreResult
 
     /// <summary>写不进的块数（磁盘、权限）。与"没动"必须分开报。</summary>
     public int BoardsFailed { get; init; }
+
+    /// <summary>从包里解回 clip-drops 目录的拖入文件件数（片292；三颗数分开报与图片那一族同一口径）。</summary>
+    public int DropFilesRestored { get; init; }
+
+    /// <summary>跳过的件数：本机已有同名文件（不覆盖）与"这件不属于这一份备份的任何一条历史"（不认领）都算在这里。</summary>
+    public int DropFilesSkipped { get; init; }
+
+    /// <summary>写不进的件数（磁盘、权限）。与"跳过"必须分开报。</summary>
+    public int DropFilesFailed { get; init; }
 }
 
 /// <summary>
