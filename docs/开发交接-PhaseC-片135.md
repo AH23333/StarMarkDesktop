@@ -1471,3 +1471,10 @@ dotnet test tests/StarMark.Tests/StarMark.Tests.csproj -c Debug -p:Platform=x64 
 - 真窗口自动化经验（五轮迭代・值回票价）：4s 冷启动不够＋首击只激活不进内容（WM_MOUSEACTIVATE 吞 click）→6500ms＋激活预击；探针被 Edge 盖（11b）／被用户 Electron 聊天窗盖（11c・Chrome_RenderWidgetHostHWND 撞类名・后验 pid=ZCode.exe）→探针停 Edge 下方条带＋**测试窗口按序置顶**（用户指示・探针与 Edge 先后 HWND_TOPMOST）＋**路径预检门**（21 点采样・外来窗口 ABORT 不注入）。
 - 验证：零产品码零测试码（片287/276 先例）・基线 7216/7216 维持不重跑・账本 P-307 段追加轮10/11 定谳块（零 `.cs:行号` 指针＝LIVING 档口径・状态行改写不翻牌）・docgates 26/26（落账后）・计数器 308/308/0 维持（marked 307・unmarked 1）・census 19/19 维持（档尾追加不移指针行）。⛔ push（一事一授权）。
 - 下一刀候选：用户裁决决策点四颗（①接收口「独占 sink＋重派」形②稳健机器〔count 钳制已实证〕③切层④排期——主刀〔待办行第一刀〕与 v1.0.8 发版先后待议）／v1.0.8 发版（用户暂缓中）。
+
+## 一百七十二、片289：P-307 轮12 XAML 路映射定谳（决定性・零产品码沙盒）——WinUI 自动物化虚拟文件为可读 StorageItems＝「独占 sink」形作废・真缺口改 StorageFile 空路径物化・方案修正供裁决
+- 实验（轮12・ExpE Drop 真读・deferral＋逐读隔离）：GetStorageItemsAsync count=1・file#0 name=[download.png]・path=[]（空＝无盘上物化・OpenReadAsync 走 FileContents 流）・size=70・first16=[89 50 4E 47…]（PNG magic・与轮11 原生 IStream 抽取逐字节一致＝两路交叉验证同一颗虚拟文件）・GetTextAsync/GetUriAsync 全通（data URI 全文 118 字符）。
+- 根前提重估：借鉴文档 v6「FileContents 在 WinUI DataPackageView 根本不出现＝双路并存根因」在 WinUI 3 XAML 对浏览器拖场景证伪——AvailableFormats 直列 FileGroupDescriptorW/FileContents 原名＋StorageItems 映射可读全文；spike 先验证后动刀的价值兑现：避免按错误前提建原生机器。
+- 主刀形状修正（供裁决）：①「独占 sink＋重派」形作废——浏览器拖已由 WinUI 映射・P-305 行拖今天就收得到 StorageItems（轮11 原生路实证保留为记录不进主刀）；真缺口＝StorageFile path=[]（P-305/P-306 取 item.Path 得空串＝空路径附件悬空）→物化腿改形「空路径 StorageFile→OpenReadAsync 读内容→落托管树→拿真路径→回 AddDroppedFilesAsync 既有链」；②稳健机器——暂存预算/MOTW/魔数/空壳治理保留・count 钳制作废（不再自解析 descriptor）；③切层——Core 判据＋UI 物化服务・Integrations Win32 层大幅缩水；④排期不变；适用面注记＝Chromium 拖图实证・Outlook 等其他源理论通无实证。
+- 验证：零产品码零测试码（片288/287/276 先例）・基线 7216/7216 维持不重跑・账本 P-307 段追加轮12 定谳块（零 `.cs:行号` 指针＝LIVING 档口径・状态行改写不翻牌）・docgates 26/26（落账后）・计数器 308/308/0 维持（marked 307・unmarked 1）・census 19/19 维持（档尾追加不移指针行）。⛔ push（一事一授权）。
+- 下一刀候选：用户裁决修正后的主刀形状（①物化入口 OpenReadAsync②稳健机器〔count 钳制作废余保留〕③切层〔Integrations 缩水〕④排期——主刀〔待办行第一刀〕与 v1.0.8 发版先后待议）／v1.0.8 发版（用户暂缓中）。
