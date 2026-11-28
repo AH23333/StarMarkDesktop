@@ -7,11 +7,13 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 using Windows.System;
 using StarMark.Abstractions;
 using StarMark.Abstractions.I18n;
 using StarMark.Core.Widgets;
 using StarMark.UI.Helpers;
+using StarMark.UI.Services;
 using StarMark.UI.ViewModels;
 
 namespace StarMark.UI.Views;
@@ -223,6 +225,12 @@ public sealed partial class TodoWidget : UserControl
     /// <summary>
     /// 落在行上的文件 → 挂成这条待办的附件。与快捷启动的 Drop 同一形状：先收路径、整批交给 VM、
     /// 结局走回执——「收到几项」与「真挂上几份」分开记，去重与失败在屏幕上不再长得一样。
+    /// <para>
+    /// 空路径的 StorageFile（P-307）＝虚拟文件（浏览器拖图：只有流没有盘上地址）——先走物化腿
+    /// 落到 %TEMP% 暂存拿真路径，再进同一颗 VM 链；物化出来的路径带上「自己人」记号
+    /// （<c>materializedStaging</c>）交给 VM 做 MOTW＋暂存清尾。物化失败的份数折进结局——
+    /// 沉默失败是「拖了没反应」的近亲。
+    /// </para>
     /// </summary>
     private async void Row_Drop(object sender, DragEventArgs e)
     {
@@ -230,18 +238,34 @@ public sealed partial class TodoWidget : UserControl
         if (!TryRowId(sender, out var id)) return;
         var deferral = e.GetDeferral();
         var paths = new List<string>();
+        IReadOnlySet<string>? materializedStaging = null;
         try
         {
             var items = await e.DataView.GetStorageItemsAsync();
+            var virtualFiles = new List<StorageFile>();
             foreach (var storageItem in items)
+            {
                 if (!string.IsNullOrWhiteSpace(storageItem.Path)) paths.Add(storageItem.Path);
+                else if (storageItem is StorageFile f) virtualFiles.Add(f);
+            }
+            TodoVirtualFileMaterialization? staged = null;
+            if (virtualFiles.Count > 0)
+            {
+                staged = await TodoVirtualFileMaterializer.MaterializeAsync(virtualFiles);
+                paths.AddRange(staged.Paths);
+                if (staged.Paths.Count > 0)
+                    materializedStaging = new HashSet<string>(staged.Paths);
+            }
             if (paths.Count == 0)
             {
                 StarLog.Warn($"[待办] 拖放 Drop：收到 {items.Count} 项但都没有可用路径，未挂附件");
                 SayAttachmentReceipt(LocMessage.Of("widget.todo.attachNone"));
                 return;
             }
-            var outcome = await ViewModel.AddDroppedFilesAsync(id, paths);
+            var outcome = await ViewModel.AddDroppedFilesAsync(id, paths, materializedStaging);
+            if (staged is { Failed: > 0 })
+                // 物化没成的那几份折进结局：Offered 补上真收到的份数、Failed 记上没物化成的份数
+                outcome = outcome with { Offered = outcome.Offered + staged.Failed, Failed = outcome.Failed + staged.Failed };
             StarLog.Info($"[待办] 拖放挂附件：收到 {outcome.Offered} 项，挂上 {outcome.Added}，重复 {outcome.Duplicates}，失败 {outcome.Failed}");
             SayAttachmentReceipt(AttachmentReceiptFor(outcome));
         }

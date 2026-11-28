@@ -54,6 +54,31 @@ public static class TodoAttachmentStorage
         }
     }
 
+    /// <summary>Zone.Identifier 用 UTF-8 无 BOM 写（系统读 ADS 的惯例形状，BOM 会进首行键名）。</summary>
+    private static readonly System.Text.UTF8Encoding s_utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>
+    /// 给托管副本标 MOTW（Zone.Identifier ADS・ZoneId=3＋HostUrl，P-307）。标在<b>托管副本</b>上
+    /// 而不是 %TEMP% 暂存原件上：ADS 不随 <c>File.Copy</c> 走——标在暂存那份，Copy 完标记就丢了，
+    /// 长命的托管副本反而裸奔＝比浏览器下载同一文件少了 SmartScreen 审查（安全降级）。
+    /// 失败只记日志返回 false：<b>可选的安全注解不许把导入本身打断</b>。
+    /// </summary>
+    public static bool TryMarkInternetZone(string path, string? hostUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        try
+        {
+            File.WriteAllText(path + ":Zone.Identifier",
+                TodoVirtualFilePolicy.BuildZoneIdentifierContent(hostUrl), s_utf8NoBom);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            StarLog.Warn($"[待办] 给托管副本标 Zone.Identifier 失败（不断导入）：{path}：{ex.Message}");
+            return false;
+        }
+    }
+
     /// <summary>把源文件复制进这条待办的托管目录，返回副本的完整路径。同名冲突加「 (2)」式后缀，不覆盖。</summary>
     public static string CopyIn(long itemId, string sourcePath)
     {

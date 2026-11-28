@@ -401,8 +401,15 @@ public sealed class TodoWidgetViewModel : ObservableObject
     /// 开了「复制」开关、或源躺在临时目录里（源随时会被系统清掉，链接等于空头支票——强制复制）
     /// 才复制成 %LOCALAPPDATA% 下的托管副本。同一路径（OrdinalIgnoreCase）已在清单里＝跳过，
     /// 同一条待办不挂两份。返回的结局交给回执（「拖了没反应」不许伪装成「已经加好了」）。
+    /// <para>
+    /// <paramref name="materializedStaging"/>（P-307）＝这批路径里<b>我们自己物化出来的暂存件</b>
+    /// （浏览器拖图那种空路径 StorageFile 落到 %TEMP% 的那份）：它 Copy 入托管树之后做两件收尾——
+    /// 给托管副本标 MOTW（ADS 不随 File.Copy 走，标在暂存原件上等于白标）＋把暂存原件用完即清
+    /// （不留给系统清盘）。两步都失败只记日志，不打断挂附件。
+    /// </para>
     /// </summary>
-    public async Task<TodoAttachmentOutcome> AddDroppedFilesAsync(long id, IReadOnlyList<string> paths)
+    public async Task<TodoAttachmentOutcome> AddDroppedFilesAsync(long id, IReadOnlyList<string> paths,
+        IReadOnlySet<string>? materializedStaging = null)
     {
         var offered = paths.Count;
         if (_repo is null || offered == 0) return new TodoAttachmentOutcome(offered, 0, 0, 0);
@@ -422,7 +429,16 @@ public sealed class TodoWidgetViewModel : ObservableObject
                 if (list.Exists(a => string.Equals(a.Path, path, StringComparison.OrdinalIgnoreCase))) { duplicates++; continue; }
                 var stored = path;
                 if (copy || TodoAttachmentPolicy.NeedsForcedCopy(path, tempRoot))
+                {
                     stored = TodoAttachmentStorage.CopyIn(id, path);
+                    if (materializedStaging is not null && materializedStaging.Contains(path))
+                    {
+                        // 物化暂存源的收尾（P-307）：MOTW 标在托管副本上（ADS 不随 File.Copy 走）＋
+                        // 暂存原件用完即清——两步都失败只记日志，可选收尾不许打断挂附件。
+                        TodoAttachmentStorage.TryMarkInternetZone(stored);
+                        TodoVirtualFileMaterializer.DiscardStaged(path);
+                    }
+                }
                 list.Add(new TodoAttachment(Path.GetFileName(path), stored));
                 added++;
             }
